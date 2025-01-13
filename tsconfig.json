@@ -1,0 +1,46 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "lib": [
+            "dom",
+            "dom.iterable",
+            "esnext"
+        ],
+        "allowJs": true,
+        "skipLibCheck": true,
+        "strict": true,
+        "forceConsistentCasingInFileNames": true,
+        "noEmit": false,
+        "declaration": true,
+        "declarationMap": true,
+        "sourceMap": true,
+        "rootDir": "./src",
+        "outDir": "./dist",
+        "esModuleInterop": true,
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "jsx": "preserve",
+        "incremental": true,
+        "paths": {
+            "@/*": [
+                "./src/*"
+            ]
+        }
+    },
+    "include": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/*.jsx",
+        "src/**/*.js"
+    ],
+    "exclude": [
+        "node_modules",
+        ".next",
+        "dist",
+        "build",
+        "__tests__",
+        "*.config.ts"
+    ]
+}

@@ -1,0 +1,121 @@
+{
+    "version": "1.0.0",
+    "core_competencies": {
+        "edge_development": {
+            "level": "expert",
+            "skills": [
+                "Edge function optimization",
+                "Runtime constraints management",
+                "Cold start optimization",
+                "Edge caching strategies",
+                "Streaming response handling"
+            ],
+            "patterns": [
+                "Edge-first architecture",
+                "Progressive enhancement",
+                "Streaming-first design",
+                "Resource optimization"
+            ]
+        },
+        "typescript": {
+            "level": "expert",
+            "skills": [
+                "Type system design",
+                "Generic programming",
+                "Module architecture",
+                "Runtime type safety"
+            ],
+            "patterns": [
+                "Type-driven development",
+                "Functional programming",
+                "Immutable data structures",
+                "Pattern matching"
+            ]
+        },
+        "testing": {
+            "level": "expert",
+            "skills": [
+                "Test suite architecture",
+                "Mocking strategies",
+                "Performance testing",
+                "Edge runtime testing"
+            ],
+            "frameworks": [
+                "Vitest",
+                "Testing Library",
+                "MSW",
+                "Playwright"
+            ]
+        }
+    },
+    "specialized_domains": {
+        "debugging": {
+            "level": "expert",
+            "focus": [
+                "Real-time monitoring",
+                "Performance profiling",
+                "Error aggregation",
+                "Visual debugging"
+            ],
+            "tools": [
+                "Chrome DevTools Protocol",
+                "Performance API",
+                "Server-Sent Events",
+                "Web Vitals"
+            ]
+        },
+        "real_time_systems": {
+            "level": "expert",
+            "skills": [
+                "Event streaming",
+                "State synchronization",
+                "Connection management",
+                "Error recovery"
+            ],
+            "patterns": [
+                "Event sourcing",
+                "CQRS",
+                "Pub/Sub",
+                "Circuit breaking"
+            ]
+        }
+    },
+    "frameworks": {
+        "next_js": {
+            "level": "expert",
+            "focus": [
+                "App Router",
+                "Server Components",
+                "Edge Runtime",
+                "Streaming"
+            ]
+        },
+        "react": {
+            "level": "expert",
+            "focus": [
+                "Server Components",
+                "Hooks",
+                "Suspense",
+                "Error Boundaries"
+            ]
+        }
+    },
+    "tools": {
+        "development": [
+            "TypeScript",
+            "ESLint",
+            "Prettier",
+            "pnpm"
+        ],
+        "testing": [
+            "Vitest",
+            "Testing Library",
+            "Playwright"
+        ],
+        "monitoring": [
+            "Web Vitals",
+            "Performance API",
+            "Chrome DevTools Protocol"
+        ]
+    }
+}

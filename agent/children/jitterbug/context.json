@@ -1,0 +1,110 @@
+{
+    "extends": "../../context/personality.json",
+    "inherits": [
+        "../../context/capabilities.json",
+        "../../context/memory.json"
+    ],
+    "task": {
+        "name": "Jitterbug Debug System",
+        "description": "Edge-first debugging system for Next.js applications",
+        "scope": [
+            "Core debug system implementation",
+            "Transport layer development",
+            "Processor system implementation",
+            "Testing infrastructure"
+        ]
+    },
+    "context": {
+        "domain_knowledge": {
+            "debug_system": {
+                "components": [
+                    "Core debug implementation",
+                    "Transport system",
+                    "Processor system",
+                    "Testing infrastructure"
+                ],
+                "capabilities": [
+                    "Real-time monitoring",
+                    "Error aggregation",
+                    "Performance tracking",
+                    "Visual debugging"
+                ]
+            },
+            "edge_runtime": {
+                "constraints": [
+                    "Memory limits",
+                    "CPU limits",
+                    "Cold starts",
+                    "API compatibility"
+                ],
+                "features": [
+                    "SSE support",
+                    "Streaming responses",
+                    "Cache API",
+                    "Web APIs"
+                ]
+            }
+        },
+        "project_state": {
+            "transport_layer": {
+                "status": "stable",
+                "current_focus": "Edge-first implementation",
+                "recent_changes": [
+                    "Implemented edge-first test suite",
+                    "Added Edge runtime validation tests",
+                    "Enforced Edge function constraints",
+                    "Added type system immutability checks",
+                    "Implemented streaming and cold start tests"
+                ],
+                "pending_tasks": [
+                    "Documentation updates",
+                    "Performance optimization",
+                    "Integration with ImageKit"
+                ]
+            },
+            "type_system": {
+                "status": "improving",
+                "issues": {
+                    "count": 193,
+                    "files_affected": 95,
+                    "major_categories": [
+                        "Missing properties",
+                        "Module imports",
+                        "Type mismatches"
+                    ]
+                }
+            }
+        }
+    },
+    "state": {
+        "current_focus": "imagekit_integration",
+        "completed_tasks": [
+            "Core type system",
+            "Transport layer foundation",
+            "Edge runtime testing"
+        ],
+        "in_progress": [
+            "ImageKit integration",
+            "Documentation updates",
+            "Performance optimization"
+        ],
+        "learnings": [
+            {
+                "topic": "Edge runtime constraints",
+                "insights": [
+                    "Memory management critical for cold starts",
+                    "SSE preferred over WebSocket for Edge",
+                    "Cache API essential for performance"
+                ]
+            },
+            {
+                "topic": "Type system design",
+                "insights": [
+                    "Immutable types improve reliability",
+                    "Generic constraints enhance reusability",
+                    "Runtime validation complements static types"
+                ]
+            }
+        ]
+    }
+}

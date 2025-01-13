@@ -1,0 +1,23 @@
+# Build output
+/dist/
+/.next/
+/coverage/
+
+# Dependencies
+/node_modules/
+
+# Config files
+*.config.js
+*.config.ts
+*.config.cjs
+*.config.mjs
+
+# Test files (JS)
+/tests/**/*.js
+
+# Allow TypeScript files
+!*.ts
+!*.tsx
+
+# But ignore type declaration files
+*.d.ts 

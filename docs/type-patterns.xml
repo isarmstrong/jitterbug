@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<type-patterns version="1.0">
+    <pattern id="runtime-type-detection">
+        <signature>TS2749: Runtime refers to a value, but is being used as a type</signature>
+        <root-cause>Using enum values directly as types in runtime detection</root-cause>
+        <resolution>
+            <strategy>Use typeof operator for runtime enums</strategy>
+            <example>
+                <before>supports(runtime: Runtime)</before>
+                <after>supports(runtime: typeof Runtime[keyof typeof Runtime])</after>
+            </example>
+        </resolution>
+    </pattern>
+
+    <pattern id="log-entry-constraints">
+        <signature>TS2416: LogEntry type parameter constraints</signature>
+        <root-cause>Generic log entries without proper type constraints</root-cause>
+        <resolution>
+            <strategy>Add Record constraint to log entry data</strategy>
+            <example>
+                <before>write&lt;T&gt;(entry: LogEntry&lt;T&gt;)</before>
+                <after>write&lt;T extends Record&lt;string, unknown&gt;&gt;(entry: LogEntry&lt;T&gt;)</after>
+            </example>
+        </resolution>
+    </pattern>
+
+    <pattern id="transport-processor-contract">
+        <signature>TS2739: Missing interface implementation</signature>
+        <root-cause>Incomplete transport or processor implementation</root-cause>
+        <resolution>
+            <strategy>Implement all required interface methods</strategy>
+            <required-methods>
+                <method>supports(runtime)</method>
+                <method>write/process(entry)</method>
+                <method>connect/disconnect (for transports)</method>
+            </required-methods>
+        </resolution>
+    </pattern>
+
+    <pattern id="async-method-contracts">
+        <signature>TS1064: Async method requires Promise return</signature>
+        <root-cause>Interface requires async but implementation is sync</root-cause>
+        <resolution>
+            <strategy>Maintain async contract even if implementation is sync</strategy>
+            <example>
+                <before>process(entry: LogEntry&lt;T&gt;)</before>
+                <after>async process(entry: LogEntry&lt;T&gt;): Promise&lt;LogEntry&lt;T&gt;&gt;</after>
+            </example>
+        </resolution>
+    </pattern>
+</type-patterns> 

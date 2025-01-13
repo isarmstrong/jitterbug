@@ -1,0 +1,69 @@
+{
+    "name": "@pocma/jitterbug",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "main": "dist/index.js",
+    "module": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "require": "./dist/index.js"
+        },
+        "./transports/*": {
+            "types": "./dist/transports/*.d.ts",
+            "import": "./dist/transports/*.js",
+            "require": "./dist/transports/*.js"
+        },
+        "./processors/*": {
+            "types": "./dist/processors/*.d.ts",
+            "import": "./dist/processors/*.js",
+            "require": "./dist/processors/*.js"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "lint": "eslint . --ext .ts,.js,.jsx --fix",
+        "lint:strict": "eslint . --ext .ts,.js,.jsx --max-warnings=0",
+        "format": "prettier --write \"**/*.{ts,js,json,md}\"",
+        "format:check": "prettier --check \"**/*.{ts,js,json,md}\"",
+        "typecheck": "tsc --noEmit",
+        "clean": "rimraf dist",
+        "prepublishOnly": "pnpm clean && pnpm build"
+    },
+    "dependencies": {
+        "@sindresorhus/is": "^6.1.0",
+        "@types/react": "^19.0.6",
+        "jotai": "^2.6.0",
+        "p-queue": "^7.4.1",
+        "p-throttle": "^5.1.0",
+        "react": "^19.0.0",
+        "ts-pattern": "^5.0.6",
+        "type-fest": "^4.8.3",
+        "zod": "^3.22.4"
+    },
+    "devDependencies": {
+        "@types/node": "^20.10.5",
+        "@typescript-eslint/eslint-plugin": "^6.15.0",
+        "@typescript-eslint/parser": "^6.15.0",
+        "eslint": "^8.56.0",
+        "eslint-config-prettier": "^9.1.0",
+        "eslint-import-resolver-typescript": "^3.6.1",
+        "eslint-plugin-import": "^2.29.1",
+        "eslint-plugin-prettier": "^5.1.0",
+        "eslint-plugin-react": "^7.37.4",
+        "eslint-plugin-react-hooks": "^5.1.0",
+        "prettier": "^3.1.1",
+        "rimraf": "^5.0.5",
+        "typescript": "~5.3.3",
+        "vitest": "^1.1.0"
+    }
+}
