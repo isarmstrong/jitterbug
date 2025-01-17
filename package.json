@@ -2,24 +2,27 @@
     "name": "@isarmstrong/jitterbug",
     "version": "0.1.2",
     "type": "module",
-    "main": "dist/index.js",
-    "module": "dist/index.js",
-    "types": "dist/index.d.ts",
+    "main": "./dist/src/index.js",
+    "module": "./dist/src/index.js",
+    "types": "./dist/src/index.d.ts",
     "exports": {
         ".": {
-            "types": "./dist/index.d.ts",
-            "import": "./dist/index.js",
-            "require": "./dist/index.js"
+            "types": "./dist/src/index.d.ts",
+            "import": "./dist/src/index.js",
+            "require": "./dist/src/index.js",
+            "default": "./dist/src/index.js"
         },
         "./transports/*": {
-            "types": "./dist/transports/*.d.ts",
-            "import": "./dist/transports/*.js",
-            "require": "./dist/transports/*.js"
+            "types": "./dist/src/transports/*.d.ts",
+            "import": "./dist/src/transports/*.js",
+            "require": "./dist/src/transports/*.js",
+            "default": "./dist/src/transports/*.js"
         },
         "./processors/*": {
-            "types": "./dist/processors/*.d.ts",
-            "import": "./dist/processors/*.js",
-            "require": "./dist/processors/*.js"
+            "types": "./dist/src/processors/*.d.ts",
+            "import": "./dist/src/processors/*.js",
+            "require": "./dist/src/processors/*.js",
+            "default": "./dist/src/processors/*.js"
         }
     },
     "files": [
