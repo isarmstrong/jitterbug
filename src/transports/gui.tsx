@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import type { LogTransport, LogEntry, RuntimeType } from "../types/types";
-import { LogLevels, Runtime } from "../types/enums";
+import type { LogTransport, LogEntry, RuntimeType } from "../types/types.js";
+import { LogLevels, Runtime } from "../types/enums.js";
 
 interface GUIConfig {
   maxEntries?: number;

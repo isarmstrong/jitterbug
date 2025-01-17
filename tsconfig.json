@@ -14,14 +14,14 @@
         "declaration": true,
         "declarationMap": true,
         "sourceMap": true,
-        "rootDir": "./src",
+        "rootDir": ".",
         "outDir": "./dist",
         "esModuleInterop": true,
-        "module": "esnext",
-        "moduleResolution": "bundler",
+        "module": "node16",
+        "moduleResolution": "node16",
         "resolveJsonModule": true,
         "isolatedModules": true,
-        "jsx": "preserve",
+        "jsx": "react-jsx",
         "incremental": true,
         "paths": {
             "@/*": [
@@ -32,15 +32,12 @@
     "include": [
         "src/**/*.ts",
         "src/**/*.tsx",
-        "src/**/*.jsx",
-        "src/**/*.js"
+        "vitest.config.ts"
     ],
     "exclude": [
         "node_modules",
         ".next",
         "dist",
-        "build",
-        "__tests__",
-        "*.config.ts"
+        "build"
     ]
 }

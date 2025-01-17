@@ -2,8 +2,8 @@ import {
   type LogEntry,
   type LogTransport,
   type LogLevel,
-} from "../types/types";
-import { LogLevels } from "../types/enums";
+} from "../types/types.js";
+import { LogLevels } from "../types/enums.js";
 
 /**
  * Transport configuration interface

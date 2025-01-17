@@ -1,2 +1,2 @@
-export * from "./edge";
-export * from "./gui";
+export * from "./edge.js";
+export * from "./gui.js";

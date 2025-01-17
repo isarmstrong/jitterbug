@@ -6,9 +6,9 @@ import type {
   JitterbugFactory,
   RuntimeType,
   EnvironmentType,
-} from "./types/types";
-import { LogLevels, Runtime, Environment } from "./types/enums";
-import { processLog, writeLog } from "./logger";
+} from "./types/types.js";
+import { LogLevels, Runtime, Environment } from "./types/enums.js";
+import { processLog, writeLog } from "./logger.js";
 
 declare global {
   // eslint-disable-next-line no-var

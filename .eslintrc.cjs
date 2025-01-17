@@ -5,62 +5,30 @@ module.exports = {
         node: true,
         browser: true,
     },
+    parser: '@typescript-eslint/parser',
+    parserOptions: {
+        project: ['./tsconfig.json', './tsconfig.gui.json'],
+        tsconfigRootDir: __dirname,
+        sourceType: 'module',
+        ecmaVersion: 2022,
+    },
+    plugins: ['@typescript-eslint', 'prettier'],
     extends: [
         'eslint:recommended',
         'plugin:@typescript-eslint/recommended',
         'plugin:@typescript-eslint/recommended-requiring-type-checking',
-        'plugin:import/recommended',
-        'plugin:import/typescript',
-        'plugin:react/recommended',
-        'plugin:react-hooks/recommended',
-        'plugin:prettier/recommended',
+        'prettier',
     ],
-    parser: '@typescript-eslint/parser',
-    parserOptions: {
-        ecmaVersion: 2022,
-        sourceType: 'module',
-        project: ['./tsconfig.json', './tsconfig.gui.json'],
-        tsconfigRootDir: __dirname,
-        ecmaFeatures: {
-            jsx: true,
-        },
-    },
-    plugins: ['@typescript-eslint', 'import', 'react', 'react-hooks'],
     rules: {
-        '@typescript-eslint/no-explicit-any': 'warn',
-        'import/no-unresolved': 'error',
         '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-        '@typescript-eslint/no-misused-promises': [
-            'error',
-            {
-                checksVoidReturn: false,
-            },
-        ],
-        'react/react-in-jsx-scope': 'off', // Not needed in Next.js
-        '@typescript-eslint/require-await': 'warn', // Downgrade to warning since some async methods are interface requirements
+        '@typescript-eslint/require-await': 'off',
+        '@typescript-eslint/no-floating-promises': 'error',
+        '@typescript-eslint/no-unsafe-assignment': 'off',
+        '@typescript-eslint/no-unsafe-member-access': 'warn',
+        '@typescript-eslint/no-unsafe-call': 'warn',
+        '@typescript-eslint/no-unsafe-return': 'warn',
+        '@typescript-eslint/no-var-requires': 'warn',
+        'no-undef': 'off',
     },
-    settings: {
-        'import/parsers': {
-            '@typescript-eslint/parser': ['.ts', '.tsx']
-        },
-        'import/resolver': {
-            typescript: {
-                alwaysTryTypes: true,
-                project: ['./tsconfig.json', './tsconfig.gui.json']
-            },
-            node: true
-        },
-        react: {
-            version: 'detect'
-        }
-    },
-    ignorePatterns: [
-        'dist/**/*',
-        'node_modules/**/*',
-        'coverage/**/*',
-        '**/*.js',
-        '**/*.cjs',
-        '**/*.mjs',
-        '**/*.json'
-    ]
-} 
+    ignorePatterns: ['__tests__/**/*', '*.config.ts'],
+}; 

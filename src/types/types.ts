@@ -1,4 +1,4 @@
-import { LogLevels, Runtime, Environment } from "./enums";
+import { LogLevels, Runtime, Environment } from "./enums.js";
 
 /**
  * Log level type
@@ -138,6 +138,7 @@ export interface LogEntry<T = Record<string, unknown>> {
   data?: T;
   error?: Error;
   context: LogContext;
+  warnings?: string[];
 }
 
 /**

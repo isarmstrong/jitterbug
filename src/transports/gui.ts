@@ -1,14 +1,18 @@
-import { type LogEntry, type LogTransport } from "../types";
-import {
-  EdgeTransport,
-  type EdgeTransportConfig,
-  type EdgeTransportEvents,
-} from "./edge";
+import { type LogEntry, type LogTransport } from "../types/types.js";
+import { EdgeTransport } from "./edge.js";
 
 export interface GUITransportConfig {
   maxEntries?: number;
   bufferSize?: number;
-  edge: EdgeTransportConfig;
+  edge: {
+    endpoint: string;
+    batchSize?: number;
+    flushInterval?: number;
+    maxRetries?: number;
+    maxConnectionDuration?: number;
+    maxEntries?: number;
+    maxPayloadSize?: number;
+  };
   autoReconnect?: boolean;
 }
 
@@ -38,46 +42,25 @@ export class GUITransport implements LogTransport {
     this.config.bufferSize = config.bufferSize ?? 100;
     this.config.autoReconnect = config.autoReconnect ?? true;
 
-    const events: EdgeTransportEvents = {
-      onConnect: () => {
-        this.isConnected = true;
-        this.isReconnecting = false;
-        this.lastError = null;
-        void this.processBuffer();
-        this.notifyUpdate();
-        this.notifyStateUpdate();
-      },
-      onDisconnect: () => {
-        this.isConnected = false;
-        this.notifyUpdate();
-        this.notifyStateUpdate();
-      },
-      onError: (error: Error) => {
-        this.isConnected = false;
-        this.lastError = error;
-        this.notifyUpdate();
-        this.notifyStateUpdate();
-      },
-      onReconnecting: () => {
-        this.isReconnecting = true;
-        this.notifyStateUpdate();
-      },
-      onMaxRetriesExceeded: () => {
-        this.hasReachedMaxRetries = true;
-        this.isReconnecting = false;
-        this.notifyStateUpdate();
-      },
-    };
-
-    this.transport = new EdgeTransport(config.edge, events);
+    this.transport = new EdgeTransport(config.edge);
     this.transport.onUpdate(() => {
       // Sync entries from edge transport
       const edgeEntries = this.transport.getEntries();
       this.entries = edgeEntries.filter(
-        (entry) => this.filters[entry.context.namespace] !== false,
+        (entry: LogEntry<Record<string, unknown>>) =>
+          this.filters[entry.context.namespace] !== false,
       );
       this.notifyUpdate();
     });
+
+    // Connect immediately if autoReconnect is enabled
+    if (this.config.autoReconnect) {
+      void this.connect().catch((error: Error) => {
+        console.error('Failed to auto-connect:', error);
+        this.lastError = error;
+        this.notifyStateUpdate();
+      });
+    }
   }
 
   public async connect(): Promise<void> {
@@ -86,14 +69,18 @@ export class GUITransport implements LogTransport {
   }
 
   public disconnect(): void {
-    this.transport.disconnect();
+    void this.transport.disconnect().catch((error) => {
+      console.error('Failed to disconnect:', error);
+      this.lastError = error;
+      this.notifyStateUpdate();
+    });
   }
 
   public async write<T extends Record<string, unknown>>(
     entry: LogEntry<T>,
   ): Promise<void> {
     if (!this.isConnected) {
-      this.buffer.push(entry);
+      this.buffer.push(entry as LogEntry<Record<string, unknown>>);
       if (this.buffer.length > this.config.bufferSize!) {
         this.buffer.shift(); // Remove oldest entry when buffer is full
       }
@@ -101,13 +88,14 @@ export class GUITransport implements LogTransport {
       return;
     }
 
-    await this.transport.write(entry);
-    this.addEntry(entry);
+    await this.transport.write(entry as LogEntry<Record<string, unknown>>);
+    this.addEntry(entry as LogEntry<Record<string, unknown>>);
   }
 
   public getEntries(): Array<LogEntry<Record<string, unknown>>> {
     return this.entries.filter(
-      (entry) => this.filters[entry.context.namespace] !== false,
+      (entry: LogEntry<Record<string, unknown>>) =>
+        this.filters[entry.context.namespace] !== false,
     );
   }
 
@@ -116,7 +104,10 @@ export class GUITransport implements LogTransport {
     // Re-filter entries when filter changes
     this.entries = this.transport
       .getEntries()
-      .filter((entry) => this.filters[entry.context.namespace] !== false);
+      .filter(
+        (entry: LogEntry<Record<string, unknown>>) =>
+          this.filters[entry.context.namespace] !== false,
+      );
     this.notifyUpdate();
   }
 
@@ -144,7 +135,7 @@ export class GUITransport implements LogTransport {
     entry: LogEntry<T>,
   ): void {
     if (this.filters[entry.context.namespace] !== false) {
-      this.entries.push(entry);
+      this.entries.push(entry as LogEntry<Record<string, unknown>>);
       if (this.entries.length > this.config.maxEntries!) {
         this.entries.shift();
       }

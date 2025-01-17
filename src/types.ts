@@ -1,4 +1,4 @@
-import { LogLevels, Runtime, Environment } from "./types/enums";
+import { LogLevels, Runtime, Environment } from "./types/enums.js";
 
 /**
  * Log level type

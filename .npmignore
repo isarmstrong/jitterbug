@@ -1,0 +1,29 @@
+# Source
+src/
+__tests__/
+docs/
+agent/
+
+# Config files
+.eslintrc.cjs
+.eslintignore
+.prettierrc
+.gitignore
+tsconfig*.json
+vitest.config.ts
+
+# Build artifacts
+.next/
+*.tsbuildinfo
+
+# Development
+node_modules/
+.DS_Store
+problem.log
+
+# IDE
+.vscode/
+.idea/
+
+# Test coverage
+coverage/ 

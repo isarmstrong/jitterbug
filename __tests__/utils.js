@@ -1,23 +1,32 @@
-function createTestEntry(overrides = {}) {
-    return {
-        level: 'INFO',
+import { LogLevels, Runtime, Environment } from '../src/types/enums';
+
+export function createTestEntry(overrides = {}) {
+    const { error, ...restOverrides } = overrides;
+    const baseEntry = {
+        level: LogLevels.INFO,
         message: 'Test message',
-        timestamp: new Date().toISOString(),
         data: {},
+        error: null,
         context: {
-            runtime: 'edge',
-            environment: 'test',
+            timestamp: new Date().toISOString(),
+            runtime: Runtime.EDGE,
+            environment: Environment.TEST,
             namespace: 'test'
-        },
-        ...overrides
+        }
+    };
+
+    // Deep merge the overrides with the base entry
+    return {
+        ...baseEntry,
+        ...restOverrides,
+        error,
+        context: {
+            ...baseEntry.context,
+            ...(restOverrides.context || {})
+        }
     };
 }
 
-function createTestError(message = 'Test error') {
+export function createTestError(message = 'Test error') {
     return new Error(message);
 }
-
-module.exports = {
-    createTestEntry,
-    createTestError
-};

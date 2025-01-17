@@ -3,8 +3,8 @@ import type {
   ExtendedError,
   DebugData,
   ErrorWrapperConfig,
-} from "../types/errors";
-import { RuntimeDetector } from "../utils/runtime-detector";
+} from "../types/errors.js";
+import { RuntimeDetector } from "../utils/runtime-detector.js";
 
 /**
  * Default error wrapper configuration

@@ -1,4 +1,4 @@
-import type { RuntimeType } from "../types";
+import type { RuntimeType } from "../types.js";
 
 /**
  * Extended error context interface

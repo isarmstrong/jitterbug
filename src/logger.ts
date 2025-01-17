@@ -1,4 +1,4 @@
-import { LogEntry, LogProcessor, LogTransport } from "./types";
+import { LogEntry, LogProcessor, LogTransport } from "./types.js";
 
 export function processLog<T extends Record<string, unknown>>(
   entry: LogEntry<T>,

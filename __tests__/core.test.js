@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EdgeTransport } from '../src/transports/edge';
 import { GUITransport } from '../src/transports/gui';
-import { LogLevels, Runtime, Environment } from '../src/types';
+import { LogLevels, Runtime, Environment } from '../src/types/enums';
 import { createEntry } from './utils.js';
 
 describe('Jitterbug Core', () => {
