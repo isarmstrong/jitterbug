@@ -1,42 +1,33 @@
-import { LogProcessor, LogEntry } from "../types/types.js";
-import { Runtime, Environment, LogLevels } from "../types/enums.js";
-import { createHash } from "crypto";
-
-interface ErrorAggregationConfig {
-  maxErrors?: number;
-  similarityThreshold?: number;
-  burstThreshold?: number;
-  burstWindow?: number;
-}
+import { LogEntry, LogProcessor } from '../types/types.js';
+import { Runtime, Environment, LogLevels } from '../types/enums.js';
 
 interface ErrorPattern {
-  count: number;
-  group: string;
-  errors: Array<{ message: string; timestamp: number }>;
-  lastOccurrence: number;
-  similarErrors: Array<{ patternId: string; count: number }>;
+  message: string;
+  stack?: string;
+  frequency: number;
+  similarErrors: Array<{
+    message: string;
+    stack?: string;
+    timestamp: number;
+  }>;
 }
 
 interface ErrorData {
-  patternId: string;
-  errorGroup: string;
   frequency: number;
-  similarErrors: Array<{ patternId: string; count: number }>;
+  similarErrors: Array<{
+    message: string;
+    stack?: string;
+    timestamp: number;
+  }>;
 }
 
 export class ErrorAggregationProcessor implements LogProcessor {
   private patterns: Map<string, ErrorPattern> = new Map();
-  private readonly maxErrors: number;
-  private readonly similarityThreshold: number;
-  private readonly burstThreshold: number;
-  private readonly burstWindow: number;
-
-  constructor(config: ErrorAggregationConfig = {}) {
-    this.maxErrors = config.maxErrors || 100;
-    this.similarityThreshold = config.similarityThreshold || 0.8;
-    this.burstThreshold = config.burstThreshold || 5;
-    this.burstWindow = config.burstWindow || 60000; // 1 minute
-  }
+  private recentErrors: Array<{
+    message: string;
+    stack?: string;
+    timestamp: number;
+  }> = [];
 
   public supports(runtime: string): boolean {
     return runtime === Runtime.NODE || runtime === Runtime.EDGE;
@@ -50,146 +41,79 @@ export class ErrorAggregationProcessor implements LogProcessor {
     return LogLevels.ERROR;
   }
 
-  private generatePatternId(error: Error): string {
-    const normalizedMessage = this.normalizeErrorMessage(error.message, false);
-    return createHash("sha256")
-      .update(`${error.name}:${normalizedMessage}`)
-      .digest("hex");
+  private getErrorKey(error: Error): string {
+    return `${error.message}${error.stack || ''}`;
   }
 
-  private generateErrorGroup(error: Error): string {
-    const normalizedMessage = this.normalizeErrorMessage(error.message, true);
-    return createHash("sha256")
-      .update(`${error.name}:${normalizedMessage}`)
-      .digest("hex");
-  }
+  private isSimilarError(error1: Error, error2: Error): boolean {
+    const message1 = error1.message.toLowerCase();
+    const message2 = error2.message.toLowerCase();
+    const stack1 = (error1.stack || '').toLowerCase();
+    const stack2 = (error2.stack || '').toLowerCase();
 
-  private normalizeErrorMessage(message: string, forGroup: boolean): string {
-    let normalized = message;
+    // Check if messages are similar
+    if (message1 === message2) return true;
+    if (message1.includes(message2) || message2.includes(message1)) return true;
 
-    // Replace numeric values with 'X'
-    normalized = normalized.replace(/\d+/g, "X");
-
-    if (forGroup) {
-      // Replace quoted strings with 'VALUE'
-      normalized = normalized.replace(/'[^']*'|"[^"]*"/g, "VALUE");
-
-      // Replace hexadecimal IDs with 'ID'
-      normalized = normalized.replace(/[0-9a-f]{8,}/gi, "ID");
-
-      // Replace variable parts with generic terms
-      normalized = normalized.replace(
-        /\b(?:id|key|name|path|url)\b=\S+/gi,
-        "$1=VALUE",
-      );
-
-      // Replace timestamps and dates
-      normalized = normalized.replace(
-        /\d{4}-\d{2}-\d{2}|\d{2}:\d{2}:\d{2}/g,
-        "DATETIME",
-      );
+    // Check if stack traces have similar patterns
+    if (stack1 && stack2) {
+      const lines1 = stack1.split('\n');
+      const lines2 = stack2.split('\n');
+      const commonLines = lines1.filter(line => lines2.includes(line));
+      if (commonLines.length > 0) return true;
     }
 
-    return normalized;
+    return false;
   }
 
-  private findSimilarPatterns(error: Error, currentPatternId: string): string[] {
-    const similarPatterns: string[] = [];
-    const normalizedMessage = this.normalizeErrorMessage(error.message, true);
-
-    for (const [patternId, pattern] of this.patterns.entries()) {
-      if (patternId === currentPatternId) continue;
-
-      const similarity = this.calculateSimilarity(
-        normalizedMessage,
-        pattern.errors[0]?.message || "",
-      );
-
-      if (similarity >= this.similarityThreshold) {
-        similarPatterns.push(patternId);
-      }
-    }
-
-    return similarPatterns;
-  }
-
-  private calculateSimilarity(str1: string, str2: string): number {
-    const words1 = new Set(str1.toLowerCase().split(/\s+/));
-    const words2 = new Set(str2.toLowerCase().split(/\s+/));
-    const intersection = new Set([...words1].filter(x => words2.has(x)));
-    const union = new Set([...words1, ...words2]);
-    return intersection.size / union.size;
-  }
-
-  private updateErrorPattern(
-    patternId: string,
-    error: Error,
-    timestamp: number,
-  ): void {
-    const pattern = this.patterns.get(patternId) || {
-      count: 0,
-      group: this.generateErrorGroup(error),
-      errors: [],
-      lastOccurrence: timestamp,
-      similarErrors: [],
-    };
-
-    pattern.count++;
-    pattern.lastOccurrence = timestamp;
-    pattern.errors.push({
-      message: error.message,
-      timestamp,
-    });
-
-    // Find and update similar errors
-    const similarPatterns = this.findSimilarPatterns(error, patternId);
-    pattern.similarErrors = similarPatterns.map(id => ({
-      patternId: id,
-      count: this.patterns.get(id)?.count || 0,
-    }));
-
-    // Keep only the last maxErrors
-    if (pattern.errors.length > this.maxErrors) {
-      pattern.errors = pattern.errors.slice(-this.maxErrors);
-    }
-
-    // Clean up old errors outside the burst window
-    const cutoff = timestamp - this.burstWindow;
-    pattern.errors = pattern.errors.filter(e => e.timestamp > cutoff);
-
-    this.patterns.set(patternId, pattern);
-  }
-
-  public async process<T extends Record<string, unknown>>(
-    entry: LogEntry<T>,
-  ): Promise<LogEntry<T & ErrorData>> {
+  public async process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T & ErrorData>> {
     if (!entry.error) {
       return entry as LogEntry<T & ErrorData>;
     }
 
-    const timestamp = Date.now();
-    const patternId = this.generatePatternId(entry.error);
-    this.updateErrorPattern(patternId, entry.error, timestamp);
-    const pattern = this.patterns.get(patternId)!;
+    const now = Date.now();
+    const errorKey = this.getErrorKey(entry.error);
 
-    // Check for error burst
-    const recentErrors = pattern.errors.filter(
-      e => e.timestamp > timestamp - this.burstWindow,
+    // Update recent errors
+    this.recentErrors.push({
+      message: entry.error.message,
+      stack: entry.error.stack,
+      timestamp: now
+    });
+
+    // Keep only errors from the last minute
+    this.recentErrors = this.recentErrors.filter(e => now - e.timestamp < 60000);
+
+    // Update error patterns
+    let pattern = this.patterns.get(errorKey);
+    if (!pattern) {
+      pattern = {
+        message: entry.error.message,
+        stack: entry.error.stack,
+        frequency: 0,
+        similarErrors: []
+      };
+      this.patterns.set(errorKey, pattern);
+    }
+
+    // Find similar errors
+    const similarErrors = this.recentErrors.filter(e =>
+      this.isSimilarError(
+        { message: e.message, stack: e.stack } as Error,
+        entry.error as Error
+      )
     );
 
-    const errorData: ErrorData = {
-      patternId,
-      errorGroup: pattern.group,
-      frequency: Math.min(recentErrors.length, 20), // Cap frequency at 20 for burst detection
-      similarErrors: pattern.similarErrors.slice(0, 5), // Keep only top 5 similar errors
-    };
+    pattern.frequency = Math.min(similarErrors.length, 20); // Cap at 20 for burst detection
+    pattern.similarErrors = similarErrors.slice(0, 5); // Keep only top 5 similar errors
 
     return {
       ...entry,
       data: {
         ...entry.data,
-        ...errorData,
-      } as T & ErrorData,
-    };
+        frequency: pattern.frequency,
+        similarErrors: pattern.similarErrors
+      }
+    } as LogEntry<T & ErrorData>;
   }
 }

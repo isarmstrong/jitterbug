@@ -1,23 +1,16 @@
 /// <reference lib="dom" />
 /// <reference types="node" />
 
-import { type LogEntry, type LogTransport } from "../types/types.js";
+import { LogEntry, LogTransport } from '../types/types.js';
 
 export interface EdgeTransportConfig {
   endpoint: string;
-  batchSize?: number;
-  flushInterval?: number;
+  bufferSize?: number;
+  retryInterval?: number;
   maxRetries?: number;
   maxConnectionDuration?: number;
   maxEntries?: number;
   maxPayloadSize?: number;
-}
-
-export interface EdgeTransportEvents {
-  onConnect?: () => void;
-  onDisconnect?: () => void;
-  onError?: (error: Error) => void;
-  onFlush?: () => void;
 }
 
 export class EdgeTransport implements LogTransport {
@@ -31,13 +24,14 @@ export class EdgeTransport implements LogTransport {
   constructor(config: EdgeTransportConfig) {
     this.config = {
       endpoint: config.endpoint,
-      batchSize: config.batchSize ?? 10,
-      flushInterval: config.flushInterval ?? 1000,
-      maxRetries: config.maxRetries ?? 3,
-      maxConnectionDuration: config.maxConnectionDuration ?? 60000,
+      bufferSize: config.bufferSize ?? 100,
+      retryInterval: config.retryInterval ?? 5000,
+      maxRetries: config.maxRetries ?? 5,
+      maxConnectionDuration: config.maxConnectionDuration ?? 4.5 * 60 * 1000,
       maxEntries: config.maxEntries ?? 1000,
-      maxPayloadSize: config.maxPayloadSize ?? 1024,
+      maxPayloadSize: config.maxPayloadSize ?? 128 * 1024,
     };
+    void this.connect();
   }
 
   public async connect(): Promise<void> {
@@ -63,7 +57,7 @@ export class EdgeTransport implements LogTransport {
     } catch (error) {
       if (this.retryCount < this.config.maxRetries) {
         this.retryCount++;
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, this.config.retryInterval));
         return this.connect();
       }
       throw error;
@@ -83,30 +77,28 @@ export class EdgeTransport implements LogTransport {
     }
   }
 
-  public async write<T extends Record<string, unknown>>(
-    entry: LogEntry<T>,
-  ): Promise<void> {
-    this.queue.push(entry as LogEntry<Record<string, unknown>>);
+  public async write(entry: LogEntry<Record<string, unknown>>): Promise<void> {
+    this.queue.push(entry);
 
     // Enforce max entries limit
     if (this.queue.length > this.config.maxEntries) {
       this.queue = this.queue.slice(-this.config.maxEntries);
     }
 
-    // Flush if batch size is reached
-    if (this.queue.length >= this.config.batchSize) {
+    // Flush if buffer size is reached
+    if (this.queue.length >= this.config.bufferSize) {
       await this.flush();
     }
 
     this.notifyUpdate();
   }
 
-  public onUpdate(callback: () => void): void {
-    this.updateCallbacks.add(callback);
-  }
-
   public getEntries(): Array<LogEntry<Record<string, unknown>>> {
     return this.queue;
+  }
+
+  public onUpdate(callback: () => void): void {
+    this.updateCallbacks.add(callback);
   }
 
   private startFlushTimer(): void {
@@ -114,16 +106,17 @@ export class EdgeTransport implements LogTransport {
       clearTimeout(this.flushTimeout);
     }
 
-    this.flushTimeout = setTimeout(async () => {
-      await this.flush();
-      this.startFlushTimer();
-    }, this.config.flushInterval);
+    this.flushTimeout = setTimeout(() => {
+      void this.flush().then(() => {
+        this.startFlushTimer();
+      });
+    }, this.config.retryInterval);
   }
 
   private async flush(): Promise<void> {
     if (!this.isConnected || this.queue.length === 0) return;
 
-    const batch = this.queue.splice(0, this.config.batchSize);
+    const batch = this.queue.splice(0, this.config.bufferSize);
     const payload = JSON.stringify(batch);
 
     // Check payload size
@@ -158,7 +151,7 @@ export class EdgeTransport implements LogTransport {
       }
     } catch (error) {
       // Put failed entries back in queue
-      const entries = JSON.parse(payload);
+      const entries = JSON.parse(payload) as Array<LogEntry<Record<string, unknown>>>;
       this.queue.unshift(...entries);
 
       // Enforce max entries limit

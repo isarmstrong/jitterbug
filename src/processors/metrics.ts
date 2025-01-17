@@ -1,210 +1,120 @@
-import {
-  LogProcessor,
-  LogEntry,
-  RuntimeType,
-} from "../types/types.js";
-import { Runtime, LogLevels } from "../types/enums.js";
+import { LogEntry, LogProcessor } from '../types/types.js';
+import { Environment, Runtime } from '../types/enums.js';
 
-interface MetricsConfig {
+interface MetricsData {
+  timestamp: number;
+  memoryUsage?: {
+    heapUsed: number;
+    heapTotal: number;
+    rss: number;
+    external: number;
+  };
+  eventLoop?: {
+    lag: number;
+  };
+}
+
+interface MetricsProcessorOptions {
   sampleRate?: number;
-  memoryWarningThreshold?: number;
-  eventLoopWarningThreshold?: number;
   trackMemory?: boolean;
   trackEventLoop?: boolean;
 }
 
-interface MemoryMetrics {
-  heapUsed: number;
-  heapTotal: number;
-  rss?: number;
-  external?: number;
-}
-
-interface EventLoopMetrics {
-  lag: number;
-}
-
-interface MetricsData extends Record<string, unknown> {
-  timestamp: number;
-  memoryUsage?: MemoryMetrics;
-  eventLoop?: EventLoopMetrics;
-}
-
-interface BrowserPerformanceMemory {
-  usedJSHeapSize: number;
-  totalJSHeapSize: number;
-}
-
-interface ExtendedPerformance extends Performance {
-  memory?: BrowserPerformanceMemory;
-}
-
 export class MetricsProcessor implements LogProcessor {
-  private readonly config: Required<MetricsConfig>;
-  private lastEventLoopCheck: number;
-  private runtime: RuntimeType;
-  private lastSampleTime: number;
-  private warningCount: number;
+  private lastSampleTime = 0;
+  private warningCount = 0;
+  private readonly sampleRate: number;
+  private readonly trackMemory: boolean;
+  private readonly trackEventLoop: boolean;
 
-  constructor(config: MetricsConfig = {}, runtime: RuntimeType = Runtime.NODE) {
-    this.config = {
-      sampleRate: config.sampleRate ?? 1,
-      memoryWarningThreshold: config.memoryWarningThreshold ?? 0.9,
-      eventLoopWarningThreshold: config.eventLoopWarningThreshold ?? 100,
-      trackMemory: config.trackMemory ?? true,
-      trackEventLoop: config.trackEventLoop ?? true,
-    };
-    this.lastEventLoopCheck = Date.now();
-    this.lastSampleTime = 0; // Initialize to 0 to ensure first sample is taken
-    this.runtime = runtime;
-    this.warningCount = 0;
+  constructor(options: MetricsProcessorOptions = {}) {
+    this.sampleRate = options.sampleRate ?? 1000; // Sample every second by default
+    this.trackMemory = options.trackMemory ?? true;
+    this.trackEventLoop = options.trackEventLoop ?? true;
   }
 
-  public supports(_runtime: string): boolean {
-    return true; // Supports all runtimes
+  public supports(runtime: "EDGE" | "NODE" | "BROWSER"): boolean {
+    return runtime === Runtime.NODE || runtime === Runtime.EDGE;
   }
 
-  public allowedIn(_environment: string): boolean {
-    return true; // Allowed in all environments
+  public allowedIn(environment: "DEVELOPMENT" | "STAGING" | "PRODUCTION" | "TEST"): boolean {
+    return environment !== Environment.TEST;
   }
 
-  public get severity(): string {
-    return LogLevels.INFO;
-  }
-
-  public setRuntime(runtime: RuntimeType): void {
-    this.runtime = runtime;
-  }
-
-  private shouldSample(): boolean {
+  public async process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T & MetricsData>> {
     const now = Date.now();
-    const timeSinceLastSample = now - this.lastSampleTime;
-    const sampleInterval = 1000 / this.config.sampleRate;
+    const shouldSample = now - this.lastSampleTime >= this.sampleRate;
 
-    if (timeSinceLastSample >= sampleInterval) {
-      this.lastSampleTime = now;
-      return true;
-    }
-
-    return false;
-  }
-
-  private getMemoryMetrics(): MemoryMetrics | undefined {
-    if (!this.config.trackMemory) return undefined;
-
-    if (this.runtime === Runtime.NODE && typeof process !== "undefined") {
-      const memory = process.memoryUsage();
-      return {
-        heapUsed: memory.heapUsed,
-        heapTotal: memory.heapTotal,
-        rss: memory.rss,
-        external: memory.external,
-      };
-    } else if (
-      this.runtime === Runtime.BROWSER &&
-      typeof performance !== "undefined" &&
-      "memory" in performance
-    ) {
-      const browserPerformance = performance as ExtendedPerformance;
-      const memory = browserPerformance.memory;
-      if (memory) {
-        return {
-          heapUsed: memory.usedJSHeapSize,
-          heapTotal: memory.totalJSHeapSize,
-        };
-      }
-    } else if (this.runtime === Runtime.EDGE) {
-      // For Edge runtime, we'll use a more basic memory tracking
-      const memory = process?.memoryUsage?.() || { heapUsed: 0, heapTotal: 0 };
-      return {
-        heapUsed: memory.heapUsed,
-        heapTotal: memory.heapTotal,
-      };
-    }
-
-    return undefined;
-  }
-
-  private checkMemoryWarning(metrics: MemoryMetrics): string | undefined {
-    if (!this.config.trackMemory) return undefined;
-
-    const usedRatio = metrics.heapUsed / metrics.heapTotal;
-    if (usedRatio > this.config.memoryWarningThreshold) {
-      this.warningCount++;
-      return `High memory usage: ${Math.round(usedRatio * 100)}% of heap used`;
-    }
-
-    return undefined;
-  }
-
-  private getEventLoopLag(): number {
-    const now = Date.now();
-    const lag = Math.max(0, now - this.lastEventLoopCheck - 1); // Subtract 1ms for minimum timer resolution
-    this.lastEventLoopCheck = now;
-    return lag;
-  }
-
-  private checkEventLoopWarning(lag: number): string | undefined {
-    if (!this.config.trackEventLoop) return undefined;
-
-    if (lag > this.config.eventLoopWarningThreshold) {
-      return `High event loop lag: ${lag}ms`;
-    }
-
-    return undefined;
-  }
-
-  public async process<T extends Record<string, unknown>>(
-    entry: LogEntry<T> & { warnings?: string[] },
-  ): Promise<LogEntry<T & MetricsData>> {
-    const now = Date.now();
-    const metricsData: MetricsData = {
-      timestamp: now,
-    };
-
-    // Apply sampling rate
-    if (!this.shouldSample()) {
+    if (!shouldSample) {
       return {
         ...entry,
         data: {
           ...entry.data,
-          timestamp: now,
         } as T & MetricsData,
       };
     }
 
-    const newWarnings: string[] = [];
+    this.lastSampleTime = now;
+    const metricsData: MetricsData = {
+      timestamp: now,
+    };
 
-    if (this.config.trackMemory) {
-      const memoryMetrics = this.getMemoryMetrics();
+    const warnings: string[] = [];
+
+    if (this.trackMemory) {
+      const memoryMetrics = await this.getMemoryMetrics();
       if (memoryMetrics) {
         metricsData.memoryUsage = memoryMetrics;
-        const warning = this.checkMemoryWarning(memoryMetrics);
-        if (warning) newWarnings.push(warning);
+        if (memoryMetrics.heapUsed / memoryMetrics.heapTotal > 0.9) {
+          warnings.push(`High memory usage: ${Math.round(memoryMetrics.heapUsed / 1024 / 1024)}MB / ${Math.round(memoryMetrics.heapTotal / 1024 / 1024)}MB`);
+          this.warningCount++;
+        }
       }
     }
 
-    if (this.config.trackEventLoop) {
-      const lag = this.getEventLoopLag();
-      metricsData.eventLoop = { lag };
-      const warning = this.checkEventLoopWarning(lag);
-      if (warning) newWarnings.push(warning);
+    if (this.trackEventLoop) {
+      const lag = await this.getEventLoopLag();
+      if (lag !== undefined) {
+        metricsData.eventLoop = { lag };
+        if (lag > 50) {
+          warnings.push(`High event loop lag: ${lag}ms`);
+        }
+      }
     }
 
-    const baseResult = {
+    return {
       ...entry,
       data: {
         ...entry.data,
         ...metricsData,
       } as T & MetricsData,
+      warnings: [...(entry.warnings || []), ...warnings],
     };
+  }
 
-    return {
-      ...baseResult,
-      warnings: newWarnings.length > 0
-        ? [...(entry.warnings || []), ...newWarnings]
-        : entry.warnings,
-    } as LogEntry<T & MetricsData>;
+  private async getMemoryMetrics(): Promise<MetricsData['memoryUsage'] | undefined> {
+    try {
+      const memoryUsage = process.memoryUsage();
+      return {
+        heapUsed: memoryUsage.heapUsed,
+        heapTotal: memoryUsage.heapTotal,
+        rss: memoryUsage.rss,
+        external: memoryUsage.external,
+      };
+    } catch {
+      // process.memoryUsage() might not be available in Edge runtime
+      return undefined;
+    }
+  }
+
+  private async getEventLoopLag(): Promise<number | undefined> {
+    if (!this.trackEventLoop) return undefined;
+
+    const start = Date.now();
+    await new Promise(resolve => setTimeout(resolve, 1));
+    const end = Date.now();
+    const lag = end - start - 1; // Subtract minimum timer resolution (1ms)
+    return Math.max(0, lag);
   }
 
   public getWarningCount(): number {

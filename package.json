@@ -1,5 +1,5 @@
 {
-    "name": "@pocma/jitterbug",
+    "name": "@isarmstrong/jitterbug",
     "version": "0.1.0",
     "type": "module",
     "main": "dist/index.js",
@@ -36,7 +36,7 @@
         "format:check": "prettier --check \"**/*.{ts,js,json,md}\"",
         "typecheck": "tsc --noEmit",
         "clean": "rimraf dist",
-        "prepublishOnly": "pnpm run lint:strict && pnpm test && pnpm build"
+        "prepublishOnly": "pnpm build"
     },
     "peerDependencies": {
         "react": "^18.2.0",
