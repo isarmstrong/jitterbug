@@ -127,6 +127,23 @@ export async function GET() {
 ### Runtime Detection
 
 ```typescript
+import { factory } from "@isarmstrong/jitterbug";
+
+// Get current runtime environment
+const runtime = factory.getRuntime(); // Returns: 'EDGE' | 'NODE' | 'BROWSER'
+const environment = factory.getEnvironment(); // Returns: 'DEVELOPMENT' | 'STAGING' | 'PRODUCTION' | 'TEST'
+
+// Use in configuration
+const debug = createJitterbug({
+  namespace: "my-app",
+  runtime: runtime,
+  environment: environment,
+});
+```
+
+You can also use the predefined constants for type-safe runtime configuration:
+
+```typescript
 import { createJitterbug, Runtime, Environment } from "@isarmstrong/jitterbug";
 
 const debug = createJitterbug({
