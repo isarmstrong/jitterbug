@@ -42,25 +42,25 @@ export class ErrorAggregationProcessor implements LogProcessor {
   }
 
   private getErrorKey(error: Error): string {
-    return `${error.message}${error.stack || ''}`;
+    return `${error.message}${error.stack ?? ''}`;
   }
 
   private isSimilarError(error1: Error, error2: Error): boolean {
     const message1 = error1.message.toLowerCase();
     const message2 = error2.message.toLowerCase();
-    const stack1 = (error1.stack || '').toLowerCase();
-    const stack2 = (error2.stack || '').toLowerCase();
+    const stack1 = (error1.stack ?? '').toLowerCase();
+    const stack2 = (error2.stack ?? '').toLowerCase();
 
     // Check if messages are similar
     if (message1 === message2) return true;
-    if (message1.includes(message2) || message2.includes(message1)) return true;
+    if (message1.length > 0 && message2.length > 0 && (message1.includes(message2) || message2.includes(message1))) return true;
 
     // Check if stack traces have similar patterns
-    if (stack1 && stack2) {
+    if (stack1.length > 0 && stack2.length > 0) {
       const lines1 = stack1.split('\n');
       const lines2 = stack2.split('\n');
       const commonLines = lines1.filter(line => lines2.includes(line));
-      if (commonLines.length > 0) return true;
+      return commonLines.length > 0;
     }
 
     return false;
@@ -68,7 +68,7 @@ export class ErrorAggregationProcessor implements LogProcessor {
 
   public async process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T & ErrorData>> {
     if (!entry.error) {
-      return entry as LogEntry<T & ErrorData>;
+      return Promise.resolve(entry as LogEntry<T & ErrorData>);
     }
 
     const now = Date.now();
@@ -107,13 +107,13 @@ export class ErrorAggregationProcessor implements LogProcessor {
     pattern.frequency = Math.min(similarErrors.length, 20); // Cap at 20 for burst detection
     pattern.similarErrors = similarErrors.slice(0, 5); // Keep only top 5 similar errors
 
-    return {
+    return Promise.resolve({
       ...entry,
       data: {
         ...entry.data,
         frequency: pattern.frequency,
         similarErrors: pattern.similarErrors
       }
-    } as LogEntry<T & ErrorData>;
+    } as LogEntry<T & ErrorData>);
   }
 }

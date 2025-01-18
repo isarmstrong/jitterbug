@@ -6,6 +6,7 @@ import type {
   JitterbugFactory,
   RuntimeType,
   EnvironmentType,
+  LogTransport,
 } from "./types/types.js";
 import { LogLevels, Runtime, Environment } from "./types/enums.js";
 import { processLog, writeLog } from "./logger.js";
@@ -34,17 +35,18 @@ class RuntimeDetector {
   }
 
   static detectEnvironment(): EnvironmentType {
-    if (typeof process !== "undefined" && process.env) {
-      switch (process.env.NODE_ENV) {
-        case "development":
-          return Environment.DEVELOPMENT;
-        case "production":
-          return Environment.PRODUCTION;
-        case "test":
-          return Environment.TEST;
-        default:
-          return Environment.DEVELOPMENT;
-      }
+    const hasProcess = typeof process !== "undefined";
+    const hasEnv = hasProcess && process.env !== undefined && process.env !== null;
+    const nodeEnv = hasEnv ? process.env.NODE_ENV : undefined;
+
+    if (nodeEnv === "development") {
+      return Environment.DEVELOPMENT;
+    }
+    if (nodeEnv === "production") {
+      return Environment.PRODUCTION;
+    }
+    if (nodeEnv === "test") {
+      return Environment.TEST;
     }
     return Environment.DEVELOPMENT;
   }
@@ -57,17 +59,18 @@ export class JitterbugImpl implements JitterbugInstance {
   private enabled: boolean;
   private context: LogContext;
   private config: Required<JitterbugConfig>;
+  private transports: LogTransport[] = [];
 
   constructor(config: JitterbugConfig) {
     this.config = {
-      namespace: config.namespace,
+      namespace: config.namespace ?? 'default',
+      runtime: config.runtime ?? RuntimeDetector.detectRuntime(),
+      environment: config.environment ?? RuntimeDetector.detectEnvironment(),
+      transports: config.transports ?? [],
+      processors: config.processors ?? [],
       enabled: config.enabled ?? true,
       level: config.level ?? LogLevels.INFO,
       minLevel: config.minLevel ?? config.level ?? LogLevels.INFO,
-      runtime: config.runtime ?? RuntimeDetector.detectRuntime(),
-      environment: config.environment ?? RuntimeDetector.detectEnvironment(),
-      processors: config.processors ?? [],
-      transports: config.transports ?? [],
     };
 
     this.enabled = this.config.enabled;
@@ -77,6 +80,8 @@ export class JitterbugImpl implements JitterbugInstance {
       environment: this.config.environment,
       namespace: this.config.namespace,
     };
+
+    this.setupTransports();
   }
 
   public debug<T extends Record<string, unknown>>(
@@ -185,14 +190,46 @@ export class JitterbugImpl implements JitterbugInstance {
     };
   };
 
-  private readonly shouldLog = (
-    level: (typeof LogLevels)[keyof typeof LogLevels],
-  ): boolean => {
-    const levels = Object.values(LogLevels);
-    const minLevelIndex = levels.indexOf(this.config.minLevel);
-    const currentLevelIndex = levels.indexOf(level);
-    return this.enabled && currentLevelIndex >= minLevelIndex;
-  };
+  private getLogContext(context?: LogContext): LogContext {
+    const baseContext = {
+      timestamp: new Date().toISOString(),
+      runtime: this.config.runtime,
+      environment: this.config.environment,
+      namespace: this.config.namespace,
+    };
+
+    if (context === undefined || context === null) {
+      return baseContext;
+    }
+
+    const message = ((): string => {
+      const msg = context.message;
+      if (msg === undefined || msg === null) {
+        return '';
+      }
+      if (typeof msg !== 'string') {
+        return '';
+      }
+      if (msg.length === 0) {
+        return '';
+      }
+      return msg;
+    })();
+
+    const updatedContext: LogContext = {
+      ...baseContext,
+      ...context,
+      message,
+    };
+
+    return updatedContext;
+  }
+
+  private shouldLog(level: keyof typeof LogLevels): boolean {
+    const minLevelIndex = this.config.minLevel !== undefined ? Object.values(LogLevels).indexOf(this.config.minLevel) : 0;
+    const currentLevelIndex = Object.values(LogLevels).indexOf(level);
+    return currentLevelIndex >= minLevelIndex;
+  }
 
   private readonly updateConfig = (config: Partial<JitterbugConfig>): void => {
     this.config = { ...this.config, ...config };
@@ -206,6 +243,14 @@ export class JitterbugImpl implements JitterbugInstance {
   ): Promise<void> {
     const entry = this.createEntry(level, message, data, error);
     await this.processAndWrite(entry);
+  }
+
+  private setupTransports(): void {
+    const transports = this.config.transports;
+    const hasTransports = Array.isArray(transports) && transports.length > 0;
+    if (hasTransports) {
+      this.transports = transports;
+    }
   }
 }
 
@@ -223,8 +268,9 @@ export function createDebug(
   namespace: string,
   config: Partial<JitterbugConfig> = {},
 ): JitterbugInstance {
+  const appName = typeof process !== "undefined" && process.env?.APP_NAME;
   const baseConfig: JitterbugConfig = {
-    namespace: process.env.APP_NAME || "app",
+    namespace: typeof appName === 'string' ? appName : "app",
     runtime: config.runtime ?? RuntimeDetector.detectRuntime(),
     environment: config.environment ?? RuntimeDetector.detectEnvironment(),
     processors: config.processors ?? [],

@@ -92,18 +92,18 @@ export class MetricsProcessor implements LogProcessor {
     };
   }
 
-  private async getMemoryMetrics(): Promise<MetricsData['memoryUsage'] | undefined> {
+  private getMemoryMetrics(): Promise<MetricsData['memoryUsage'] | undefined> {
     try {
       const memoryUsage = process.memoryUsage();
-      return {
+      return Promise.resolve({
         heapUsed: memoryUsage.heapUsed,
         heapTotal: memoryUsage.heapTotal,
         rss: memoryUsage.rss,
         external: memoryUsage.external,
-      };
+      });
     } catch {
       // process.memoryUsage() might not be available in Edge runtime
-      return undefined;
+      return Promise.resolve(undefined);
     }
   }
 

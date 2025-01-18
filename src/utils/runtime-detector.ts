@@ -9,26 +9,22 @@ export class RuntimeDetector {
    * Detect the current runtime environment
    */
   static detectRuntime(): RuntimeType {
-    if (typeof EdgeRuntime !== "undefined") {
-      return Runtime.EDGE;
-    }
-
-    if (
-      typeof window !== "undefined" &&
-      typeof window.document !== "undefined" &&
-      typeof window.document.createElement !== "undefined"
-    ) {
+    if (typeof window === 'object' && window !== null && typeof window.document === 'object' && window.document !== null && 'createElement' in window.document) {
       return Runtime.BROWSER;
     }
 
-    return Runtime.NODE;
+    if (typeof process === 'object' && process !== null && typeof process.versions === 'object' && process.versions !== null && typeof process.versions.node === 'string' && process.versions.node.length > 0) {
+      return Runtime.NODE;
+    }
+
+    return Runtime.EDGE;
   }
 
   /**
    * Detect the current environment type
    */
   static detectEnvironment(): EnvironmentType {
-    if (typeof process !== "undefined" && process.env) {
+    if (typeof process === 'object' && process !== null && typeof process.env === 'object' && process.env !== null && typeof process.env.NODE_ENV === 'string') {
       switch (process.env.NODE_ENV) {
         case "development":
           return Environment.DEVELOPMENT;

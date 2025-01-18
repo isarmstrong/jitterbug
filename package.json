@@ -41,33 +41,20 @@
         "clean": "rimraf dist",
         "prepublishOnly": "pnpm build"
     },
-    "peerDependencies": {
+    "optionalDependencies": {
         "react": "^18.2.0",
-        "next": "^13.0.0 || ^14.0.0 || ^15.0.0"
+        "next": "^14.0.0"
     },
     "dependencies": {
-        "@sindresorhus/is": "^6.1.0",
-        "jotai": "^2.6.0",
         "p-queue": "^7.4.1",
         "p-throttle": "^5.1.0",
-        "ts-pattern": "^5.0.6",
-        "type-fest": "^4.8.3",
         "zod": "^3.22.4"
     },
     "devDependencies": {
         "@types/node": "^20.10.5",
-        "@types/react": "^18.2.0",
-        "react": "^18.2.0",
-        "next": "^14.0.0",
         "@typescript-eslint/eslint-plugin": "^6.15.0",
         "@typescript-eslint/parser": "^6.15.0",
         "eslint": "^8.56.0",
-        "eslint-config-prettier": "^9.1.0",
-        "eslint-import-resolver-typescript": "^3.6.1",
-        "eslint-plugin-import": "^2.29.1",
-        "eslint-plugin-prettier": "^5.1.0",
-        "eslint-plugin-react": "^7.37.4",
-        "eslint-plugin-react-hooks": "^5.1.0",
         "prettier": "^3.1.1",
         "rimraf": "^5.0.5",
         "typescript": "~5.3.3",

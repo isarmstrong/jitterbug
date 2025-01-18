@@ -5,7 +5,7 @@ import { Runtime } from "../types/enums.js";
  * Sanitize processor configuration
  */
 export interface SanitizeConfig {
-  sensitiveKeys?: string[];
+  sensitiveKeys: Array<string | RegExp>;
   replacement?: string;
 }
 
@@ -24,10 +24,10 @@ export class SanitizeProcessor implements LogProcessor {
     "private",
   ];
 
-  constructor(config?: SanitizeConfig) {
+  constructor(config: SanitizeConfig) {
     this.config = {
-      sensitiveKeys: config?.sensitiveKeys ?? this.defaultSensitiveKeys,
-      replacement: config?.replacement ?? "[REDACTED]",
+      sensitiveKeys: config.sensitiveKeys,
+      replacement: config.replacement ?? '[REDACTED]'
     };
   }
 
@@ -43,39 +43,33 @@ export class SanitizeProcessor implements LogProcessor {
     return true;
   }
 
-  public async process<T extends Record<string, unknown>>(
-    entry: LogEntry<T>,
-  ): Promise<LogEntry<T>> {
-    if (!entry.data) return entry;
-
-    const sanitizedData = this.sanitizeObject(entry.data);
-    return {
+  public process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>> {
+    const sanitizedData = this.sanitizeObject(entry.data ?? {});
+    return Promise.resolve({
       ...entry,
-      data: sanitizedData as T,
-    };
+      data: sanitizedData as T
+    });
   }
 
-  private sanitizeObject(
-    obj: Record<string, unknown>,
-  ): Record<string, unknown> {
+  private sanitizeObject(obj: Record<string, unknown>): Record<string, unknown> {
     const result: Record<string, unknown> = {};
-
     for (const [key, value] of Object.entries(obj)) {
-      if (this.isSensitiveKey(key)) {
+      if (this.shouldSanitize(key)) {
         result[key] = this.config.replacement;
-      } else if (value && typeof value === "object" && !Array.isArray(value)) {
+      } else if (typeof value === 'object' && value !== null) {
         result[key] = this.sanitizeObject(value as Record<string, unknown>);
       } else {
         result[key] = value;
       }
     }
-
     return result;
   }
 
-  private isSensitiveKey(key: string): boolean {
-    return this.config.sensitiveKeys.some((sensitiveKey) =>
-      key.toLowerCase().includes(sensitiveKey.toLowerCase()),
+  private shouldSanitize(key: string): boolean {
+    return this.config.sensitiveKeys.some((pattern: string | RegExp) =>
+      typeof pattern === 'string'
+        ? key.toLowerCase() === pattern.toLowerCase()
+        : pattern.test(key)
     );
   }
 }
