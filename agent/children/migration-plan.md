@@ -1,6 +1,7 @@
 # Agent Structure Migration Plan
 
 ## Current Structure
+
 ```
 @jitterbug/agent/
 ├── context/
@@ -17,6 +18,7 @@
 ```
 
 ## Target Structure
+
 ```
 @jitterbug/agent/
 ├── context/                 # Core agent personality & beliefs
@@ -39,16 +41,19 @@
 ## Migration Steps
 
 1. Create core agent personality files:
+
    - Extract engineering principles & beliefs to `context/personality.json`
    - Document technical capabilities in `context/capabilities.json`
    - Initialize learning system in `context/memory.json`
 
 2. Create Jitterbug child context:
+
    - Move `backlog.xml` to `children/jitterbug/`
    - Move `meta-context.json` to `children/jitterbug/context.json`
    - Move `asana-sync.json` to `children/jitterbug/`
 
 3. Update references:
+
    - Update paths in `asana-sync.js`
    - Update inheritance chains in child contexts
    - Ensure all children extend core personality
@@ -71,4 +76,4 @@
 - Use strict typing for personality traits and capabilities
 - Implement version control for agent evolution
 - Document learning patterns and memory structure
-- Create clear inheritance rules for child contexts 
+- Create clear inheritance rules for child contexts

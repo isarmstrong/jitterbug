@@ -1,91 +1,91 @@
 {
-    "version": "1.0.0",
-    "system": {
-        "type": "hierarchical_memory",
-        "structure": {
-            "short_term": {
-                "capacity": "current_task",
-                "retention": "session",
-                "priority": "immediate_context"
-            },
-            "working": {
-                "capacity": "active_projects",
-                "retention": "project_duration",
-                "priority": "task_completion"
-            },
-            "long_term": {
-                "capacity": "unlimited",
-                "retention": "permanent",
-                "priority": "pattern_recognition"
-            }
-        }
-    },
-    "experiences": {
-        "projects": [],
-        "patterns": {
-            "successful": [],
-            "problematic": [],
-            "innovative": []
-        },
-        "learnings": {
-            "technical": [],
-            "process": [],
-            "collaboration": []
-        }
-    },
-    "current_context": {
-        "active_task": null,
-        "working_set": [],
-        "recent_learnings": []
-    },
-    "learning_rules": {
-        "pattern_recognition": {
-            "threshold": 3,
-            "confidence_required": 0.8,
-            "validation_steps": [
-                "Multiple occurrences",
-                "Positive outcomes",
-                "Reproducible results"
-            ]
-        },
-        "memory_promotion": {
-            "conditions": [
-                "Successfully applied",
-                "Validated results",
-                "Clear benefits"
-            ],
-            "review_process": [
-                "Document pattern",
-                "Validate applicability",
-                "Test in new context"
-            ]
-        }
-    },
-    "reflection_system": {
-        "triggers": [
-            "Task completion",
-            "Pattern recognition",
-            "Error resolution",
-            "Innovation discovery"
-        ],
-        "process": {
-            "analyze": [
-                "What worked",
-                "What didn't",
-                "Why it worked/didn't",
-                "Future applications"
-            ],
-            "document": [
-                "Pattern description",
-                "Context details",
-                "Success metrics",
-                "Limitations"
-            ],
-            "integrate": [
-                "Update capabilities",
-                "Refine approaches",
-                "Share learnings"
-            ]
-        }
+  "version": "1.0.0",
+  "system": {
+    "type": "hierarchical_memory",
+    "structure": {
+      "short_term": {
+        "capacity": "current_task",
+        "retention": "session",
+        "priority": "immediate_context"
+      },
+      "working": {
+        "capacity": "active_projects",
+        "retention": "project_duration",
+        "priority": "task_completion"
+      },
+      "long_term": {
+        "capacity": "unlimited",
+        "retention": "permanent",
+        "priority": "pattern_recognition"
+      }
     }
+  },
+  "experiences": {
+    "projects": [],
+    "patterns": {
+      "successful": [],
+      "problematic": [],
+      "innovative": []
+    },
+    "learnings": {
+      "technical": [],
+      "process": [],
+      "collaboration": []
+    }
+  },
+  "current_context": {
+    "active_task": null,
+    "working_set": [],
+    "recent_learnings": []
+  },
+  "learning_rules": {
+    "pattern_recognition": {
+      "threshold": 3,
+      "confidence_required": 0.8,
+      "validation_steps": [
+        "Multiple occurrences",
+        "Positive outcomes",
+        "Reproducible results"
+      ]
+    },
+    "memory_promotion": {
+      "conditions": [
+        "Successfully applied",
+        "Validated results",
+        "Clear benefits"
+      ],
+      "review_process": [
+        "Document pattern",
+        "Validate applicability",
+        "Test in new context"
+      ]
+    }
+  },
+  "reflection_system": {
+    "triggers": [
+      "Task completion",
+      "Pattern recognition",
+      "Error resolution",
+      "Innovation discovery"
+    ],
+    "process": {
+      "analyze": [
+        "What worked",
+        "What didn't",
+        "Why it worked/didn't",
+        "Future applications"
+      ],
+      "document": [
+        "Pattern description",
+        "Context details",
+        "Success metrics",
+        "Limitations"
+      ],
+      "integrate": [
+        "Update capabilities",
+        "Refine approaches",
+        "Share learnings"
+      ]
+    }
+  }
 }

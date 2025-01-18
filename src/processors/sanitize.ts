@@ -5,8 +5,18 @@ import { Runtime } from "../types/enums.js";
  * Sanitize processor configuration
  */
 export interface SanitizeConfig {
-  sensitiveKeys: Array<string | RegExp>;
+  /**
+   * @deprecated Since version 1.1.0. The default sensitive keys list will be removed in version 2.0.0.
+   * Please explicitly provide sensitive keys to ensure proper data sanitization.
+   */
+  sensitiveKeys?: Array<string | RegExp>;
   replacement?: string;
+  /**
+   * @since 1.1.0
+   * @default false
+   * Controls whether arrays should be recursively sanitized.
+   */
+  sanitizeArrays?: boolean;
 }
 
 /**
@@ -14,6 +24,10 @@ export interface SanitizeConfig {
  */
 export class SanitizeProcessor implements LogProcessor {
   private readonly config: Required<SanitizeConfig>;
+
+  /**
+   * @deprecated Since version 1.1.0. Will be removed in version 2.0.0.
+   */
   private readonly defaultSensitiveKeys = [
     "password",
     "token",
@@ -24,10 +38,15 @@ export class SanitizeProcessor implements LogProcessor {
     "private",
   ];
 
-  constructor(config: SanitizeConfig) {
+  /**
+   * Creates a new SanitizeProcessor instance
+   * @deprecated Since version 1.1.0. Constructor without explicit sensitiveKeys will be removed in version 2.0.0.
+   */
+  constructor(config?: SanitizeConfig) {
     this.config = {
-      sensitiveKeys: config.sensitiveKeys,
-      replacement: config.replacement ?? '[REDACTED]'
+      sensitiveKeys: config?.sensitiveKeys ?? this.defaultSensitiveKeys,
+      replacement: config?.replacement ?? "[REDACTED]",
+      sanitizeArrays: config?.sanitizeArrays ?? false,
     };
   }
 
@@ -43,33 +62,69 @@ export class SanitizeProcessor implements LogProcessor {
     return true;
   }
 
-  public process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>> {
-    const sanitizedData = this.sanitizeObject(entry.data ?? {});
+  public process<T extends Record<string, unknown>>(
+    entry: LogEntry<T>,
+  ): Promise<LogEntry<T>> {
+    // Ensure we have a valid data object to work with
+    const sourceData = entry.data ?? ({} as T);
+
+    // Type-safe sanitization with runtime validation
+    const sanitizedData = this.sanitizeObject(sourceData);
+
+    // Construct new entry with validated data
     return Promise.resolve({
       ...entry,
-      data: sanitizedData as T
+      data: sanitizedData,
     });
   }
 
-  private sanitizeObject(obj: Record<string, unknown>): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
+  private sanitizeObject<T extends Record<string, unknown>>(obj: T): T {
+    // Initialize result with correct type
+    const result = Object.create(null) as T;
+
     for (const [key, value] of Object.entries(obj)) {
+      const targetKey = key as keyof T;
+
       if (this.shouldSanitize(key)) {
-        result[key] = this.config.replacement;
-      } else if (typeof value === 'object' && value !== null) {
-        result[key] = this.sanitizeObject(value as Record<string, unknown>);
+        // Handle sensitive data replacement
+        result[targetKey] = this.config.replacement as T[keyof T];
+      } else if (this.isObject(value)) {
+        if (Array.isArray(value)) {
+          // Handle arrays with type safety
+          result[targetKey] = (
+            this.config.sanitizeArrays ? this.sanitizeArray(value) : value
+          ) as T[keyof T];
+        } else {
+          // Recursively sanitize nested objects
+          result[targetKey] = this.sanitizeObject(value) as T[keyof T];
+        }
       } else {
-        result[key] = value;
+        // Preserve primitive values
+        result[targetKey] = value as T[keyof T];
       }
     }
+
     return result;
+  }
+
+  private sanitizeArray(arr: unknown[]): unknown[] {
+    return arr.map((item) => {
+      if (Array.isArray(item)) {
+        return this.sanitizeArray(item);
+      }
+      return this.isObject(item) ? this.sanitizeObject(item) : item;
+    });
+  }
+
+  private isObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
   }
 
   private shouldSanitize(key: string): boolean {
     return this.config.sensitiveKeys.some((pattern: string | RegExp) =>
-      typeof pattern === 'string'
-        ? key.toLowerCase() === pattern.toLowerCase()
-        : pattern.test(key)
+      typeof pattern === "string"
+        ? key.toLowerCase().includes(pattern.toLowerCase())
+        : pattern.test(key),
     );
   }
 }

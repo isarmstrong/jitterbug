@@ -1,191 +1,203 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { EdgeTransport } from '../../src/transports/edge';
-import { createTestEntry } from '../utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { EdgeTransport } from "../../src/transports/edge";
+import { createTestEntry } from "../utils";
 
-describe('EdgeTransport', () => {
-    let transport;
-    let mockFetch;
+describe("EdgeTransport", () => {
+  let transport;
+  let mockFetch;
 
-    beforeEach(() => {
-        vi.useFakeTimers();
-        mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
-        global.fetch = mockFetch;
-        transport = new EdgeTransport({
-            endpoint: 'https://test-endpoint.com/logs',
-            batchSize: 10,
-            flushInterval: 1000,
-            maxRetries: 3,
-            maxConnectionDuration: 60000,
-            maxEntries: 50,
-            maxPayloadSize: 1024
-        });
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    global.fetch = mockFetch;
+    transport = new EdgeTransport({
+      endpoint: "https://test-endpoint.com/logs",
+      batchSize: 10,
+      flushInterval: 1000,
+      maxRetries: 3,
+      maxConnectionDuration: 60000,
+      maxEntries: 50,
+      maxPayloadSize: 1024,
+    });
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  describe("Basic Transport", () => {
+    it("should initialize with config", () => {
+      expect(transport.config.endpoint).toBe("https://test-endpoint.com/logs");
+      expect(transport.config.batchSize).toBe(10);
+      expect(transport.config.flushInterval).toBe(1000);
+      expect(transport.config.maxRetries).toBe(3);
+      expect(transport.config.maxConnectionDuration).toBe(60000);
+      expect(transport.config.maxEntries).toBe(50);
+      expect(transport.config.maxPayloadSize).toBe(1024);
     });
 
-    afterEach(() => {
-        vi.clearAllTimers();
-        vi.useRealTimers();
-        vi.clearAllMocks();
+    it("should queue log entries", async () => {
+      const entry = createTestEntry();
+      await transport.write(entry);
+      expect(transport.queue.length).toBe(1);
     });
 
-    describe('Basic Transport', () => {
-        it('should initialize with config', () => {
-            expect(transport.config.endpoint).toBe('https://test-endpoint.com/logs');
-            expect(transport.config.batchSize).toBe(10);
-            expect(transport.config.flushInterval).toBe(1000);
-            expect(transport.config.maxRetries).toBe(3);
-            expect(transport.config.maxConnectionDuration).toBe(60000);
-            expect(transport.config.maxEntries).toBe(50);
-            expect(transport.config.maxPayloadSize).toBe(1024);
-        });
+    it("should respect batch size", async () => {
+      const entries = Array(15)
+        .fill(null)
+        .map(() => createTestEntry());
 
-        it('should queue log entries', async () => {
-            const entry = createTestEntry();
-            await transport.write(entry);
-            expect(transport.queue.length).toBe(1);
-        });
+      for (const entry of entries.slice(0, 9)) {
+        await transport.write(entry);
+      }
+      expect(mockFetch).not.toHaveBeenCalled();
 
-        it('should respect batch size', async () => {
-            const entries = Array(15).fill(null).map(() => createTestEntry());
+      await transport.write(entries[9]); // This should trigger a flush
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(transport.queue.length).toBe(5);
+    });
+  });
 
-            for (const entry of entries.slice(0, 9)) {
-                await transport.write(entry);
-            }
-            expect(mockFetch).not.toHaveBeenCalled();
+  describe("Batch Processing", () => {
+    it("should process batches correctly", async () => {
+      const entries = Array(10)
+        .fill(null)
+        .map(() => createTestEntry());
 
-            await transport.write(entries[9]); // This should trigger a flush
-            expect(mockFetch).toHaveBeenCalledTimes(1);
-            expect(transport.queue.length).toBe(5);
-        });
+      for (const entry of entries) {
+        await transport.write(entry);
+      }
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).toBe("https://test-endpoint.com/logs");
+      expect(JSON.parse(options.body).length).toBe(10);
     });
 
-    describe('Batch Processing', () => {
-        it('should process batches correctly', async () => {
-            const entries = Array(10).fill(null).map(() => createTestEntry());
+    it("should handle failed batches", async () => {
+      mockFetch
+        .mockRejectedValueOnce(new Error("Network error"))
+        .mockResolvedValueOnce({ ok: true, status: 200 });
 
-            for (const entry of entries) {
-                await transport.write(entry);
-            }
+      const entries = Array(10)
+        .fill(null)
+        .map(() => createTestEntry());
 
-            expect(mockFetch).toHaveBeenCalledTimes(1);
-            const [url, options] = mockFetch.mock.calls[0];
-            expect(url).toBe('https://test-endpoint.com/logs');
-            expect(JSON.parse(options.body).length).toBe(10);
-        });
+      for (const entry of entries) {
+        await transport.write(entry);
+      }
 
-        it('should handle failed batches', async () => {
-            mockFetch.mockRejectedValueOnce(new Error('Network error'))
-                .mockResolvedValueOnce({ ok: true, status: 200 });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(transport.queue.length).toBe(0);
+    });
+  });
 
-            const entries = Array(10).fill(null).map(() => createTestEntry());
+  describe("Auto Flush", () => {
+    it("should auto-flush on interval", async () => {
+      const entry = createTestEntry();
+      await transport.write(entry);
 
-            for (const entry of entries) {
-                await transport.write(entry);
-            }
-
-            expect(mockFetch).toHaveBeenCalledTimes(2);
-            expect(transport.queue.length).toBe(0);
-        });
+      expect(mockFetch).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1100);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
-    describe('Auto Flush', () => {
-        it('should auto-flush on interval', async () => {
-            const entry = createTestEntry();
-            await transport.write(entry);
+    it("should handle flush errors", async () => {
+      mockFetch.mockRejectedValue(new Error("Flush error"));
 
-            expect(mockFetch).not.toHaveBeenCalled();
-            vi.advanceTimersByTime(1100);
-            expect(mockFetch).toHaveBeenCalledTimes(1);
-        });
+      const entries = Array(5)
+        .fill(null)
+        .map(() => createTestEntry());
+      for (const entry of entries) {
+        await transport.write(entry);
+      }
 
-        it('should handle flush errors', async () => {
-            mockFetch.mockRejectedValue(new Error('Flush error'));
+      vi.advanceTimersByTime(1100);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(transport.queue.length).toBe(5);
+    });
+  });
 
-            const entries = Array(5).fill(null).map(() => createTestEntry());
-            for (const entry of entries) {
-                await transport.write(entry);
-            }
+  describe("Edge Runtime", () => {
+    it("should handle edge runtime constraints", async () => {
+      const entry = createTestEntry();
+      await transport.write(entry);
 
-            vi.advanceTimersByTime(1100);
-            expect(mockFetch).toHaveBeenCalledTimes(1);
-            expect(transport.queue.length).toBe(5);
-        });
+      vi.advanceTimersByTime(1100);
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://test-endpoint.com/logs",
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            "X-Runtime": "edge",
+            "X-Environment": "production",
+          }),
+        }),
+      );
     });
 
-    describe('Edge Runtime', () => {
-        it('should handle edge runtime constraints', async () => {
-            const entry = createTestEntry();
-            await transport.write(entry);
+    it("should handle large payloads", async () => {
+      const largeEntry = createTestEntry();
+      largeEntry.data = { large: "x".repeat(1000000) };
 
-            vi.advanceTimersByTime(1100);
-            expect(mockFetch).toHaveBeenCalledWith(
-                'https://test-endpoint.com/logs',
-                expect.objectContaining({
-                    headers: expect.objectContaining({
-                        'X-Runtime': 'edge',
-                        'X-Environment': 'production'
-                    })
-                })
-            );
-        });
+      await transport.write(largeEntry);
+      vi.advanceTimersByTime(1100);
 
-        it('should handle large payloads', async () => {
-            const largeEntry = createTestEntry();
-            largeEntry.data = { large: 'x'.repeat(1000000) };
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [, options] = mockFetch.mock.calls[0];
+      expect(options.body.length).toBeLessThan(1000000);
+    });
+  });
 
-            await transport.write(largeEntry);
-            vi.advanceTimersByTime(1100);
+  describe("Error Handling", () => {
+    it("should handle network errors", async () => {
+      mockFetch
+        .mockRejectedValueOnce(new Error("Network error"))
+        .mockResolvedValueOnce({ ok: true, status: 200 });
 
-            expect(mockFetch).toHaveBeenCalledTimes(1);
-            const [, options] = mockFetch.mock.calls[0];
-            expect(options.body.length).toBeLessThan(1000000);
-        });
+      const entry = createTestEntry();
+      await transport.write(entry);
+
+      vi.advanceTimersByTime(1100);
+      expect(transport.queue.length).toBe(0);
     });
 
-    describe('Error Handling', () => {
-        it('should handle network errors', async () => {
-            mockFetch.mockRejectedValueOnce(new Error('Network error'))
-                .mockResolvedValueOnce({ ok: true, status: 200 });
+    it("should handle malformed responses", async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 400 });
 
-            const entry = createTestEntry();
-            await transport.write(entry);
+      const entry = createTestEntry();
+      await transport.write(entry);
 
-            vi.advanceTimersByTime(1100);
-            expect(transport.queue.length).toBe(0);
-        });
+      vi.advanceTimersByTime(1100);
+      expect(transport.queue.length).toBe(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+  });
 
-        it('should handle malformed responses', async () => {
-            mockFetch.mockResolvedValue({ ok: false, status: 400 });
+  describe("Cleanup", () => {
+    it("should clean up resources on destroy", async () => {
+      const entry = createTestEntry();
+      await transport.write(entry);
 
-            const entry = createTestEntry();
-            await transport.write(entry);
-
-            vi.advanceTimersByTime(1100);
-            expect(transport.queue.length).toBe(1);
-            expect(mockFetch).toHaveBeenCalledTimes(1);
-        });
+      await transport.destroy();
+      expect(transport.queue.length).toBe(0);
+      expect(transport.flushTimeout).toBeNull();
     });
 
-    describe('Cleanup', () => {
-        it('should clean up resources on destroy', async () => {
-            const entry = createTestEntry();
-            await transport.write(entry);
+    it("should handle pending operations on destroy", async () => {
+      mockFetch.mockResolvedValue({ ok: true, status: 200 });
 
-            await transport.destroy();
-            expect(transport.queue.length).toBe(0);
-            expect(transport.flushTimeout).toBeNull();
-        });
+      const entries = Array(5)
+        .fill(null)
+        .map(() => createTestEntry());
+      for (const entry of entries) {
+        await transport.write(entry);
+      }
 
-        it('should handle pending operations on destroy', async () => {
-            mockFetch.mockResolvedValue({ ok: true, status: 200 });
-
-            const entries = Array(5).fill(null).map(() => createTestEntry());
-            for (const entry of entries) {
-                await transport.write(entry);
-            }
-
-            await transport.destroy();
-            expect(mockFetch).toHaveBeenCalledTimes(1);
-            expect(transport.queue.length).toBe(0);
-        });
+      await transport.destroy();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(transport.queue.length).toBe(0);
     });
+  });
 });

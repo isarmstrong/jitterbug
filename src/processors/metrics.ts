@@ -1,5 +1,5 @@
-import { LogEntry, LogProcessor } from '../types/types.js';
-import { Environment, Runtime } from '../types/enums.js';
+import { LogEntry, LogProcessor } from "../types/types.js";
+import { Environment, Runtime } from "../types/enums.js";
 
 interface MetricsData {
   timestamp: number;
@@ -37,11 +37,15 @@ export class MetricsProcessor implements LogProcessor {
     return runtime === Runtime.NODE || runtime === Runtime.EDGE;
   }
 
-  public allowedIn(environment: "DEVELOPMENT" | "STAGING" | "PRODUCTION" | "TEST"): boolean {
+  public allowedIn(
+    environment: "DEVELOPMENT" | "STAGING" | "PRODUCTION" | "TEST",
+  ): boolean {
     return environment !== Environment.TEST;
   }
 
-  public async process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T & MetricsData>> {
+  public async process<T extends Record<string, unknown>>(
+    entry: LogEntry<T>,
+  ): Promise<LogEntry<T & MetricsData>> {
     const now = Date.now();
     const shouldSample = now - this.lastSampleTime >= this.sampleRate;
 
@@ -66,7 +70,9 @@ export class MetricsProcessor implements LogProcessor {
       if (memoryMetrics) {
         metricsData.memoryUsage = memoryMetrics;
         if (memoryMetrics.heapUsed / memoryMetrics.heapTotal > 0.9) {
-          warnings.push(`High memory usage: ${Math.round(memoryMetrics.heapUsed / 1024 / 1024)}MB / ${Math.round(memoryMetrics.heapTotal / 1024 / 1024)}MB`);
+          warnings.push(
+            `High memory usage: ${Math.round(memoryMetrics.heapUsed / 1024 / 1024)}MB / ${Math.round(memoryMetrics.heapTotal / 1024 / 1024)}MB`,
+          );
           this.warningCount++;
         }
       }
@@ -92,7 +98,7 @@ export class MetricsProcessor implements LogProcessor {
     };
   }
 
-  private getMemoryMetrics(): Promise<MetricsData['memoryUsage'] | undefined> {
+  private getMemoryMetrics(): Promise<MetricsData["memoryUsage"] | undefined> {
     try {
       const memoryUsage = process.memoryUsage();
       return Promise.resolve({
@@ -111,7 +117,7 @@ export class MetricsProcessor implements LogProcessor {
     if (!this.trackEventLoop) return undefined;
 
     const start = Date.now();
-    await new Promise(resolve => setTimeout(resolve, 1));
+    await new Promise((resolve) => setTimeout(resolve, 1));
     const end = Date.now();
     const lag = end - start - 1; // Subtract minimum timer resolution (1ms)
     return Math.max(0, lag);

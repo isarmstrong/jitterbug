@@ -68,7 +68,13 @@ export class ErrorWrapperService {
     }
 
     // Format stack trace if configured
-    if (this.config.maxStackLines !== undefined && error.stack !== undefined && error.stack !== null && typeof error.stack === 'string' && error.stack.length > 0) {
+    if (
+      this.config.maxStackLines !== undefined &&
+      error.stack !== undefined &&
+      error.stack !== null &&
+      typeof error.stack === "string" &&
+      error.stack.length > 0
+    ) {
       const lines = error.stack.split("\n");
       if (lines.length > this.config.maxStackLines) {
         error.stack = lines
@@ -109,23 +115,23 @@ export class ErrorWrapperService {
 
   private getErrorMessage(error: unknown): string {
     if (error === undefined || error === null) {
-      return 'Unknown error occurred';
+      return "Unknown error occurred";
     }
 
     if (error instanceof Error) {
       const msg = error.message;
       if (msg === undefined || msg === null) {
-        return 'Unknown error occurred';
+        return "Unknown error occurred";
       }
-      if (typeof msg !== 'string') {
-        return 'Unknown error occurred';
+      if (typeof msg !== "string") {
+        return "Unknown error occurred";
       }
       if (msg.length === 0) {
-        return 'Unknown error occurred';
+        return "Unknown error occurred";
       }
       return msg;
     }
 
-    return 'Unknown error occurred';
+    return "Unknown error occurred";
   }
 }

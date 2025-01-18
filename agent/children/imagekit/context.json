@@ -1,92 +1,89 @@
 {
-    "extends": "../../context/personality.json",
-    "inherits": [
-        "../../context/capabilities.json",
-        "../../context/memory.json"
-    ],
-    "task": {
-        "name": "ImageKit Integration",
-        "description": "Digital Asset Management bridge between Sanity CMS and ImageKit, with S3 archival",
-        "scope": [
-            "Core service implementation",
-            "Sync process development",
-            "Video processing pipeline",
-            "Debug system integration"
+  "extends": "../../context/personality.json",
+  "inherits": ["../../context/capabilities.json", "../../context/memory.json"],
+  "task": {
+    "name": "ImageKit Integration",
+    "description": "Digital Asset Management bridge between Sanity CMS and ImageKit, with S3 archival",
+    "scope": [
+      "Core service implementation",
+      "Sync process development",
+      "Video processing pipeline",
+      "Debug system integration"
+    ]
+  },
+  "context": {
+    "domain_knowledge": {
+      "storage_architecture": {
+        "components": [
+          "S3 (high-quality archive)",
+          "ImageKit (optimized working copies)",
+          "Sanity CMS (content management)"
+        ],
+        "workflows": [
+          "Content editor upload flow",
+          "Developer bulk upload flow",
+          "Video processing pipeline",
+          "Sync orchestration"
         ]
-    },
-    "context": {
-        "domain_knowledge": {
-            "storage_architecture": {
-                "components": [
-                    "S3 (high-quality archive)",
-                    "ImageKit (optimized working copies)",
-                    "Sanity CMS (content management)"
-                ],
-                "workflows": [
-                    "Content editor upload flow",
-                    "Developer bulk upload flow",
-                    "Video processing pipeline",
-                    "Sync orchestration"
-                ]
-            },
-            "operations": {
-                "monitoring_points": [
-                    "File upload status",
-                    "Transform progress",
-                    "Sync operations",
-                    "Error states"
-                ],
-                "transform_monitoring": {
-                    "status": "completed",
-                    "features": [
-                        "SSE-based progress reporting",
-                        "Connection pool management",
-                        "Phase-based tracking",
-                        "Error resilience"
-                    ],
-                    "patterns": [
-                        "Edge-compatible streaming",
-                        "Real-time state updates",
-                        "Graceful error handling",
-                        "Connection recovery"
-                    ]
-                }
-            }
+      },
+      "operations": {
+        "monitoring_points": [
+          "File upload status",
+          "Transform progress",
+          "Sync operations",
+          "Error states"
+        ],
+        "transform_monitoring": {
+          "status": "completed",
+          "features": [
+            "SSE-based progress reporting",
+            "Connection pool management",
+            "Phase-based tracking",
+            "Error resilience"
+          ],
+          "patterns": [
+            "Edge-compatible streaming",
+            "Real-time state updates",
+            "Graceful error handling",
+            "Connection recovery"
+          ]
         }
-    },
-    "state": {
-        "current_focus": "ui_integration",
-        "completed_tasks": [
-            "Core services implementation",
-            "Sync process development",
-            "Video processing pipeline",
-            "Progress reporting",
-            "Transform monitoring"
-        ],
-        "in_progress": [
-            "UI component development",
-            "Testing infrastructure",
-            "Documentation updates"
-        ],
-        "learnings": [
-            {
-                "topic": "SSE Implementation",
-                "insights": [
-                    "Edge-compatible event streaming",
-                    "Connection pool management",
-                    "Graceful error recovery",
-                    "Progress phase tracking"
-                ]
-            },
-            {
-                "topic": "Testing Patterns",
-                "insights": [
-                    "Mock EventSource for SSE",
-                    "Simulate connection errors",
-                    "Test phase transitions",
-                    "Verify concurrent operations"
-                ]
-            }
-        ]
+      }
     }
+  },
+  "state": {
+    "current_focus": "ui_integration",
+    "completed_tasks": [
+      "Core services implementation",
+      "Sync process development",
+      "Video processing pipeline",
+      "Progress reporting",
+      "Transform monitoring"
+    ],
+    "in_progress": [
+      "UI component development",
+      "Testing infrastructure",
+      "Documentation updates"
+    ],
+    "learnings": [
+      {
+        "topic": "SSE Implementation",
+        "insights": [
+          "Edge-compatible event streaming",
+          "Connection pool management",
+          "Graceful error recovery",
+          "Progress phase tracking"
+        ]
+      },
+      {
+        "topic": "Testing Patterns",
+        "insights": [
+          "Mock EventSource for SSE",
+          "Simulate connection errors",
+          "Test phase transitions",
+          "Verify concurrent operations"
+        ]
+      }
+    ]
+  }
 }

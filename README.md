@@ -5,17 +5,21 @@ Edge-first debugging system for Next.js applications with type safety and runtim
 ## Key Features
 
 - 🔒 **Type Safety**
+
   - Full TypeScript support with generic constraints
   - Runtime-aware type guards
   - Interface contracts for extensibility
 
 - 🌐 **Edge Runtime First**
+
   - Built for Next.js 13+ Edge Runtime
   - SSE-based real-time logging
   - Memory-efficient streaming
   - Automatic runtime detection
+  - Rate limiting and backpressure handling
 
 - 📊 **Smart Processing**
+
   - Error aggregation and correlation
   - Performance metrics tracking
   - Automatic sensitive data redaction
@@ -30,70 +34,80 @@ Edge-first debugging system for Next.js applications with type safety and runtim
 ## Installation
 
 ```bash
-npm install @pocma/jitterbug
+npm install @isarmstrong/jitterbug
 # or
-yarn add @pocma/jitterbug
+yarn add @isarmstrong/jitterbug
 # or
-pnpm add @pocma/jitterbug
+pnpm add @isarmstrong/jitterbug
 ```
 
 ## Quick Start
 
 ```typescript
-import { createJitterbug } from '@pocma/jitterbug';
+import { createJitterbug } from "@isarmstrong/jitterbug";
 
 // Create a type-safe debugger
 const debug = createJitterbug({
-  namespace: 'my-app',
+  namespace: "my-app",
   // Optional: Override runtime detection
-  runtime: 'edge',
+  runtime: "edge",
   // Optional: Configure minimum log level
-  minLevel: 'info'
+  minLevel: "info",
 });
 
 // Basic logging with type inference
-debug.info('API Route accessed', { 
-  path: '/api/users',
-  method: 'GET',
-  duration: 45
+debug.info("API Route accessed", {
+  path: "/api/users",
+  method: "GET",
+  duration: 45,
 });
 
 // Error tracking with aggregation
 try {
-  throw new Error('Database timeout');
+  throw new Error("Database timeout");
 } catch (error) {
-  debug.error('Query failed', error, {
-    query: 'SELECT...',
-    table: 'users'
+  debug.error("Query failed", error, {
+    query: "SELECT...",
+    table: "users",
   });
 }
 
 // Component lifecycle debugging
-debug.render('UserProfile mounted', {
-  props: { userId: '123' },
+debug.render("UserProfile mounted", {
+  props: { userId: "123" },
   renderTime: 25,
-  hydrated: true
+  hydrated: true,
 });
 ```
 
 ## Edge Runtime Usage
 
-Jitterbug is optimized for Next.js Edge Runtime:
+Jitterbug is optimized for Next.js Edge Runtime with built-in rate limiting:
 
 ```typescript
 // app/api/logs/route.ts
-import { createDebug } from '@pocma/jitterbug';
+import { createDebug } from "@isarmstrong/jitterbug";
 
-const debug = createDebug('api:logs');
+// Configure Edge transport with rate limiting
+const debug = createDebug("api:logs", {
+  transport: {
+    type: "edge",
+    endpoint: "/api/logs",
+    // Optional: Configure rate limiting
+    requestsPerSecond: 10, // Default: 10
+    maxPayloadSize: 128 * 1024, // Default: 128KB
+    bufferSize: 100, // Default: 100 entries
+  },
+});
 
 export async function GET() {
-  debug.info('SSE connection established');
-  
+  debug.info("SSE connection established");
+
   // Streaming response with backpressure handling
   const stream = new ReadableStream({
     start(controller) {
-      debug.info('Stream started', { 
-        memory: process.memoryUsage?.()
+      debug.info("Stream started", {
+        memory: process.memoryUsage?.(),
       });
     },
     // ...
@@ -101,9 +115,9 @@ export async function GET() {
 
   return new Response(stream, {
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache'
-    }
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+    },
   });
 }
 ```
@@ -113,30 +127,30 @@ export async function GET() {
 ### Runtime Detection
 
 ```typescript
-import { createJitterbug, Runtime, Environment } from '@pocma/jitterbug';
+import { createJitterbug, Runtime, Environment } from "@isarmstrong/jitterbug";
 
 const debug = createJitterbug({
-  namespace: 'my-app',
+  namespace: "my-app",
   // Type-safe runtime configuration
   runtime: Runtime.EDGE,
   // Type-safe environment setting
   environment: Environment.PRODUCTION,
   // Minimum log level with type checking
-  minLevel: 'warn'
+  minLevel: "warn",
 });
 ```
 
 ### Custom Transport
 
 ```typescript
-import { LogTransport, LogEntry } from '@pocma/jitterbug';
+import { LogTransport, LogEntry } from "@isarmstrong/jitterbug";
 
 class MetricsTransport implements LogTransport {
   async write<T extends Record<string, unknown>>(
-    entry: LogEntry<T>
+    entry: LogEntry<T>,
   ): Promise<void> {
     // Type-safe access to log data
-    if (entry.level === 'error') {
+    if (entry.level === "error") {
       await this.trackError(entry.data);
     }
   }
@@ -151,11 +165,11 @@ class MetricsTransport implements LogTransport {
 ### Custom Processor
 
 ```typescript
-import { LogProcessor, LogEntry } from '@pocma/jitterbug';
+import { LogProcessor, LogEntry } from "@isarmstrong/jitterbug";
 
 class PerformanceProcessor implements LogProcessor {
   async process<T extends Record<string, unknown>>(
-    entry: LogEntry<T>
+    entry: LogEntry<T>,
   ): Promise<LogEntry<T & { performance: unknown }>> {
     // Enhance log entry with performance data
     return {
@@ -164,9 +178,9 @@ class PerformanceProcessor implements LogProcessor {
         ...entry.data,
         performance: {
           timestamp: Date.now(),
-          memory: process.memoryUsage?.()
-        }
-      }
+          memory: process.memoryUsage?.(),
+        },
+      },
     };
   }
 }
@@ -180,7 +194,7 @@ class PerformanceProcessor implements LogProcessor {
 // app/components/UserProfile.tsx
 'use client';
 
-import { createDebug } from '@pocma/jitterbug';
+import { createDebug } from '@isarmstrong/jitterbug';
 
 const debug = createDebug('ui:user-profile');
 
@@ -197,21 +211,21 @@ export function UserProfile({ user }) {
 ### Error Correlation
 
 ```typescript
-const debug = createDebug('api:users');
+const debug = createDebug("api:users");
 
 try {
   const result = await db.query(sql);
-  debug.info('Query completed', {
+  debug.info("Query completed", {
     duration: result.duration,
-    rows: result.rowCount
+    rows: result.rowCount,
   });
 } catch (error) {
   // Error will be aggregated with similar errors
-  debug.error('Query failed', error, {
+  debug.error("Query failed", error, {
     sql,
     params,
     // Add request ID for correlation
-    requestId: headers.get('x-request-id')
+    requestId: headers.get("x-request-id"),
   });
 }
 ```
@@ -219,13 +233,13 @@ try {
 ### Memory Management
 
 ```typescript
-const debug = createDebug('edge:stream');
+const debug = createDebug("edge:stream");
 
 // Monitor memory usage in Edge functions
 setInterval(() => {
   const memory = process.memoryUsage?.();
   if (memory && memory.heapUsed > threshold) {
-    debug.warn('High memory usage', { memory });
+    debug.warn("High memory usage", { memory });
   }
 }, 1000);
 ```
@@ -238,4 +252,4 @@ setInterval(() => {
 
 ## License
 
-MIT 
+MIT

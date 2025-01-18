@@ -1,7 +1,8 @@
 /// <reference lib="dom" />
 /// <reference types="node" />
 
-import { LogEntry, LogTransport } from '../types/types.js';
+import pThrottle from "p-throttle";
+import { LogEntry, LogTransport } from "../types/types.js";
 
 export interface EdgeTransportConfig {
   endpoint: string;
@@ -11,15 +12,27 @@ export interface EdgeTransportConfig {
   maxConnectionDuration?: number;
   maxEntries?: number;
   maxPayloadSize?: number;
+  requestsPerSecond?: number;
+  maxConcurrent?: number;
 }
 
 export class EdgeTransport implements LogTransport {
   private queue: Array<LogEntry<Record<string, unknown>>> = [];
   private flushTimeout: NodeJS.Timeout | null = null;
-  private isConnected = false;
+  private _isConnected = false;
   private retryCount = 0;
   private updateCallbacks: Set<() => void> = new Set();
   private readonly config: Required<EdgeTransportConfig>;
+  private throttledSendPayload: (payload: string) => Promise<void>;
+  private pendingRequests = 0;
+  private readonly maxPendingRequests: number;
+
+  /**
+   * Get the current connection state
+   */
+  public get isConnected(): boolean {
+    return this._isConnected;
+  }
 
   constructor(config: EdgeTransportConfig) {
     this.config = {
@@ -30,12 +43,24 @@ export class EdgeTransport implements LogTransport {
       maxConnectionDuration: config.maxConnectionDuration ?? 4.5 * 60 * 1000,
       maxEntries: config.maxEntries ?? 1000,
       maxPayloadSize: config.maxPayloadSize ?? 128 * 1024,
+      requestsPerSecond: config.requestsPerSecond ?? 10,
+      maxConcurrent: config.maxConcurrent ?? 2,
     };
+
+    this.maxPendingRequests = this.config.maxConcurrent * 2;
+
+    // Initialize throttled send payload with concurrency limit
+    const throttle = pThrottle({
+      limit: this.config.maxConcurrent,
+      interval: Math.ceil(1000 / this.config.requestsPerSecond),
+    });
+    this.throttledSendPayload = throttle(this.sendPayload.bind(this));
+
     void this.connect();
   }
 
   public async connect(): Promise<void> {
-    if (this.isConnected) return;
+    if (this._isConnected) return;
 
     try {
       // Validate endpoint
@@ -51,13 +76,15 @@ export class EdgeTransport implements LogTransport {
         throw new Error(`Failed to connect: ${response.status}`);
       }
 
-      this.isConnected = true;
+      this._isConnected = true;
       this.retryCount = 0;
       this.startFlushTimer();
     } catch (error) {
       if (this.retryCount < this.config.maxRetries) {
         this.retryCount++;
-        await new Promise(resolve => setTimeout(resolve, this.config.retryInterval));
+        await new Promise((resolve) =>
+          setTimeout(resolve, this.config.retryInterval),
+        );
         return this.connect();
       }
       throw error;
@@ -65,7 +92,7 @@ export class EdgeTransport implements LogTransport {
   }
 
   public async disconnect(): Promise<void> {
-    this.isConnected = false;
+    this._isConnected = false;
     if (this.flushTimeout) {
       clearTimeout(this.flushTimeout);
       this.flushTimeout = null;
@@ -78,6 +105,11 @@ export class EdgeTransport implements LogTransport {
   }
 
   public async write(entry: LogEntry<Record<string, unknown>>): Promise<void> {
+    // Apply backpressure if too many pending requests
+    if (this.pendingRequests >= this.maxPendingRequests) {
+      throw new Error("Transport backpressure: too many pending requests");
+    }
+
     this.queue.push(entry);
 
     // Enforce max entries limit
@@ -114,7 +146,7 @@ export class EdgeTransport implements LogTransport {
   }
 
   private async flush(): Promise<void> {
-    if (!this.isConnected || this.queue.length === 0) return;
+    if (!this._isConnected || this.queue.length === 0) return;
 
     const batch = this.queue.splice(0, this.config.bufferSize);
     const payload = JSON.stringify(batch);
@@ -125,16 +157,17 @@ export class EdgeTransport implements LogTransport {
       for (const entry of batch) {
         const singlePayload = JSON.stringify([entry]);
         if (singlePayload.length <= this.config.maxPayloadSize) {
-          await this.sendPayload(singlePayload);
+          await this.throttledSendPayload(singlePayload);
         }
       }
       return;
     }
 
-    await this.sendPayload(payload);
+    await this.throttledSendPayload(payload);
   }
 
   private async sendPayload(payload: string): Promise<void> {
+    this.pendingRequests++;
     try {
       const response = await fetch(this.config.endpoint, {
         method: "POST",
@@ -151,7 +184,9 @@ export class EdgeTransport implements LogTransport {
       }
     } catch (error) {
       // Put failed entries back in queue
-      const entries = JSON.parse(payload) as Array<LogEntry<Record<string, unknown>>>;
+      const entries = JSON.parse(payload) as Array<
+        LogEntry<Record<string, unknown>>
+      >;
       this.queue.unshift(...entries);
 
       // Enforce max entries limit
@@ -160,11 +195,13 @@ export class EdgeTransport implements LogTransport {
       }
 
       throw error;
+    } finally {
+      this.pendingRequests--;
     }
   }
 
   private notifyUpdate(): void {
-    this.updateCallbacks.forEach(callback => callback());
+    this.updateCallbacks.forEach((callback) => callback());
   }
 
   public async destroy(): Promise<void> {

@@ -36,7 +36,8 @@ class RuntimeDetector {
 
   static detectEnvironment(): EnvironmentType {
     const hasProcess = typeof process !== "undefined";
-    const hasEnv = hasProcess && process.env !== undefined && process.env !== null;
+    const hasEnv =
+      hasProcess && process.env !== undefined && process.env !== null;
     const nodeEnv = hasEnv ? process.env.NODE_ENV : undefined;
 
     if (nodeEnv === "development") {
@@ -63,7 +64,7 @@ export class JitterbugImpl implements JitterbugInstance {
 
   constructor(config: JitterbugConfig) {
     this.config = {
-      namespace: config.namespace ?? 'default',
+      namespace: config.namespace ?? "default",
       runtime: config.runtime ?? RuntimeDetector.detectRuntime(),
       environment: config.environment ?? RuntimeDetector.detectEnvironment(),
       transports: config.transports ?? [],
@@ -158,7 +159,7 @@ export class JitterbugImpl implements JitterbugInstance {
 
     try {
       const processedEntry = await processLog(entry, this.config.processors);
-      void writeLog(processedEntry, this.config.transports).catch(this.onError);
+      void writeLog(processedEntry, this.transports).catch(this.onError);
     } catch (error) {
       this.onError(error as Error);
     }
@@ -205,13 +206,13 @@ export class JitterbugImpl implements JitterbugInstance {
     const message = ((): string => {
       const msg = context.message;
       if (msg === undefined || msg === null) {
-        return '';
+        return "";
       }
-      if (typeof msg !== 'string') {
-        return '';
+      if (typeof msg !== "string") {
+        return "";
       }
       if (msg.length === 0) {
-        return '';
+        return "";
       }
       return msg;
     })();
@@ -226,7 +227,11 @@ export class JitterbugImpl implements JitterbugInstance {
   }
 
   private shouldLog(level: keyof typeof LogLevels): boolean {
-    const minLevelIndex = this.config.minLevel !== undefined ? Object.values(LogLevels).indexOf(this.config.minLevel) : 0;
+    if (!this.enabled) return false;
+    const minLevelIndex =
+      this.config.minLevel !== undefined
+        ? Object.values(LogLevels).indexOf(this.config.minLevel)
+        : 0;
     const currentLevelIndex = Object.values(LogLevels).indexOf(level);
     return currentLevelIndex >= minLevelIndex;
   }
@@ -247,9 +252,10 @@ export class JitterbugImpl implements JitterbugInstance {
 
   private setupTransports(): void {
     const transports = this.config.transports;
-    const hasTransports = Array.isArray(transports) && transports.length > 0;
-    if (hasTransports) {
-      this.transports = transports;
+    if (Array.isArray(transports)) {
+      this.transports = [...transports];
+    } else {
+      this.transports = [];
     }
   }
 }
@@ -269,8 +275,16 @@ export function createDebug(
   config: Partial<JitterbugConfig> = {},
 ): JitterbugInstance {
   const appName = typeof process !== "undefined" && process.env?.APP_NAME;
+  const defaultNamespace = "app";
+
+  // Ensure we have a valid base namespace
+  const baseNamespace =
+    typeof appName === "string" && appName.trim().length > 0
+      ? appName.trim()
+      : defaultNamespace;
+
   const baseConfig: JitterbugConfig = {
-    namespace: typeof appName === 'string' ? appName : "app",
+    namespace: baseNamespace,
     runtime: config.runtime ?? RuntimeDetector.detectRuntime(),
     environment: config.environment ?? RuntimeDetector.detectEnvironment(),
     processors: config.processors ?? [],
@@ -279,7 +293,7 @@ export function createDebug(
 
   return createJitterbug({
     ...baseConfig,
-    namespace: `${baseConfig.namespace}:${namespace}`,
+    namespace: `${baseNamespace}:${namespace}`,
     ...config,
   });
 }

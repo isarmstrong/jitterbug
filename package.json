@@ -1,6 +1,6 @@
 {
     "name": "@isarmstrong/jitterbug",
-    "version": "0.1.3",
+    "version": "0.1.4",
     "type": "module",
     "main": "./dist/src/index.js",
     "module": "./dist/src/index.js",
@@ -35,6 +35,9 @@
         "test:watch": "vitest",
         "lint": "eslint . --ext .ts,.js,.jsx --fix",
         "lint:strict": "eslint . --ext .ts,.js,.jsx --max-warnings=0",
+        "lint:react": "eslint --config .eslintrc.test.cjs 'src/transports/**/*.{ts,tsx}' --max-warnings 0",
+        "lint:core": "eslint --config .eslintrc.test.cjs 'src/core.ts' --max-warnings 0",
+        "lint:all": "pnpm lint:core && pnpm lint:react",
         "format": "prettier --write \"**/*.{ts,js,json,md}\"",
         "format:check": "prettier --check \"**/*.{ts,js,json,md}\"",
         "typecheck": "tsc --noEmit",
@@ -42,19 +45,24 @@
         "prepublishOnly": "pnpm build"
     },
     "optionalDependencies": {
-        "react": "^18.2.0",
-        "next": "^14.0.0"
+        "next": "^14.0.0",
+        "react": "^18.2.0"
     },
     "dependencies": {
         "p-queue": "^7.4.1",
         "p-throttle": "^5.1.0",
+        "react-dom": "18.2.0",
         "zod": "^3.22.4"
     },
     "devDependencies": {
         "@types/node": "^20.10.5",
+        "@types/react": "^18.2.0",
+        "@types/react-dom": "18.2.0",
         "@typescript-eslint/eslint-plugin": "^6.15.0",
         "@typescript-eslint/parser": "^6.15.0",
         "eslint": "^8.56.0",
+        "eslint-import-resolver-typescript": "^3.7.0",
+        "eslint-plugin-react": "^7.37.4",
         "prettier": "^3.1.1",
         "rimraf": "^5.0.5",
         "typescript": "~5.3.3",

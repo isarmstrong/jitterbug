@@ -1,24 +1,12 @@
 {
-    "extends": "./tsconfig.json",
-    "compilerOptions": {
-        "jsx": "react-jsx",
-        "lib": [
-            "dom",
-            "dom.iterable",
-            "esnext"
-        ],
-        "module": "esnext",
-        "moduleResolution": "bundler",
-        "isolatedModules": true
-    },
-    "include": [
-        "src/**/*.tsx",
-        "src/**/*.jsx"
-    ],
-    "exclude": [
-        "node_modules",
-        ".next",
-        "dist",
-        "build"
-    ]
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "isolatedModules": true
+  },
+  "include": ["src/**/*.tsx", "src/**/*.jsx"],
+  "exclude": ["node_modules", ".next", "dist", "build"]
 }
