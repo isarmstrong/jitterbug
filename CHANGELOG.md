@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added configuration examples using detected values
   - Improved type-safe configuration documentation with predefined constants
 
+## [0.1.4a] - 2024-03-XX
+
+### Added
+
+- Support for lowercase log levels in configuration
+  - Added type support for both uppercase and lowercase log levels (e.g., 'debug' or 'DEBUG')
+  - Implemented automatic normalization of log levels for internal consistency
+  - Maintains backward compatibility with existing uppercase values
+  - Improves developer experience by aligning with common JavaScript conventions
+
 ## [0.1.4] - 2024-03-XX
 
 ### Added

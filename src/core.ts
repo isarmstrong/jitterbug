@@ -7,6 +7,7 @@ import type {
   RuntimeType,
   EnvironmentType,
   LogTransport,
+  LogLevel,
 } from "./types/types.js";
 import { LogLevels, Runtime, Environment } from "./types/enums.js";
 import { processLog, writeLog } from "./logger.js";
@@ -70,8 +71,10 @@ export class JitterbugImpl implements JitterbugInstance {
       transports: config.transports ?? [],
       processors: config.processors ?? [],
       enabled: config.enabled ?? true,
-      level: config.level ?? LogLevels.INFO,
-      minLevel: config.minLevel ?? config.level ?? LogLevels.INFO,
+      level: config.level ? this.normalizeLogLevel(config.level) : LogLevels.INFO,
+      minLevel: config.minLevel
+        ? this.normalizeLogLevel(config.minLevel)
+        : this.normalizeLogLevel(config.level ?? LogLevels.INFO),
     };
 
     this.enabled = this.config.enabled;
@@ -83,6 +86,13 @@ export class JitterbugImpl implements JitterbugInstance {
     };
 
     this.setupTransports();
+  }
+
+  /**
+   * Normalizes log level to uppercase for internal consistency
+   */
+  private normalizeLogLevel(level: LogLevel): keyof typeof LogLevels {
+    return level.toUpperCase() as keyof typeof LogLevels;
   }
 
   public debug<T extends Record<string, unknown>>(
@@ -226,13 +236,14 @@ export class JitterbugImpl implements JitterbugInstance {
     return updatedContext;
   }
 
-  private shouldLog(level: keyof typeof LogLevels): boolean {
+  private shouldLog(level: LogLevel): boolean {
     if (!this.enabled) return false;
+    const normalizedLevel = this.normalizeLogLevel(level);
     const minLevelIndex =
       this.config.minLevel !== undefined
         ? Object.values(LogLevels).indexOf(this.config.minLevel)
         : 0;
-    const currentLevelIndex = Object.values(LogLevels).indexOf(level);
+    const currentLevelIndex = Object.values(LogLevels).indexOf(normalizedLevel);
     return currentLevelIndex >= minLevelIndex;
   }
 
