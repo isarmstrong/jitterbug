@@ -10,11 +10,6 @@ export const LogLevels = Object.freeze({
 } as const);
 
 /**
- * Log level type supporting both uppercase and lowercase
- */
-export type LogLevel = keyof typeof LogLevels | Lowercase<keyof typeof LogLevels>;
-
-/**
  * Runtime environments where Jitterbug can operate
  */
 export const Runtime = Object.freeze({

@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.5] - 2024-03-XX
+## [0.1.4a] - 2025-01-19
 
 ### Added
 
@@ -14,18 +14,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Documented return types for getRuntime() and getEnvironment()
   - Added configuration examples using detected values
   - Improved type-safe configuration documentation with predefined constants
-
-## [0.1.4a] - 2024-03-XX
-
-### Added
-
 - Support for lowercase log levels in configuration
   - Added type support for both uppercase and lowercase log levels (e.g., 'debug' or 'DEBUG')
   - Implemented automatic normalization of log levels for internal consistency
   - Maintains backward compatibility with existing uppercase values
   - Improves developer experience by aligning with common JavaScript conventions
 
-## [0.1.4] - 2024-03-XX
+### Fixed
+
+- Fixed type conflicts in logger implementation
+  - Consolidated type definitions to prevent import cycles
+  - Fixed return type of processAndWrite to properly handle Promise<void>
+  - Improved type safety in transport and processor interfaces
+  - Enhanced error handling with proper type propagation
+
+## [0.1.4] - 2025-01-18
 
 ### Added
 

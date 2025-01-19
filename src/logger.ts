@@ -1,28 +1,35 @@
-import { LogEntry, LogProcessor, LogTransport } from "./types.js";
+import type {
+  LogEntry,
+  LogProcessor,
+  LogTransport,
+} from "./types/index.js";
 
-export function processLog<T extends Record<string, unknown>>(
+export async function processLog<T extends Record<string, unknown>>(
   entry: LogEntry<T>,
   processors: LogProcessor[],
 ): Promise<LogEntry<T>> {
-  return processors.reduce(
-    async (promise, processor) => processor.process(await promise),
-    Promise.resolve(entry),
-  );
+  let processedEntry = { ...entry };
+
+  for (const processor of processors) {
+    processedEntry = await processor.process(processedEntry);
+  }
+
+  return processedEntry;
 }
 
-export function writeLog<T extends Record<string, unknown>>(
+export async function writeLog<T extends Record<string, unknown>>(
   entry: LogEntry<T>,
   transports: LogTransport[],
-): Promise<void[]> {
-  return Promise.all(transports.map((transport) => transport.write(entry)));
+): Promise<void> {
+  const promises = transports.map((transport) => transport.write(entry));
+  await Promise.all(promises);
 }
 
-export function processAndWrite<T extends Record<string, unknown>>(
+export async function processAndWrite<T extends Record<string, unknown>>(
   entry: LogEntry<T>,
   processors: LogProcessor[],
   transports: LogTransport[],
-): Promise<void[]> {
-  return processLog(entry, processors).then((processedEntry) =>
-    writeLog(processedEntry, transports),
-  );
+): Promise<void> {
+  const processedEntry = await processLog(entry, processors);
+  await writeLog(processedEntry, transports);
 }

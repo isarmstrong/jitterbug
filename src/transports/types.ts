@@ -20,10 +20,10 @@ export interface TransportConfig {
 export abstract class BaseTransport implements LogTransport {
   protected config: Required<TransportConfig>;
 
-  constructor(config?: TransportConfig) {
+  constructor(config: TransportConfig = {}) {
     this.config = {
-      enabled: config?.enabled ?? true,
-      level: config?.level ?? LogLevels.DEBUG,
+      enabled: config.enabled ?? true,
+      level: config.level ?? LogLevels.INFO,
       format: config?.format ?? "pretty",
     };
   }
@@ -33,15 +33,14 @@ export abstract class BaseTransport implements LogTransport {
   ): Promise<void>;
 
   protected shouldLog(level: LogLevel): boolean {
-    const levels = [
-      LogLevels.DEBUG,
-      LogLevels.INFO,
-      LogLevels.WARN,
-      LogLevels.ERROR,
-      LogLevels.FATAL,
-    ];
-    const configIndex = levels.indexOf(this.config.level);
-    const messageIndex = levels.indexOf(level);
+    if (!this.config.enabled) return false;
+
+    const levels = Object.values(LogLevels);
+    const configLevel = this.config.level.toUpperCase() as keyof typeof LogLevels;
+    const entryLevel = level.toUpperCase() as keyof typeof LogLevels;
+
+    const configIndex = levels.indexOf(configLevel);
+    const messageIndex = levels.indexOf(entryLevel);
     return messageIndex >= configIndex;
   }
 

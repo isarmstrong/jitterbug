@@ -642,3 +642,123 @@
   - Enhance memory management
   - Add performance monitoring
   - Implement entry compression
+
+## Log Level Type Normalization
+
+**Priority:** P0 ✅ COMPLETED in v0.1.4a
+**Type:** Enhancement
+**Component:** Core/Types
+**Found:** During POC NOW nav implementation
+**Reporter:** Claude/Ian
+
+### Problem Statement
+The current type system for log levels enforces uppercase strings (e.g., 'DEBUG') while JavaScript/TypeScript conventions typically favor lowercase for such constants. This creates friction in the developer experience and doesn't align with common patterns.
+
+### Current Behavior
+```typescript
+const debug = createJitterbug({
+    level: 'debug' // Now supported! Both 'debug' and 'DEBUG' work
+});
+```
+
+### Impact
+- ✅ Developers can now use lowercase (matches common patterns)
+- ✅ Matches common logging patterns in other libraries
+- ✅ Eliminates unnecessary type errors
+- ✅ Improves DX and adoption potential
+
+### Solution Implemented
+1. Accept both cases:
+```typescript
+type LogLevel = keyof typeof LogLevels | Lowercase<keyof typeof LogLevels>;
+```
+
+2. Normalize internally:
+```typescript
+function normalizeLogLevel(level: LogLevel): StandardLogLevel {
+    return level.toUpperCase() as StandardLogLevel;
+}
+```
+
+### Implementation Notes
+- ✅ Backward compatible
+- ✅ Added deprecation warning for uppercase in future major version
+- ✅ Updated documentation to show lowercase as preferred
+- ✅ Added tests for both cases
+
+### Validation
+- [x] Type system accepts both cases
+- [x] Runtime behavior identical regardless of case
+- [x] No breaking changes for existing implementations
+- [x] Documentation updated
+- [x] Tests added
+
+### References
+- POC NOW nav implementation where issue was discovered
+- Common logging libraries (Winston, Pino, etc.) for conventions
+
+## Type System Improvements
+
+**Priority:** P1
+**Type:** Enhancement
+**Component:** Core/Types
+**Found:** During log level normalization implementation
+**Reporter:** Claude/Ian
+
+### Problem Statement
+The current type system has some areas that could benefit from stronger type safety and better error handling, particularly around asynchronous operations and promise handling.
+
+### Current Behavior
+```typescript
+// Some type conflicts between modules
+// Inconsistent Promise handling
+// Import cycles causing type mismatches
+```
+
+### Impact
+- Type conflicts can lead to runtime errors
+- Promise handling could be more robust
+- Import cycles make type definitions harder to maintain
+- Debugging experience could be improved
+
+### Proposed Solution
+1. Enhance Promise handling:
+```typescript
+// Standardize on async/await
+async function processAndWrite(): Promise<void> {
+  const processed = await processLog();
+  await writeLog(processed);
+}
+```
+
+2. Improve type organization:
+```typescript
+// Consolidate related types
+// Prevent import cycles
+// Better error type propagation
+```
+
+3. Add debugging utilities:
+```typescript
+// Type-safe error boundaries
+// Better stack trace handling
+// Enhanced debugging context
+```
+
+### Implementation Notes
+- Should maintain backward compatibility
+- Consider performance implications
+- Add comprehensive type tests
+- Document type patterns
+
+### Validation Required
+- [ ] Type system accepts all valid use cases
+- [ ] Runtime behavior matches type definitions
+- [ ] No breaking changes for existing code
+- [ ] Documentation updated
+- [ ] Tests added for type edge cases
+
+### References
+- Log level normalization implementation
+- Promise handling patterns
+- TypeScript best practices

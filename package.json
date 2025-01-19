@@ -1,6 +1,6 @@
 {
     "name": "@isarmstrong/jitterbug",
-    "version": "0.1.4",
+    "version": "0.1.4a",
     "type": "module",
     "main": "./dist/src/index.js",
     "module": "./dist/src/index.js",

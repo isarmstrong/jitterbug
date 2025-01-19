@@ -1,3 +1,8 @@
+import {
+  LogLevels,
+  Runtime,
+  Environment,
+} from "./types/index.js";
 import type {
   JitterbugInstance,
   JitterbugConfig,
@@ -7,9 +12,9 @@ import type {
   RuntimeType,
   EnvironmentType,
   LogTransport,
+  LogProcessor,
   LogLevel,
-} from "./types/types.js";
-import { LogLevels, Runtime, Environment } from "./types/enums.js";
+} from "./types/index.js";
 import { processLog, writeLog } from "./logger.js";
 
 declare global {
@@ -168,7 +173,11 @@ export class JitterbugImpl implements JitterbugInstance {
     if (!this.enabled) return;
 
     try {
-      const processedEntry = await processLog(entry, this.config.processors);
+      const normalizedEntry = {
+        ...entry,
+        level: this.normalizeLogLevel(entry.level),
+      };
+      const processedEntry = await processLog(normalizedEntry, this.config.processors);
       void writeLog(processedEntry, this.transports).catch(this.onError);
     } catch (error) {
       this.onError(error as Error);
@@ -239,9 +248,10 @@ export class JitterbugImpl implements JitterbugInstance {
   private shouldLog(level: LogLevel): boolean {
     if (!this.enabled) return false;
     const normalizedLevel = this.normalizeLogLevel(level);
+    const normalizedMinLevel = this.normalizeLogLevel(this.config.minLevel);
     const minLevelIndex =
       this.config.minLevel !== undefined
-        ? Object.values(LogLevels).indexOf(this.config.minLevel)
+        ? Object.values(LogLevels).indexOf(normalizedMinLevel)
         : 0;
     const currentLevelIndex = Object.values(LogLevels).indexOf(normalizedLevel);
     return currentLevelIndex >= minLevelIndex;
