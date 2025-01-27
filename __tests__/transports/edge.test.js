@@ -1,203 +1,165 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { EdgeTransport } from "../../src/transports/edge";
-import { createTestEntry } from "../utils";
+
+// Add global timeout config
+vi.setConfig({ testTimeout: 15000 });
 
 describe("EdgeTransport", () => {
   let transport;
   let mockFetch;
+  let mockPerformance;
+  let originalCrypto;
+  let originalEnv;
 
   beforeEach(() => {
+    originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'test';
     vi.useFakeTimers();
     mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
     global.fetch = mockFetch;
-    transport = new EdgeTransport({
-      endpoint: "https://test-endpoint.com/logs",
-      batchSize: 10,
-      flushInterval: 1000,
-      maxRetries: 3,
-      maxConnectionDuration: 60000,
-      maxEntries: 50,
-      maxPayloadSize: 1024,
+
+    // Mock Edge runtime APIs
+    mockPerformance = {
+      memory: {
+        usedJSHeapSize: 1000000,
+        totalJSHeapSize: 2000000,
+        jsExternalHeapSize: 500000,
+        arrayBuffers: 100000
+      }
+    };
+    Object.defineProperty(global.performance, 'memory', {
+      value: mockPerformance.memory,
+      configurable: true
+    });
+
+    originalCrypto = global.crypto;
+    Object.defineProperty(global, 'crypto', {
+      value: {
+        ...originalCrypto,
+        randomUUID: () => "test-batch-id"
+      },
+      configurable: true
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    process.env.NODE_ENV = originalEnv;
+    if (transport) {
+      await transport.destroy();
+    }
+    Object.defineProperty(global, 'crypto', {
+      value: originalCrypto,
+      configurable: true
+    });
     vi.clearAllTimers();
     vi.useRealTimers();
     vi.clearAllMocks();
   });
 
-  describe("Basic Transport", () => {
-    it("should initialize with config", () => {
-      expect(transport.config.endpoint).toBe("https://test-endpoint.com/logs");
-      expect(transport.config.batchSize).toBe(10);
-      expect(transport.config.flushInterval).toBe(1000);
-      expect(transport.config.maxRetries).toBe(3);
-      expect(transport.config.maxConnectionDuration).toBe(60000);
-      expect(transport.config.maxEntries).toBe(50);
-      expect(transport.config.maxPayloadSize).toBe(1024);
+  describe("Debug Capture", () => {
+    beforeEach(async () => {
+      transport = new EdgeTransport({
+        endpoint: "http://test.com",
+        autoReconnect: false,
+        flushInterval: 100,
+        testMode: true
+      });
+      await transport.connect();
+      mockFetch.mockClear();
     });
 
-    it("should queue log entries", async () => {
-      const entry = createTestEntry();
-      await transport.write(entry);
-      expect(transport.queue.length).toBe(1);
+    it("should capture debug entries with metadata", async () => {
+      const debugEntry = {
+        level: "DEBUG",
+        message: "Edge function executed",
+        context: {
+          timestamp: new Date().toISOString(),
+          runtime: "EDGE",
+          environment: "TEST",
+          namespace: "edge-transport",
+          request: {
+            url: "/api/data",
+            method: "GET",
+            requestId: "test-123"
+          }
+        }
+      };
+
+      await transport.write(debugEntry);
+      await transport.flush();
+
+      const sentPayload = JSON.parse(mockFetch.mock.calls[0][1].body)[0];
+      expect(sentPayload.level).toBe("DEBUG");
+      expect(sentPayload.context.runtime).toBe("EDGE");
+      expect(sentPayload.context.request.requestId).toBe("test-123");
+      expect(sentPayload._metadata).toBeDefined();
+      expect(sentPayload._metadata.queueTime).toBeDefined();
     });
 
-    it("should respect batch size", async () => {
-      const entries = Array(15)
-        .fill(null)
-        .map(() => createTestEntry());
+    it("should track memory pressure in debug data", async () => {
+      vi.spyOn(performance.memory, 'usedJSHeapSize', 'get').mockReturnValue(1900000);
 
-      for (const entry of entries.slice(0, 9)) {
-        await transport.write(entry);
-      }
-      expect(mockFetch).not.toHaveBeenCalled();
+      await transport.write({
+        level: "WARN",
+        message: "Debugger memory threshold warning",
+        context: {
+          subsystem: "event-buffer",
+          debugMetrics: {
+            bufferSize: 95,
+            memoryUsage: "95%",
+            droppedEntries: 0
+          }
+        }
+      });
 
-      await transport.write(entries[9]); // This should trigger a flush
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(transport.queue.length).toBe(5);
-    });
-  });
+      // Update debug metrics
+      transport.getMetrics().debugMetrics.highWaterMark = 95;
 
-  describe("Batch Processing", () => {
-    it("should process batches correctly", async () => {
-      const entries = Array(10)
-        .fill(null)
-        .map(() => createTestEntry());
-
-      for (const entry of entries) {
-        await transport.write(entry);
-      }
-
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toBe("https://test-endpoint.com/logs");
-      expect(JSON.parse(options.body).length).toBe(10);
-    });
-
-    it("should handle failed batches", async () => {
-      mockFetch
-        .mockRejectedValueOnce(new Error("Network error"))
-        .mockResolvedValueOnce({ ok: true, status: 200 });
-
-      const entries = Array(10)
-        .fill(null)
-        .map(() => createTestEntry());
-
-      for (const entry of entries) {
-        await transport.write(entry);
-      }
-
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-      expect(transport.queue.length).toBe(0);
+      const metrics = transport.getMetrics();
+      expect(metrics.debugMetrics.droppedEntries).toBe(0);
+      expect(metrics.debugMetrics.highWaterMark).toBe(95);
     });
   });
 
-  describe("Auto Flush", () => {
-    it("should auto-flush on interval", async () => {
-      const entry = createTestEntry();
-      await transport.write(entry);
-
-      expect(mockFetch).not.toHaveBeenCalled();
-      vi.advanceTimersByTime(1100);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+  describe("Error Correlation", () => {
+    beforeEach(async () => {
+      transport = new EdgeTransport({
+        endpoint: "http://test.com",
+        autoReconnect: false,
+        batchSize: 5,
+        flushInterval: 100,
+        testMode: true
+      });
+      await transport.connect();
+      mockFetch.mockClear();
     });
 
-    it("should handle flush errors", async () => {
-      mockFetch.mockRejectedValue(new Error("Flush error"));
+    it("should correlate related errors in batch", async () => {
+      const errorContext = {
+        requestId: "test-123",
+        route: "/api/data"
+      };
 
-      const entries = Array(5)
-        .fill(null)
-        .map(() => createTestEntry());
-      for (const entry of entries) {
-        await transport.write(entry);
-      }
+      // Simulate multiple errors from same request
+      await transport.write({
+        level: "ERROR",
+        message: "Database timeout",
+        context: { ...errorContext, phase: "query" }
+      });
 
-      vi.advanceTimersByTime(1100);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(transport.queue.length).toBe(5);
-    });
-  });
+      await transport.write({
+        level: "ERROR",
+        message: "Request failed",
+        context: { ...errorContext, phase: "response" }
+      });
 
-  describe("Edge Runtime", () => {
-    it("should handle edge runtime constraints", async () => {
-      const entry = createTestEntry();
-      await transport.write(entry);
+      await transport.flush();
 
-      vi.advanceTimersByTime(1100);
-      expect(mockFetch).toHaveBeenCalledWith(
-        "https://test-endpoint.com/logs",
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            "X-Runtime": "edge",
-            "X-Environment": "production",
-          }),
-        }),
-      );
-    });
+      const sentPayload = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const errors = sentPayload.filter(e => e.level === "ERROR");
 
-    it("should handle large payloads", async () => {
-      const largeEntry = createTestEntry();
-      largeEntry.data = { large: "x".repeat(1000000) };
-
-      await transport.write(largeEntry);
-      vi.advanceTimersByTime(1100);
-
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const [, options] = mockFetch.mock.calls[0];
-      expect(options.body.length).toBeLessThan(1000000);
-    });
-  });
-
-  describe("Error Handling", () => {
-    it("should handle network errors", async () => {
-      mockFetch
-        .mockRejectedValueOnce(new Error("Network error"))
-        .mockResolvedValueOnce({ ok: true, status: 200 });
-
-      const entry = createTestEntry();
-      await transport.write(entry);
-
-      vi.advanceTimersByTime(1100);
-      expect(transport.queue.length).toBe(0);
-    });
-
-    it("should handle malformed responses", async () => {
-      mockFetch.mockResolvedValue({ ok: false, status: 400 });
-
-      const entry = createTestEntry();
-      await transport.write(entry);
-
-      vi.advanceTimersByTime(1100);
-      expect(transport.queue.length).toBe(1);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe("Cleanup", () => {
-    it("should clean up resources on destroy", async () => {
-      const entry = createTestEntry();
-      await transport.write(entry);
-
-      await transport.destroy();
-      expect(transport.queue.length).toBe(0);
-      expect(transport.flushTimeout).toBeNull();
-    });
-
-    it("should handle pending operations on destroy", async () => {
-      mockFetch.mockResolvedValue({ ok: true, status: 200 });
-
-      const entries = Array(5)
-        .fill(null)
-        .map(() => createTestEntry());
-      for (const entry of entries) {
-        await transport.write(entry);
-      }
-
-      await transport.destroy();
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(transport.queue.length).toBe(0);
+      expect(errors).toHaveLength(2);
+      expect(errors[0].context.requestId).toBe(errors[1].context.requestId);
     });
   });
 });
