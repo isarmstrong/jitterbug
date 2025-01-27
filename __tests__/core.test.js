@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { EdgeTransport } from "../src/transports/edge";
-import { GUITransport } from "../src/transports/gui";
-import { LogLevels, Runtime, Environment } from "../src/types/enums";
+import { GUITransport } from "../src/transports/gui-transport";
+import { LogLevels, Runtime, Environment } from "../src/types/core";
 import { createEntry } from "./utils.js";
 
 describe("Jitterbug Core", () => {
@@ -42,33 +42,36 @@ describe("Jitterbug Core", () => {
         };
         const transport = new EdgeTransport(config);
 
-        expect(transport.config).toEqual(config);
+        // Test that provided values are set
+        expect(transport.config.endpoint).toBe(config.endpoint);
+        expect(transport.config.maxEntries).toBe(config.maxEntries);
+        expect(transport.config.bufferSize).toBe(config.bufferSize);
+        expect(transport.config.retryInterval).toBe(config.retryInterval);
+        expect(transport.config.maxConnectionDuration).toBe(config.maxConnectionDuration);
+        expect(transport.config.maxPayloadSize).toBe(config.maxPayloadSize);
+        expect(transport.config.maxRetries).toBe(config.maxRetries);
       });
     });
 
     describe("GUI Transport", () => {
       it("should initialize with minimal config", () => {
         const transport = new GUITransport({
-          edge: {
-            endpoint: "http://test.com/events",
-          },
+          defaultFilters: { test: true }
         });
         expect(transport).toBeDefined();
-        expect(transport).toHaveProperty("connect");
-        expect(transport).toHaveProperty("disconnect");
-        expect(transport).toHaveProperty("write");
+        expect(transport.config).toBeDefined();
+        expect(transport.config.maxEntries).toBeDefined();
+        expect(transport.config.bufferSize).toBeDefined();
+        expect(transport.config.autoReconnect).toBeDefined();
       });
 
       it("should apply default config values", () => {
-        const transport = new GUITransport({
-          edge: {
-            endpoint: "http://test.com/events",
-          },
-        });
+        const transport = new GUITransport({});
 
         expect(transport.config.maxEntries).toBe(1000);
         expect(transport.config.bufferSize).toBe(100);
         expect(transport.config.autoReconnect).toBe(true);
+        expect(transport.config.defaultFilters).toEqual({});
       });
 
       it("should override default config values", () => {
@@ -76,13 +79,14 @@ describe("Jitterbug Core", () => {
           maxEntries: 50,
           bufferSize: 10,
           autoReconnect: false,
-          edge: {
-            endpoint: "http://test.com/events",
-          },
+          defaultFilters: { test: true }
         };
         const transport = new GUITransport(config);
 
-        expect(transport.config).toEqual(config);
+        expect(transport.config.maxEntries).toBe(config.maxEntries);
+        expect(transport.config.bufferSize).toBe(config.bufferSize);
+        expect(transport.config.autoReconnect).toBe(config.autoReconnect);
+        expect(transport.config.defaultFilters).toEqual(config.defaultFilters);
       });
     });
   });

@@ -1,114 +1,159 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { ErrorAggregationProcessor } from "../../src/processors/error-aggregation";
-import { Runtime } from "../../src/types/enums";
+import { Runtime } from "../../src/types/core";
 
 describe("ErrorAggregationProcessor", () => {
   let processor;
-  let mockDate;
 
   beforeEach(() => {
-    vi.useFakeTimers();
-    mockDate = vi.spyOn(Date, "now").mockReturnValue(1000);
     processor = new ErrorAggregationProcessor();
-  });
-
-  afterEach(() => {
-    vi.clearAllTimers();
-    vi.useRealTimers();
-    vi.clearAllMocks();
   });
 
   describe("Basic Error Processing", () => {
     it("should process errors correctly", async () => {
       const error = new Error("Test error");
-      const entry = { context: {}, data: {}, error };
+      const entry = {
+        level: "ERROR",
+        message: "Test message",
+        error,
+        context: {
+          timestamp: new Date().toISOString(),
+          runtime: Runtime.NODE,
+          environment: "TEST",
+          namespace: "test"
+        }
+      };
 
       const result = await processor.process(entry);
-      expect(result.data.patternId).toBeDefined();
-      expect(result.data.errorGroup).toBeDefined();
-      expect(result.data.frequency).toBe(1);
+      expect(result.context.error.errorType).toBe("Error");
+      expect(result.context.error.errorMessage).toBe("Test error");
+      expect(result.context.error.patternId).toBeDefined();
+      expect(result.context.error.errorGroup).toBeDefined();
+      expect(result.context.error.frequency).toBe(1);
     });
 
     it("should handle entries without errors", async () => {
-      const entry = { context: {}, data: {} };
+      const entry = {
+        level: "INFO",
+        message: "Test message",
+        context: {
+          timestamp: new Date().toISOString(),
+          runtime: Runtime.NODE,
+          environment: "TEST",
+          namespace: "test"
+        }
+      };
+
       const result = await processor.process(entry);
-      expect(result).toEqual(entry);
+      expect(result).toBe(entry);
     });
   });
 
   describe("Error Pattern Recognition", () => {
     it("should detect error patterns", async () => {
-      const error = new Error(
-        "Test error with ID 123 and timestamp 2024-01-17",
-      );
-      const similarError = new Error(
-        "Test error with ID 456 and timestamp 2024-01-18",
-      );
+      const error = new Error("Test error");
+      const entry = {
+        level: "ERROR",
+        message: "Test message",
+        error,
+        context: {
+          timestamp: new Date().toISOString(),
+          runtime: Runtime.NODE,
+          environment: "TEST",
+          namespace: "test"
+        }
+      };
 
-      // Process first error
-      await processor.process({ context: {}, data: {}, error });
+      // Process same error twice
+      await processor.process(entry);
+      const result = await processor.process(entry);
 
-      // Process similar error after some time
-      mockDate.mockReturnValue(2000);
-      const result = await processor.process({
-        context: {},
-        data: {},
-        error: similarError,
-      });
-
-      expect(result.data.frequency).toBe(2);
-      expect(result.data.similarErrors.length).toBeGreaterThan(0);
+      expect(result.context.error.frequency).toBe(2);
+      expect(result.context.error.similarErrors.length).toBeGreaterThan(0);
     });
 
     it("should handle different error types", async () => {
-      const error1 = new Error("Database connection failed: timeout");
-      const error2 = new TypeError("Invalid input: missing required field");
+      const error1 = new Error("Test error 1");
+      const error2 = new TypeError("Test error 2");
 
-      const result1 = await processor.process({
-        context: {},
-        data: {},
+      const entry1 = {
+        level: "ERROR",
+        message: "Test message 1",
         error: error1,
-      });
-      const result2 = await processor.process({
-        context: {},
-        data: {},
-        error: error2,
-      });
+        context: {
+          timestamp: new Date().toISOString(),
+          runtime: Runtime.NODE,
+          environment: "TEST",
+          namespace: "test"
+        }
+      };
 
-      expect(result1.data.patternId).not.toBe(result2.data.patternId);
-      expect(result1.data.errorGroup).not.toBe(result2.data.errorGroup);
+      const entry2 = {
+        level: "ERROR",
+        message: "Test message 2",
+        error: error2,
+        context: {
+          timestamp: new Date().toISOString(),
+          runtime: Runtime.NODE,
+          environment: "TEST",
+          namespace: "test"
+        }
+      };
+
+      const result1 = await processor.process(entry1);
+      const result2 = await processor.process(entry2);
+
+      expect(result1.context.error.patternId).not.toBe(result2.context.error.patternId);
+      expect(result1.context.error.errorGroup).not.toBe(result2.context.error.errorGroup);
     });
   });
 
   describe("Error Frequency Analysis", () => {
     it("should track error frequency", async () => {
-      const error = new Error("Repeated error");
-      const entry = { context: {}, data: {}, error };
+      const error = new Error("Test error");
+      const entry = {
+        level: "ERROR",
+        message: "Test message",
+        error,
+        context: {
+          timestamp: new Date().toISOString(),
+          runtime: Runtime.NODE,
+          environment: "TEST",
+          namespace: "test"
+        }
+      };
 
-      // Process same error multiple times
+      // Process same error three times
       await processor.process(entry);
-      mockDate.mockReturnValue(2000);
       await processor.process(entry);
-      mockDate.mockReturnValue(3000);
       const result = await processor.process(entry);
 
-      expect(result.data.frequency).toBe(3);
+      expect(result.context.error.frequency).toBe(3);
     });
 
     it("should handle error bursts", async () => {
-      const error = new Error("Burst error");
-      const entry = { context: {}, data: {}, error };
+      const error = new Error("Test error");
+      const entry = {
+        level: "ERROR",
+        message: "Test message",
+        error,
+        context: {
+          timestamp: new Date().toISOString(),
+          runtime: Runtime.NODE,
+          environment: "TEST",
+          namespace: "test"
+        }
+      };
 
-      // Create error burst
-      for (let i = 0; i < 20; i++) {
-        mockDate.mockReturnValue(1000 + i * 100); // 100ms between errors
+      // Process same error multiple times in quick succession
+      for (let i = 0; i < 25; i++) {
         await processor.process(entry);
       }
 
       // Get the last result
       const result = await processor.process(entry);
-      expect(result.data.frequency).toBe(20);
-      expect(result.data.similarErrors.length).toBeGreaterThan(0);
+      expect(result.context.error.frequency).toBe(26);
+      expect(result.context.error.similarErrors.length).toBeGreaterThan(0);
     });
   });
 

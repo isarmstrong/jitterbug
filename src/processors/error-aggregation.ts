@@ -1,5 +1,6 @@
-import { LogEntry, LogProcessor } from "../types/types.js";
-import { Runtime, Environment, LogLevels } from "../types/enums.js";
+import { LogLevels, Runtime, Environment } from '../types/core';
+import type { LogEntry, LogProcessor, RuntimeType, EnvironmentType } from '../types/core';
+import { hashString } from "../utils/index.js";
 
 interface ErrorPattern {
   message: string;
@@ -12,8 +13,17 @@ interface ErrorPattern {
   }>;
 }
 
-interface ErrorData {
+interface ErrorContext {
+  errorId: string;
+  errorType: string;
+  errorMessage: string;
+  stackTrace?: string;
   frequency: number;
+  firstOccurrence: number;
+  lastOccurrence: number;
+  metadata?: Record<string, unknown>;
+  patternId: string;
+  errorGroup: string;
   similarErrors: Array<{
     message: string;
     stack?: string;
@@ -28,13 +38,23 @@ export class ErrorAggregationProcessor implements LogProcessor {
     stack?: string;
     timestamp: number;
   }> = [];
+  private errorMap: Map<string, ErrorContext> = new Map();
+  private readonly supportedRuntimes = new Set<RuntimeType>([
+    Runtime.NODE,
+    Runtime.EDGE
+  ]);
+  private readonly supportedEnvironments = new Set<EnvironmentType>([
+    Environment.DEVELOPMENT,
+    Environment.STAGING,
+    Environment.PRODUCTION
+  ]);
 
-  public supports(runtime: string): boolean {
-    return runtime === Runtime.NODE || runtime === Runtime.EDGE;
+  public supports(runtime: RuntimeType): boolean {
+    return this.supportedRuntimes.has(runtime);
   }
 
-  public allowedIn(environment: string): boolean {
-    return environment !== Environment.TEST;
+  public allowedIn(environment: EnvironmentType): boolean {
+    return this.supportedEnvironments.has(environment);
   }
 
   public get severity(): string {
@@ -72,57 +92,115 @@ export class ErrorAggregationProcessor implements LogProcessor {
   }
 
   public async process<T extends Record<string, unknown>>(
-    entry: LogEntry<T>,
-  ): Promise<LogEntry<T & ErrorData>> {
+    entry: LogEntry<T>
+  ): Promise<LogEntry<T>> {
     if (!entry.error) {
-      return Promise.resolve(entry as LogEntry<T & ErrorData>);
+      return entry;
     }
 
-    const now = Date.now();
-    const errorKey = this.getErrorKey(entry.error);
+    const error = entry.error;
+    const errorType = error.constructor.name;
+    const errorMessage = error.message;
+    const stackTrace = error.stack;
 
-    // Update recent errors
+    // Generate consistent error ID based on type and message
+    const errorId = this.generateErrorId(errorType, errorMessage);
+    const patternId = this.detectPattern(error);
+    const errorGroup = this.groupError(error);
+
+    // Find similar errors
+    const now = Date.now();
     this.recentErrors.push({
-      message: entry.error.message,
-      stack: entry.error.stack,
-      timestamp: now,
+      message: error.message,
+      stack: error.stack,
+      timestamp: now
     });
 
     // Keep only errors from the last minute
-    this.recentErrors = this.recentErrors.filter(
-      (e) => now - e.timestamp < 60000,
-    );
-
-    // Update error patterns
-    let pattern = this.patterns.get(errorKey);
-    if (!pattern) {
-      pattern = {
-        message: entry.error.message,
-        stack: entry.error.stack,
-        frequency: 0,
-        similarErrors: [],
-      };
-      this.patterns.set(errorKey, pattern);
-    }
+    this.recentErrors = this.recentErrors.filter(e => now - e.timestamp < 60000);
 
     // Find similar errors
-    const similarErrors = this.recentErrors.filter((e) =>
+    const similarErrors = this.recentErrors.filter(e =>
       this.isSimilarError(
         { message: e.message, stack: e.stack } as Error,
-        entry.error as Error,
-      ),
+        error
+      )
     );
 
-    pattern.frequency = Math.min(similarErrors.length, 20); // Cap at 20 for burst detection
-    pattern.similarErrors = similarErrors.slice(0, 5); // Keep only top 5 similar errors
+    // Update error tracking
+    let errorContext = this.errorMap.get(errorId);
+    if (!errorContext) {
+      errorContext = {
+        errorId,
+        errorType,
+        errorMessage,
+        stackTrace,
+        frequency: 0,
+        firstOccurrence: now,
+        lastOccurrence: now,
+        metadata: {},
+        patternId,
+        errorGroup,
+        similarErrors: []
+      };
+      this.errorMap.set(errorId, errorContext);
+    }
 
-    return Promise.resolve({
+    // Update frequency and timing
+    errorContext.frequency++;
+    errorContext.lastOccurrence = now;
+    errorContext.similarErrors = similarErrors.slice(0, 5);
+
+    // Extract additional metadata if available
+    if (error instanceof Error && 'metadata' in error) {
+      errorContext.metadata = {
+        ...errorContext.metadata,
+        ...(error as { metadata?: Record<string, unknown> }).metadata
+      };
+    }
+
+    // Merge error data with original entry
+    return {
       ...entry,
-      data: {
-        ...entry.data,
-        frequency: pattern.frequency,
-        similarErrors: pattern.similarErrors,
-      },
-    } as LogEntry<T & ErrorData>);
+      level: LogLevels.ERROR,
+      context: {
+        ...entry.context,
+        error: errorContext
+      }
+    };
+  }
+
+  private generateErrorId(errorType: string, message: string): string {
+    // Create a stable hash of the error type and message
+    const str = `${errorType}:${message}`;
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return hash.toString(36);
+  }
+
+  private detectPattern(error: Error): string {
+    const err = error as Error;
+    const uniqueId = err.stack
+      ? err.stack.split('\n').slice(0, 2).join('|')
+      : Math.random().toString(36).slice(2, 6);
+
+    const patternString = `${err.name}:${err.message}:${uniqueId}`;
+    let hash = 0;
+
+    for (let i = 0; i < patternString.length; i++) {
+      hash = (hash << 5) - hash + patternString.charCodeAt(i);
+      hash |= 0; // Convert to 32-bit integer
+    }
+
+    return `err-${Math.abs(hash)}`;
+  }
+
+  private groupError(error: Error): string {
+    const err = error as Error;
+    return `err-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   }
 }

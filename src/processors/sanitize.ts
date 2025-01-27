@@ -1,5 +1,5 @@
-import type { LogEntry, LogProcessor, RuntimeType } from "../types/types.js";
-import { Runtime } from "../types/enums.js";
+import type { LogEntry, LogProcessor, RuntimeType } from "../types";
+import { Runtime } from "../types";
 
 /**
  * Sanitize processor configuration

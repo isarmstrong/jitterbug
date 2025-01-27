@@ -247,6 +247,14 @@ export class JitterbugImpl implements JitterbugInstance {
 
   private shouldLog(level: LogLevel): boolean {
     if (!this.enabled) return false;
+
+    // Check localStorage debug setting in browser environment
+    if (this.config.runtime === Runtime.BROWSER && typeof window !== 'undefined') {
+      const debug = window.localStorage?.getItem('jitterbug');
+      if (debug === '*') return true;
+      if (debug && debug.split(',').includes(this.config.namespace)) return true;
+    }
+
     const normalizedLevel = this.normalizeLogLevel(level);
     const normalizedMinLevel = this.normalizeLogLevel(this.config.minLevel);
     const minLevelIndex =

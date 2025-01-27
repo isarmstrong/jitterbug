@@ -1,5 +1,5 @@
 import type { RuntimeType, EnvironmentType } from "../types.js";
-import { Runtime, Environment } from "../types/enums.js";
+import { Runtime, Environment } from "../types";
 
 /**
  * Runtime detection utility

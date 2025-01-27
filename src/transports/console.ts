@@ -1,7 +1,6 @@
-import { LogLevels } from "../types/enums.js";
-import type { LogEntry, LogLevel } from "../types/types.js";
-import { BaseTransport, type TransportConfig } from "./types.js";
-import type { LogTransport } from "../types/types.js";
+import { LogLevels } from "../types";
+import type { LogEntry, LogLevel, LogTransport } from "../types";
+import { BaseTransport, type TransportConfig } from "./types";
 
 /**
  * Console transport configuration
@@ -37,25 +36,25 @@ export class ConsoleTransport extends BaseTransport implements LogTransport {
     super(config);
     this.config = {
       ...this.config,
-      colors: config?.colors ?? true,
+      colors: config?.colors ?? (typeof window === 'undefined'), // Disable colors in browser by default
     };
   }
 
   async write<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void> {
     const level = entry.level.toUpperCase() as keyof typeof LogLevels;
-    const color = this.colors[level];
     const method = this.methods[level];
 
     if (!this.shouldLog(level)) return Promise.resolve();
 
     const message = this.formatEntry(entry);
 
+    // Browser-friendly console output
     if (entry.error) {
-      (console[method] as (...args: unknown[]) => void)(message, entry.error);
+      console[method](message, entry.error);
     } else if (entry.data) {
-      (console[method] as (...args: unknown[]) => void)(message, entry.data);
+      console[method](message, entry.data);
     } else {
-      (console[method] as (...args: unknown[]) => void)(message);
+      console[method](message);
     }
 
     return Promise.resolve();

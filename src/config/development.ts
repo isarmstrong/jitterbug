@@ -1,7 +1,8 @@
-import { JitterbugConfig, Runtime, Environment } from '../types';
+import { JitterbugConfig, LogLevels, Environment } from '../types';
 import { GUITransport } from '../transports/gui';
 import { ConsoleTransport } from '../transports/console';
 import { SanitizeProcessor } from '../processors/sanitize';
+import { createJitterbug } from '../core';
 
 /**
  * Default development configuration for Jitterbug
@@ -9,7 +10,7 @@ import { SanitizeProcessor } from '../processors/sanitize';
  */
 export const developmentConfig: Partial<JitterbugConfig> = {
     environment: Environment.DEVELOPMENT,
-    level: 'debug',
+    level: LogLevels.DEBUG,
     enabled: true,
     processors: [
         new SanitizeProcessor({
@@ -38,4 +39,4 @@ export function createDevDebug(namespace: string, config: Partial<JitterbugConfi
 }
 
 // Re-export for convenience
-export { createJitterbug } from '../core'; 
+export { createJitterbug }; 

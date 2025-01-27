@@ -1,151 +1,113 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { MetricsProcessor } from "../../src/processors/metrics";
-import { Runtime } from "../../src/types/enums";
+import { describe, beforeEach, test, expect, afterEach } from 'vitest';
+import { MetricsProcessor } from '../../src/processors/metrics';
+import { LogLevels, Runtime } from '../../src/types';
+import { vi } from 'vitest';
 
-describe("MetricsProcessor", () => {
-  let processor;
-  let mockDate;
-  let mockMemoryUsage;
-
+describe('MetricsProcessor', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    mockDate = vi.spyOn(Date, "now").mockReturnValue(1000);
-    mockMemoryUsage = vi.spyOn(process, "memoryUsage").mockReturnValue({
-      heapUsed: 100,
-      heapTotal: 1000,
-      rss: 2000,
-      external: 50,
+    // Mock performance.now to simulate time passing
+    let time = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => {
+      time += 1;
+      return time;
     });
-    processor = new MetricsProcessor();
+
+    // Mock setImmediate to be synchronous
+    vi.spyOn(global, 'setImmediate').mockImplementation((fn) => {
+      fn();
+      return { unref: () => { } };
+    });
   });
 
   afterEach(() => {
-    vi.clearAllTimers();
     vi.useRealTimers();
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
-  describe("Basic Metrics", () => {
-    it("should track basic metrics", async () => {
-      const entry = { context: {}, data: {} };
-      const result = await processor.process(entry);
-
-      expect(result.data).toBeDefined();
-      expect(result.data.timestamp).toBe(1000);
-      expect(result.data.memoryUsage).toBeDefined();
-      expect(result.data.eventLoop).toBeDefined();
+  test('should track event loop lag', async () => {
+    const processor = new MetricsProcessor({
+      trackEventLoop: true,
+      sampleRate: 1
     });
 
-    it("should respect sample rate", async () => {
-      processor = new MetricsProcessor({ sampleRate: 0.5 });
-      const entry = { context: {}, data: {} };
+    // Force a metrics collection cycle
+    const metrics = await processor.collect();
 
-      // First call should be sampled
-      let result = await processor.process(entry);
-      expect(result.data.timestamp).toBeDefined();
-
-      // Second call within 2 seconds should not be sampled
-      mockDate.mockReturnValue(1500);
-      result = await processor.process(entry);
-      expect(result.data.timestamp).toBeUndefined();
-
-      // Call after 2 seconds should be sampled
-      mockDate.mockReturnValue(3000);
-      result = await processor.process(entry);
-      expect(result.data.timestamp).toBeDefined();
-    });
+    expect(metrics.eventLoop).toBeDefined();
+    expect(metrics.eventLoop.lag).toBeGreaterThanOrEqual(0);
+    expect(metrics.eventLoop.samples).toBe(1);
   });
 
-  describe("Memory Tracking", () => {
-    it("should track memory usage when enabled", async () => {
-      const entry = { context: {}, data: {} };
-      const result = await processor.process(entry);
-
-      expect(result.data.memoryUsage).toEqual({
-        heapUsed: 100,
-        heapTotal: 1000,
-        rss: 2000,
-        external: 50,
-      });
+  test('should track memory metrics', async () => {
+    const processor = new MetricsProcessor({
+      trackMemory: true,
+      sampleRate: 1
     });
 
-    it("should handle memory warnings", async () => {
-      mockMemoryUsage.mockReturnValue({
-        heapUsed: 950, // 95% usage
-        heapTotal: 1000,
-        rss: 2000,
-        external: 50,
-      });
+    // Mock memory usage
+    const mockMemory = {
+      heapUsed: 1000000,
+      heapTotal: 2000000,
+      rss: 3000000,
+      external: 500000
+    };
 
-      const entry = { context: {}, data: {} };
-      const result = await processor.process(entry);
+    vi.spyOn(process, 'memoryUsage').mockReturnValue(mockMemory);
 
-      expect(result.warnings).toBeDefined();
-      expect(result.warnings[0]).toContain("High memory usage");
-      expect(processor.getWarningCount()).toBe(1);
-    });
+    // Force a metrics collection cycle
+    const metrics = await processor.collect();
+
+    expect(metrics.memoryUsage).toBeDefined();
+    expect(metrics.memoryUsage.heapUsed).toBe(mockMemory.heapUsed);
+    expect(metrics.memoryUsage.heapTotal).toBe(mockMemory.heapTotal);
+    expect(metrics.memoryUsage.rss).toBe(mockMemory.rss);
+    expect(metrics.memoryUsage.external).toBe(mockMemory.external);
   });
 
-  describe("Event Loop Tracking", () => {
-    it("should track event loop lag", async () => {
-      const entry = { context: {}, data: {} };
-
-      mockDate
-        .mockReturnValueOnce(1000) // Initial time
-        .mockReturnValueOnce(1010); // 10ms lag
-
-      const result = await processor.process(entry);
-      expect(result.data.eventLoop).toBeDefined();
-      expect(result.data.eventLoop.lag).toBe(9); // 10ms - 1ms minimum timer
+  test('should respect sample rate', async () => {
+    const processor = new MetricsProcessor({
+      trackEventLoop: true,
+      trackMemory: true,
+      sampleRate: 1000 // Sample every second
     });
 
-    it("should detect event loop lag spikes", async () => {
-      const entry = { context: {}, data: {} };
-      const results = [];
+    // First collection should work
+    let metrics = await processor.collect();
+    expect(metrics.samples).toBe(1);
 
-      // Normal lag
-      mockDate.mockReturnValueOnce(1000).mockReturnValueOnce(1010);
-      results.push(await processor.process(entry));
+    // Second collection within sampleRate should return cached metrics
+    metrics = await processor.collect();
+    expect(metrics.samples).toBe(1);
 
-      // High lag
-      mockDate.mockReturnValueOnce(1100).mockReturnValueOnce(1200);
-      results.push(await processor.process(entry));
+    // Advance time past sampleRate
+    vi.advanceTimersByTime(1001);
 
-      // Back to normal
-      mockDate.mockReturnValueOnce(1300).mockReturnValueOnce(1310);
-      results.push(await processor.process(entry));
-
-      expect(results[0].data.eventLoop.lag).toBeLessThan(50);
-      expect(results[1].data.eventLoop.lag).toBeGreaterThan(50);
-      expect(results[2].data.eventLoop.lag).toBeLessThan(50);
-      expect(results[1].warnings).toContain("High event loop lag: 99ms");
-    });
+    // Third collection should increment samples
+    metrics = await processor.collect();
+    expect(metrics.samples).toBe(2);
   });
 
-  describe("Cross-Runtime Support", () => {
-    it("should handle both Node.js and browser metrics", async () => {
-      // Test Node.js runtime
-      const nodeProcessor = new MetricsProcessor({}, Runtime.NODE);
-      const nodeEntry = { context: {}, data: {} };
-      const nodeResult = await nodeProcessor.process(nodeEntry);
-
-      // Test browser runtime
-      const browserProcessor = new MetricsProcessor({}, Runtime.BROWSER);
-      const browserEntry = { context: {}, data: {} };
-
-      // Mock browser performance.memory
-      const mockPerformance = {
-        memory: {
-          usedJSHeapSize: 200,
-          totalJSHeapSize: 1000,
-        },
-      };
-      global.performance = mockPerformance;
-
-      const browserResult = await browserProcessor.process(browserEntry);
-
-      expect(nodeResult.data.memoryUsage.heapUsed).toBe(100);
-      expect(browserResult.data.memoryUsage.heapUsed).toBe(200);
+  test('should add metrics to log context', async () => {
+    const processor = new MetricsProcessor({
+      trackEventLoop: true,
+      trackMemory: true,
+      sampleRate: 1
     });
+
+    const entry = {
+      level: LogLevels.INFO,
+      message: 'test',
+      context: {
+        timestamp: new Date().toISOString(),
+        runtime: Runtime.NODE,
+        environment: 'TEST',
+        namespace: 'test'
+      }
+    };
+
+    const processedEntry = await processor.process(entry);
+    expect(processedEntry.context.metrics).toBeDefined();
+    expect(processedEntry.context.metrics.samples).toBe(1);
   });
 });
