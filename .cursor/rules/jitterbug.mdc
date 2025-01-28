@@ -1,0 +1,145 @@
+---
+description: This is what Jitterbug is about. It is an Edge-first debugger with a runtime component (send to Sentry in prod)
+globs: 
+---
+# Jitterbug
+
+Edge-first debugging system for Next.js applications with type safety and runtime awareness.
+
+## Key Features
+
+- 🔒 **Type Safety**
+  - Full TypeScript support with generic constraints
+  - Runtime-aware type guards
+  - Interface contracts for extensibility
+
+- 🌐 **Edge Runtime First**
+  - Built for Next.js 13+ Edge Runtime
+  - SSE-based real-time logging
+  - Memory-efficient streaming
+  - Automatic runtime detection
+
+- 📊 **Smart Processing**
+  - Error aggregation and correlation
+  - Performance metrics tracking
+  - Automatic sensitive data redaction
+  - Custom processors support
+
+Project @README.md
+
+# Jitterbug Project Rules
+
+# File patterns to watch
+globs:
+  - "*.tsx"
+  - "*.ts"
+  - "src/**/*"
+  - "packages/**/*"
+  - "__tests__/**/*"
+
+# Project-specific rules
+rules:
+  - name: "Edge Transport Configuration"
+    description: "Ensure Edge transport endpoints match the Next.js API route structure"
+    pattern: "endpoint: ''"
+    message: "Edge transport endpoints should follow the pattern '/api/logs/:clientId' for Next.js integration"
+    files: 
+      - "src/transports/edge.ts"
+      - "packages/jitterbug-next/src/**/*.ts"
+
+  - name: "Client ID Format"
+    description: "Ensure consistent client ID format across the codebase"
+    pattern: "clientId = crypto.randomUUID()"
+    message: "Client IDs should be stored and reused across sessions for consistent log tracking"
+    files:
+      - "src/**/*.ts"
+
+  - name: "Next.js API Routes"
+    description: "Ensure API routes are properly configured for Edge Runtime"
+    pattern: "export const runtime = 'edge'"
+    message: "API routes should explicitly set Edge Runtime when using Jitterbug"
+    files:
+      - "__tests__/integration/next-app/app/api/**/*.ts"
+
+  - name: "Environment Detection"
+    description: "Ensure proper environment detection in Edge contexts"
+    pattern: "typeof window !== 'undefined'"
+    message: "Use Runtime.EDGE check instead of window for Edge environment detection"
+    files:
+      - "src/**/*.ts"
+      - "packages/**/*.ts"
+
+# Reference files
+references:
+  - path: "@src/types/core.ts"
+    description: "Core type definitions and constants"
+  - path: "@src/transports/edge.ts"
+    description: "Edge transport implementation"
+  - path: "@packages/jitterbug-next/src/types.ts"
+    description: "Next.js specific type definitions"
+
+# Integration test paths
+test_paths:
+  - "__tests__/integration/next-app"
+  - "__tests__/integration/edge-app" 
+export const GET = handler.GET;
+export const POST = handler.POST;
+export const HEAD = handler.HEAD;
+export const OPTIONS = handler.OPTIONS;
+
+export const runtime = 'edge';
+```
+
+### Logger Configuration
+
+```typescript
+// lib/logger.ts
+import { createJitterbugLogger } from "@isarmstrong/jitterbug-next";
+
+export const logger = createJitterbugLogger({
+  namespace: "my-app",
+  environment: "development",
+  runtime: "edge",
+  endpoint: "/api/logs",
+  testMode: false
+});
+```
+
+## Packages
+
+- `@isarmstrong/jitterbug`: Core logging functionality
+- `@isarmstrong/jitterbug-next`: Next.js integration and Edge Runtime support
+
+## Type Safety
+
+The logger provides full TypeScript support with runtime type checking:
+
+```typescript
+interface UserEvent {
+  userId: string;
+  action: "login" | "logout";
+  timestamp: Date;
+}
+
+// Type-safe event logging
+logger.event<UserEvent>("user.action", {
+  userId: "123",
+  action: "login",
+  timestamp: new Date()
+});
+```
+
+## Edge Runtime Support
+
+Optimized for Next.js Edge Runtime with built-in features:
+- Automatic runtime detection
+- Rate limiting and backpressure handling
+- Memory-efficient log buffering
+- SSE-based real-time streaming
+
+## Documentation
+
+For detailed documentation and examples, visit:
+- @Core API Documentation
+- @Next.js Integration Guide
+- @Edge Runtime Configuration

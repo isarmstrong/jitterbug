@@ -1,0 +1,55 @@
+# Jitterbug Project Rules
+
+# File patterns to watch
+globs:
+  - "*.tsx"
+  - "*.ts"
+  - "src/**/*"
+  - "packages/**/*"
+  - "__tests__/**/*"
+
+# Project-specific rules
+rules:
+  - name: "Edge Transport Configuration"
+    description: "Ensure Edge transport endpoints match the Next.js API route structure"
+    pattern: "endpoint: ''"
+    message: "Edge transport endpoints should follow the pattern '/api/logs/:clientId' for Next.js integration"
+    files: 
+      - "src/transports/edge.ts"
+      - "packages/jitterbug-next/src/**/*.ts"
+
+  - name: "Client ID Format"
+    description: "Ensure consistent client ID format across the codebase"
+    pattern: "clientId = crypto.randomUUID()"
+    message: "Client IDs should be stored and reused across sessions for consistent log tracking"
+    files:
+      - "src/**/*.ts"
+
+  - name: "Next.js API Routes"
+    description: "Ensure API routes are properly configured for Edge Runtime"
+    pattern: "export const runtime = 'edge'"
+    message: "API routes should explicitly set Edge Runtime when using Jitterbug"
+    files:
+      - "__tests__/integration/next-app/app/api/**/*.ts"
+
+  - name: "Environment Detection"
+    description: "Ensure proper environment detection in Edge contexts"
+    pattern: "typeof window !== 'undefined'"
+    message: "Use Runtime.EDGE check instead of window for Edge environment detection"
+    files:
+      - "src/**/*.ts"
+      - "packages/**/*.ts"
+
+# Reference files
+references:
+  - path: "@src/types/core.ts"
+    description: "Core type definitions and constants"
+  - path: "@src/transports/edge.ts"
+    description: "Edge transport implementation"
+  - path: "@packages/jitterbug-next/src/types.ts"
+    description: "Next.js specific type definitions"
+
+# Integration test paths
+test_paths:
+  - "__tests__/integration/next-app"
+  - "__tests__/integration/edge-app" 
