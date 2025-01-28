@@ -1,8 +1,36 @@
-import type { LogEntry, LogProcessor, RuntimeType } from "../types";
-import { Runtime } from "../types";
+import type { LogEntry, LogProcessor, RuntimeType } from "../types/core";
+import { Runtime } from "../types/core";
 
 /**
- * Sanitize processor configuration
+ * Pattern to match for sanitization
+ */
+export type SanitizePattern = string | RegExp;
+
+/**
+ * Sanitize processor configuration for v2
+ */
+export interface SanitizeConfigV2 {
+  /**
+   * Patterns to match for sanitization
+   * @example ['password', 'token', /secret/i]
+   */
+  patterns: SanitizePattern[];
+
+  /**
+   * Value to replace sensitive data with
+   * @default "[REDACTED]"
+   */
+  replacement?: string;
+
+  /**
+   * Whether to recursively sanitize arrays
+   * @default false
+   */
+  sanitizeArrays?: boolean;
+}
+
+/**
+ * @deprecated Use SanitizeConfigV2 instead
  */
 export interface SanitizeConfig {
   /**
@@ -19,11 +47,15 @@ export interface SanitizeConfig {
   sanitizeArrays?: boolean;
 }
 
+function isLegacyConfig(config: SanitizeConfigV2 | SanitizeConfig): config is SanitizeConfig {
+  return 'sensitiveKeys' in config;
+}
+
 /**
  * Sanitize processor implementation
  */
 export class SanitizeProcessor implements LogProcessor {
-  private readonly config: Required<SanitizeConfig>;
+  private readonly config: Required<SanitizeConfigV2>;
 
   /**
    * @deprecated Since version 1.1.0. Will be removed in version 2.0.0.
@@ -38,16 +70,24 @@ export class SanitizeProcessor implements LogProcessor {
     "private",
   ];
 
-  /**
-   * Creates a new SanitizeProcessor instance
-   * @deprecated Since version 1.1.0. Constructor without explicit sensitiveKeys will be removed in version 2.0.0.
-   */
-  constructor(config?: SanitizeConfig) {
-    this.config = {
-      sensitiveKeys: config?.sensitiveKeys ?? this.defaultSensitiveKeys,
-      replacement: config?.replacement ?? "[REDACTED]",
-      sanitizeArrays: config?.sanitizeArrays ?? false,
-    };
+  constructor(config: SanitizeConfigV2 | SanitizeConfig) {
+    // Handle legacy config
+    if (isLegacyConfig(config)) {
+      console.warn(
+        'SanitizeConfig is deprecated. Please use SanitizeConfigV2 with "patterns" instead of "sensitiveKeys".'
+      );
+      this.config = {
+        patterns: config.sensitiveKeys ?? [],
+        replacement: config.replacement ?? "[REDACTED]",
+        sanitizeArrays: config.sanitizeArrays ?? false,
+      };
+    } else {
+      this.config = {
+        patterns: config.patterns,
+        replacement: config.replacement ?? "[REDACTED]",
+        sanitizeArrays: config.sanitizeArrays ?? false,
+      };
+    }
   }
 
   supports(runtime: RuntimeType): boolean {
@@ -121,7 +161,7 @@ export class SanitizeProcessor implements LogProcessor {
   }
 
   private shouldSanitize(key: string): boolean {
-    return this.config.sensitiveKeys.some((pattern: string | RegExp) =>
+    return this.config.patterns.some((pattern: SanitizePattern) =>
       typeof pattern === "string"
         ? key.toLowerCase().includes(pattern.toLowerCase())
         : pattern.test(key),

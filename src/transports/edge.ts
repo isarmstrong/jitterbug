@@ -3,6 +3,18 @@
 import pThrottle from "p-throttle";
 import { LogEntry, LogTransport } from "../types";
 import { EDGE_DEFAULTS } from '../config/defaults';
+import type { EdgeMemoryMetrics } from '../types/edge';
+
+declare global {
+  interface Performance {
+    memory?: {
+      usedJSHeapSize: number;
+      totalJSHeapSize: number;
+      jsExternalHeapSize?: number;
+      arrayBuffers?: number;
+    };
+  }
+}
 
 export interface EdgeTransportConfig {
   endpoint: string;
@@ -54,7 +66,7 @@ interface BatchMetrics {
 }
 
 export class EdgeTransport implements LogTransport {
-  private queue: LogEntry[] = [];
+  private queue: LogEntry<Record<string, unknown>>[] = [];
   private flushTimeout: ReturnType<typeof setTimeout> | null = null;
   private _isConnected = false;
   private retryCount = 0;
@@ -119,12 +131,12 @@ export class EdgeTransport implements LogTransport {
 
     // Use config to determine if we're in test mode
     if (this.config.testMode) {
-      this.throttledSendPayload = (payload: string, batchId: string) => this.sendPayload(payload, batchId);
+      this.throttledSendPayload = (payload: string, batchId: string): Promise<void> => this.sendPayload(payload, batchId);
     } else {
       this.throttledSendPayload = pThrottle({
         limit: this.config.maxConcurrent,
         interval: 1000 / this.config.requestsPerSecond
-      })((payload: string, batchId: string) => this.sendPayload(payload, batchId));
+      })((payload: string, batchId: string): Promise<void> => this.sendPayload(payload, batchId));
     }
 
     if (this.config.autoReconnect) {
@@ -137,7 +149,9 @@ export class EdgeTransport implements LogTransport {
 
   private async acquireFlushLock(): Promise<boolean> {
     const view = new Int32Array(this.flushMutex.buffer);
-    return Atomics.compareExchange(view, 0, 0, 1) === 0;
+    const result = Atomics.compareExchange(view, 0, 0, 1);
+    await Promise.resolve(); // Ensure async context
+    return result === 0;
   }
 
   private releaseFlushLock(): void {
@@ -146,18 +160,21 @@ export class EdgeTransport implements LogTransport {
   }
 
   private startMemoryMonitoring(): void {
-    const checkMemory = () => {
-      if (typeof performance !== 'undefined' && 'memory' in performance) {
-        const memory = (performance as any).memory;
-        this.metrics.memoryUsage = {
-          heapUsed: memory.usedJSHeapSize,
-          heapTotal: memory.totalJSHeapSize,
-          external: memory.jsExternalHeapSize || 0,
-          arrayBuffers: memory.arrayBuffers || 0
+    const checkMemory = (): void => {
+      const metrics = this.getMemoryMetrics();
+      if (metrics !== null) {
+        const memoryUsage = {
+          heapUsed: metrics.usedJSHeapSize,
+          heapTotal: metrics.totalJSHeapSize,
+          external: metrics.jsExternalHeapSize ?? 0,
+          arrayBuffers: metrics.arrayBuffers ?? 0
         };
 
+        this.metrics.memoryUsage = memoryUsage;
+
         // Implement backpressure if memory usage is high
-        if (this.metrics.memoryUsage.heapUsed / this.metrics.memoryUsage.heapTotal > 0.9) {
+        const memoryUtilization = memoryUsage.heapUsed / memoryUsage.heapTotal;
+        if (memoryUtilization > 0.9) {
           this.handleBackpressure();
         }
       }
@@ -180,13 +197,27 @@ export class EdgeTransport implements LogTransport {
   }
 
   private async persistQueue(): Promise<void> {
-    if (!this.config.persistQueue) return;
-    // Edge-specific persistence logic can be added later
+    if (!this.config.persistQueue || this.queue.length === 0) {
+      return;
+    }
+    await this.saveQueueToStorage();
   }
 
   private async restoreQueue(): Promise<void> {
-    if (!this.config.persistQueue) return;
-    // Edge-specific restoration logic can be added later
+    if (!this.config.persistQueue) {
+      return;
+    }
+    await this.loadQueueFromStorage();
+  }
+
+  private async saveQueueToStorage(): Promise<void> {
+    // Implementation for saving queue to storage would go here
+    await Promise.resolve(); // Placeholder for actual storage logic
+  }
+
+  private async loadQueueFromStorage(): Promise<void> {
+    // Implementation for loading queue from storage would go here
+    await Promise.resolve(); // Placeholder for actual storage logic
   }
 
   public async flush(): Promise<void> {
@@ -198,7 +229,7 @@ export class EdgeTransport implements LogTransport {
         return;
       }
 
-      let batch = [];
+      const batch = [] as LogEntry<Record<string, unknown>>[];
       let payloadSize = 0;
       const batchId = crypto.randomUUID();
       const batchMetrics: BatchMetrics = {
@@ -300,7 +331,7 @@ export class EdgeTransport implements LogTransport {
     } catch (error) {
       if (!(error instanceof Error && error.name === 'AbortError')) {
         try {
-          const entries = JSON.parse(payload) as Array<LogEntry>;
+          const entries = JSON.parse(payload) as Array<LogEntry<Record<string, unknown>>>;
           const existingIds = new Set(
             this.queue
               .map(e => e._metadata?.sequence)
@@ -522,4 +553,53 @@ export class EdgeTransport implements LogTransport {
     this.queue = [];
     this.updateCallbacks.clear();
   }
+
+  private getMemoryMetrics = (): EdgeMemoryMetrics | null => {
+    if (typeof performance === 'undefined' || !performance.memory) {
+      return null;
+    }
+
+    const memory = performance.memory;
+    return {
+      usedJSHeapSize: memory.usedJSHeapSize,
+      totalJSHeapSize: memory.totalJSHeapSize,
+      jsExternalHeapSize: memory.jsExternalHeapSize ?? 0,
+      arrayBuffers: memory.arrayBuffers ?? 0
+    };
+  };
+
+  private onMessage = (event: MessageEvent<string>): void => {
+    if (typeof event.data !== 'string' || event.data.length === 0) {
+      return;
+    }
+
+    try {
+      this.processPayload(event.data);
+    } catch (_err) {
+      const error = _err instanceof Error ? _err : new Error('Unknown error processing message');
+      console.error('Error processing message:', error);
+    }
+  };
+
+  private processPayload(_payload: string): void {
+    // Implementation for processing payload
+    // This is a placeholder - actual implementation would go here
+    this.notifyUpdate();
+  }
+
+  private onError = (_error: Event): void => {
+    this._isConnected = false;
+    this.metrics.interruptions++;
+    this.metrics.lastInterruptionTime = Date.now();
+
+    if (this.config.autoReconnect && this.retryCount < this.config.maxRetries) {
+      this.retryCount++;
+      setTimeout(() => {
+        void this.connect().catch((err: unknown) => {
+          const error = err instanceof Error ? err : new Error('Unknown error connecting');
+          console.error('Error reconnecting:', error);
+        });
+      }, this.config.retryInterval);
+    }
+  };
 }

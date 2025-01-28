@@ -3,7 +3,7 @@ import {
   type LogTransport,
   type LogLevel,
   LogLevels,
-} from "../types";
+} from "../types/core";
 
 /**
  * Transport configuration interface

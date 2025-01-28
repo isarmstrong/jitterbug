@@ -1,5 +1,5 @@
-import { LogEntry, LogTransport, Runtime } from "../types";
-import { BaseTransport, TransportConfig } from "./types";
+import type { LogEntry, LogTransport } from "../types/core";
+import { BaseTransport, type TransportConfig } from "./types";
 import * as semver from "semver";
 
 interface EdgeRuntimeGlobal {
@@ -52,7 +52,15 @@ export interface VersionMetrics {
     }>;
 }
 
-export interface VersionConfig extends TransportConfig {
+export interface VersionData {
+    type: 'version';
+    version: string;
+    dependencies?: Record<string, string>;
+    environment?: Record<string, string>;
+}
+
+export interface VersionTransportConfig extends TransportConfig {
+    maxEntries?: number;
     requiredVersions?: {
         next?: string;
         react?: string;
@@ -87,7 +95,9 @@ interface VersionEvent {
     };
 }
 
-export class VersionTransport extends BaseTransport implements LogTransport {
+export class VersionTransport extends BaseTransport {
+    protected readonly transportConfig: Required<VersionTransportConfig>;
+    private entries: Array<LogEntry<Record<string, unknown>>> = [];
     private metrics: VersionMetrics = {
         nextVersion: null,
         reactVersion: null,
@@ -102,17 +112,20 @@ export class VersionTransport extends BaseTransport implements LogTransport {
         reactPatterns: new Map()
     };
 
-    private readonly requiredVersions: Required<NonNullable<VersionConfig['requiredVersions']>>;
-    private readonly allowedPatterns: Set<string>;
-
-    constructor(config?: VersionConfig) {
+    constructor(config: VersionTransportConfig = {}) {
         super(config);
-        this.requiredVersions = {
-            next: config?.requiredVersions?.next ?? '13.0.0',
-            react: config?.requiredVersions?.react ?? '18.2.0',
-            node: config?.requiredVersions?.node ?? '16.0.0'
+        this.transportConfig = {
+            enabled: config.enabled ?? true,
+            level: config.level ?? this.config.level,
+            format: config.format ?? this.config.format,
+            maxEntries: config.maxEntries ?? 1000,
+            requiredVersions: {
+                next: config.requiredVersions?.next ?? '>=13.0.0',
+                react: config.requiredVersions?.react ?? '>=18.0.0',
+                node: config.requiredVersions?.node ?? '>=16.0.0'
+            },
+            allowedPatterns: config.allowedPatterns ?? []
         };
-        this.allowedPatterns = new Set(config?.allowedPatterns ?? []);
 
         // Initialize with current runtime versions if available
         if (typeof process !== 'undefined') {
@@ -153,18 +166,64 @@ export class VersionTransport extends BaseTransport implements LogTransport {
         }
     }
 
-    public async write<T extends Record<string, unknown>>(
-        entry: LogEntry<T>
-    ): Promise<void> {
-        if (!this.isVersionEntry(entry)) {
-            return Promise.resolve();
+    public async write<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void> {
+        if (!this.shouldLog(entry.level)) {
+            return;
         }
 
-        const event = this.parseVersionEvent(entry);
-        if (!event) return Promise.resolve();
+        const versionData = entry.data as VersionData | undefined;
+        if (!versionData || !this.isVersionData(versionData)) {
+            return;
+        }
 
-        this.processVersionEvent(event);
-        return Promise.resolve();
+        // Add entry with timestamp
+        const timestamp = entry.context?.timestamp ?? new Date().toISOString();
+        this.entries.push({
+            ...entry,
+            context: {
+                ...entry.context,
+                timestamp
+            }
+        });
+
+        // Enforce entry limit
+        if (this.entries.length > this.transportConfig.maxEntries) {
+            this.entries = this.entries.slice(-this.transportConfig.maxEntries);
+        }
+    }
+
+    private isVersionData(data: unknown): data is VersionData {
+        if (typeof data !== 'object' || data === null) {
+            return false;
+        }
+
+        const vData = data as Partial<VersionData>;
+
+        if (vData.type !== 'version') {
+            return false;
+        }
+
+        if (typeof vData.version !== 'string') {
+            return false;
+        }
+
+        if (vData.dependencies !== undefined &&
+            (typeof vData.dependencies !== 'object' ||
+                !Object.values(vData.dependencies).every(v => typeof v === 'string'))) {
+            return false;
+        }
+
+        if (vData.environment !== undefined &&
+            (typeof vData.environment !== 'object' ||
+                !Object.values(vData.environment).every(v => typeof v === 'string'))) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public getEntries(): ReadonlyArray<LogEntry<Record<string, unknown>>> {
+        return Object.freeze([...this.entries]);
     }
 
     public getMetrics(): Readonly<VersionMetrics> {
@@ -176,193 +235,14 @@ export class VersionTransport extends BaseTransport implements LogTransport {
         });
     }
 
-    private isVersionEntry<T extends Record<string, unknown>>(
-        entry: LogEntry<T>
-    ): boolean {
-        return entry.data?.type === 'version';
-    }
-
-    private parseVersionEvent<T extends Record<string, unknown>>(
-        entry: LogEntry<T>
-    ): VersionEvent | null {
-        const data = entry.data as Record<string, unknown>;
-
-        if (!data.eventType || typeof data.eventType !== 'string') {
-            return null;
-        }
-
-        return {
-            type: data.eventType as VersionEvent['type'],
-            framework: data.framework as VersionEvent['framework'],
-            pattern: data.pattern as VersionEvent['pattern'],
-            sse: data.sse as VersionEvent['sse'],
-            react: data.react as VersionEvent['react']
-        };
-    }
-
-    private processVersionEvent(event: VersionEvent): void {
-        switch (event.type) {
-            case 'framework':
-                this.processFrameworkVersion(event.framework);
-                break;
-            case 'pattern':
-                this.processPatternUsage(event.pattern);
-                break;
-            case 'sse':
-                this.processSSEImplementation(event.sse);
-                break;
-            case 'react':
-                this.processReactPattern(event.react);
-                break;
-        }
-    }
-
-    private processFrameworkVersion(framework?: VersionEvent['framework']): void {
-        if (!framework?.name || !framework.version) return;
-
-        switch (framework.name.toLowerCase()) {
-            case 'next':
-                this.metrics.nextVersion = framework.version;
-                this.metrics.isNextCompatible = this.checkVersionCompatibility(
-                    'next',
-                    framework.version
-                );
-                break;
-            case 'react':
-                this.metrics.reactVersion = framework.version;
-                this.metrics.isReactCompatible = this.checkVersionCompatibility(
-                    'react',
-                    framework.version
-                );
-                break;
-            case 'node':
-                this.metrics.nodeVersion = framework.version;
-                this.metrics.isNodeCompatible = this.checkVersionCompatibility(
-                    'node',
-                    framework.version
-                );
-                break;
-        }
-    }
-
-    private processPatternUsage(pattern?: VersionEvent['pattern']): void {
-        if (!pattern?.name || !pattern.implementation) return;
-
-        if (!this.allowedPatterns.has(pattern.name)) {
-            this.metrics.incompatiblePatterns.set(pattern.name, {
-                count: (this.metrics.incompatiblePatterns.get(pattern.name)?.count ?? 0) + 1,
-                lastSeen: Date.now(),
-                severity: this.determinePatternSeverity(pattern),
-                details: this.generatePatternDetails(pattern)
-            });
-        }
-    }
-
-    private processSSEImplementation(sse?: VersionEvent['sse']): void {
-        if (!sse?.endpoint || !sse.implementation) return;
-
-        const isValid = this.validateSSEImplementation(sse);
-        const issues = this.identifySSEIssues(sse);
-
-        this.metrics.sseImplementations.set(sse.endpoint, {
-            isValid,
-            issues,
-            lastUsed: Date.now()
-        });
-    }
-
-    private processReactPattern(react?: VersionEvent['react']): void {
-        if (!react?.component) return;
-
-        this.metrics.reactPatterns.set(react.component, {
-            isAsync: react.async ?? false,
-            usesSuspense: react.suspense ?? false,
-            usesServerComponents: react.serverComponent ?? false,
-            lastSeen: Date.now(),
-            issues: this.identifyReactPatternIssues(react)
-        });
-    }
-
     private checkVersionCompatibility(
-        framework: keyof typeof this.requiredVersions,
+        framework: keyof typeof this.transportConfig.requiredVersions,
         version: string | null
     ): boolean {
         if (!version) return false;
-        return semver.gte(version, this.requiredVersions[framework]);
-    }
-
-    private determinePatternSeverity(pattern: NonNullable<VersionEvent['pattern']>): 'warning' | 'error' {
-        // Check for known problematic patterns
-        const errorPatterns = [
-            'useLayoutEffect in SSR',
-            'sync fetch in Edge',
-            'document access in SSR'
-        ];
-
-        return errorPatterns.some(p => pattern.implementation.includes(p))
-            ? 'error'
-            : 'warning';
-    }
-
-    private generatePatternDetails(pattern: NonNullable<VersionEvent['pattern']>): string {
-        const details = [`Pattern '${pattern.name}' is not recommended.`];
-
-        if (pattern.context) {
-            if (pattern.context.runtime === Runtime.EDGE) {
-                details.push('This pattern may not work correctly in Edge Runtime.');
-            }
-            if (pattern.context.isSSR) {
-                details.push('This pattern may cause hydration mismatches.');
-            }
-        }
-
-        return details.join(' ');
-    }
-
-    private validateSSEImplementation(sse: NonNullable<VersionEvent['sse']>): boolean {
-        // Check for required SSE patterns
-        const requiredPatterns = [
-            'EventSource',
-            'onmessage',
-            'onerror',
-            'reconnection'
-        ];
-
-        return requiredPatterns.every(pattern =>
-            sse.implementation.includes(pattern)
-        );
-    }
-
-    private identifySSEIssues(sse: NonNullable<VersionEvent['sse']>): string[] {
-        const issues: string[] = [];
-
-        if (!sse.reconnectStrategy) {
-            issues.push('Missing reconnection strategy');
-        }
-        if (!sse.implementation.includes('error handling')) {
-            issues.push('Missing error handling');
-        }
-        if (sse.implementation.includes('WebSocket')) {
-            issues.push('Mixing SSE with WebSocket patterns');
-        }
-
-        return issues;
-    }
-
-    private identifyReactPatternIssues(react: NonNullable<VersionEvent['react']>): string[] {
-        const issues: string[] = [];
-
-        if (react.async && !react.suspense) {
-            issues.push('Async component without Suspense boundary');
-        }
-        if (react.serverComponent && !this.metrics.isNextCompatible) {
-            issues.push('Server Component used with incompatible Next.js version');
-        }
-        if (react.patterns?.includes('useLayoutEffect') && react.serverComponent) {
-            issues.push('useLayoutEffect in Server Component');
-        }
-
-        return issues;
+        const required = this.transportConfig.requiredVersions[framework];
+        if (!required) return true; // If no requirement is set, any version is valid
+        return semver.gte(version, required);
     }
 
     private extractNextVersion(buildId: string): string {

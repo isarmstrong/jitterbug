@@ -1,4 +1,4 @@
-import { JitterbugConfig, LogLevels, Environment } from '../types';
+import { JitterbugConfig, LogLevels, Environment } from '../types/core';
 import { GUITransport } from '../transports/gui';
 import { ConsoleTransport } from '../transports/console';
 import { SanitizeProcessor } from '../processors/sanitize';
@@ -14,15 +14,15 @@ export const developmentConfig: Partial<JitterbugConfig> = {
     enabled: true,
     processors: [
         new SanitizeProcessor({
-            sensitiveKeys: ['password', 'token', 'secret', 'key'],
+            patterns: ['password', 'token', 'secret', 'key'],
         }),
     ],
     transports: [
         new ConsoleTransport(),
         new GUITransport({
-            edge: {
-                endpoint: '/api/debug',
-            },
+            maxEntries: 1000,
+            bufferSize: 100,
+            autoReconnect: true,
         }),
     ],
 };

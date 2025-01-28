@@ -14,6 +14,9 @@ import { GUITransport } from "./gui-transport";
 import type { GUITransportState } from "./gui-transport";
 import { GUI_DEFAULTS } from '../config/defaults';
 
+// Re-export the GUITransport for use in other modules
+export { GUITransport };
+
 interface GUIProps {
   maxEntries?: number;
   transport: GUITransport;

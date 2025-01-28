@@ -1,5 +1,5 @@
-import { LogLevels } from "../types";
-import type { LogEntry, LogLevel, LogTransport } from "../types";
+import { LogLevels } from "../types/core";
+import type { LogEntry, LogLevel, LogTransport } from "../types/core";
 import { BaseTransport, type TransportConfig } from "./types";
 
 /**
@@ -24,13 +24,13 @@ export class ConsoleTransport extends BaseTransport implements LogTransport {
     FATAL: "\x1b[35m", // Magenta
   };
   private readonly reset = "\x1b[0m";
-  private readonly methods: Record<keyof typeof LogLevels, ConsoleMethod> = {
-    DEBUG: "debug",
-    INFO: "info",
-    WARN: "warn",
-    ERROR: "error",
-    FATAL: "error",
-  };
+  private readonly methods = {
+    [LogLevels.DEBUG]: 'debug',
+    [LogLevels.INFO]: 'info',
+    [LogLevels.WARN]: 'warn',
+    [LogLevels.ERROR]: 'error',
+    [LogLevels.FATAL]: 'error'
+  } as const;
 
   constructor(config?: ConsoleConfig) {
     super(config);
@@ -40,24 +40,39 @@ export class ConsoleTransport extends BaseTransport implements LogTransport {
     };
   }
 
-  async write<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void> {
-    const level = entry.level.toUpperCase() as keyof typeof LogLevels;
-    const method = this.methods[level];
+  private getLogFunction(level: LogLevel): (message: string, ...args: unknown[]) => void {
+    const upperLevel = level.toUpperCase() as keyof typeof LogLevels;
+    const method = this.methods[upperLevel];
+    return console[method].bind(console);
+  }
 
-    if (!this.shouldLog(level)) return Promise.resolve();
-
-    const message = this.formatEntry(entry);
-
-    // Browser-friendly console output
-    if (entry.error) {
-      console[method](message, entry.error);
-    } else if (entry.data) {
-      console[method](message, entry.data);
-    } else {
-      console[method](message);
+  public async write<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void> {
+    if (!this.shouldLog(entry.level)) {
+      return;
     }
 
-    return Promise.resolve();
+    const logFn = this.getLogFunction(entry.level);
+    const timestamp = entry.context?.timestamp ?? new Date().toISOString();
+    const namespace = entry.context?.namespace ?? 'default';
+
+    // Format error if present
+    if (entry.error instanceof Error) {
+      logFn(`[${timestamp}] [${namespace}] ${entry.level}: ${entry.message}`);
+      logFn(`Error: ${entry.error.message}`);
+      if (entry.data) {
+        logFn('Additional data:', entry.data);
+      }
+      return;
+    }
+
+    // Format data if present
+    if (entry.data) {
+      logFn(`[${timestamp}] [${namespace}] ${entry.level}: ${entry.message}`, entry.data);
+      return;
+    }
+
+    // Basic log format
+    logFn(`[${timestamp}] [${namespace}] ${entry.level}: ${entry.message}`);
   }
 
   protected override formatEntry<T extends Record<string, unknown>>(

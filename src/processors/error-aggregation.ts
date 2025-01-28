@@ -183,7 +183,7 @@ export class ErrorAggregationProcessor implements LogProcessor {
   }
 
   private detectPattern(error: Error): string {
-    const err = error as Error;
+    const err = error;
     const uniqueId = err.stack
       ? err.stack.split('\n').slice(0, 2).join('|')
       : Math.random().toString(36).slice(2, 6);
@@ -200,7 +200,7 @@ export class ErrorAggregationProcessor implements LogProcessor {
   }
 
   private groupError(error: Error): string {
-    const err = error as Error;
+    const err = error;
     return `err-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   }
 }
