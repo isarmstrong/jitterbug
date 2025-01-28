@@ -1,4 +1,4 @@
-import { LogEntry, LogTransport, LogLevel } from "../types";
+import { LogEntry, LogTransport, LogLevel } from "../types/core";
 import { BaseTransport, TransportConfig } from "./types";
 
 export interface CacheMetrics {
@@ -88,7 +88,7 @@ export class CacheTransport extends BaseTransport implements LogTransport {
     ): Promise<LogEntry<T> | null> {
         const key = this.generateKeyFromParts(namespace, level, timestamp);
         const now = Date.now();
-        const entry = this.cache.get(key);
+        const entry = await Promise.resolve(this.cache.get(key));
 
         if (!entry) {
             this.metrics.misses++;
@@ -100,18 +100,21 @@ export class CacheTransport extends BaseTransport implements LogTransport {
         const age = now - entry.timestamp;
 
         // Check if entry is fresh
-        if (age <= this.maxAge) {
+        if (typeof age === 'number' && age <= this.maxAge) {
             this.metrics.hits++;
             return entry.value as LogEntry<T>;
         }
 
         // Check if entry is stale but usable
-        if (age <= this.maxAge + this.staleWhileRevalidate) {
+        if (typeof age === 'number' && age <= this.maxAge + this.staleWhileRevalidate) {
             this.metrics.staleHits++;
 
             // Trigger revalidation if not already in progress
             if (!entry.isRevalidating) {
-                void this.revalidate(entry);
+                // Use void to explicitly ignore the promise
+                void this.revalidate(entry).catch(err => {
+                    console.error('Error revalidating cache entry:', err);
+                });
             }
 
             return entry.value as LogEntry<T>;
@@ -159,10 +162,24 @@ export class CacheTransport extends BaseTransport implements LogTransport {
     }
 
     private generateKey(entry: LogEntry<Record<string, unknown>>): string {
+        const namespace = entry.context?.namespace;
+        const timestamp = entry.context?.timestamp;
+        const level = entry.level;
+
+        // If we don't have required fields, use a fallback key
+        if (typeof namespace !== 'string' || typeof timestamp !== 'string') {
+            return this.generateKeyFromParts(
+                typeof namespace === 'string' ? namespace : 'unknown',
+                level
+            );
+        }
+
+        // We've validated the fields exist and are strings
+        const date = new Date(timestamp).getTime();
         return this.generateKeyFromParts(
-            entry.context.namespace,
-            entry.level,
-            new Date(entry.context.timestamp).getTime()
+            namespace,
+            level,
+            date
         );
     }
 
@@ -186,7 +203,7 @@ export class CacheTransport extends BaseTransport implements LogTransport {
             }
         }
 
-        if (oldestKey) {
+        if (oldestKey !== null) {
             this.cache.delete(oldestKey);
             this.metrics.evictions++;
             this.metrics.lastEvictionTime = Date.now();
