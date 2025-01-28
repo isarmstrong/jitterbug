@@ -1,16 +1,17 @@
-import type { LogEntry, LogTransport } from "../types/core";
-import { BaseTransport, type TransportConfig } from "./types";
+import type { LogEntry } from "../types/core";
+import { BaseTransport } from "./types";
 
 export interface ResourceData {
     type: 'resource';
     url: string;
-    initiator?: string;
-    duration?: number;
+    initiator: string;
+    duration: number;
     size?: number;
     error?: Error;
+    timestamp?: number;
 }
 
-export interface ResourceTransportConfig extends TransportConfig {
+export interface ResourceTransportConfig {
     maxEntries?: number;
     sampleInterval?: number;
     retentionPeriod?: number;
@@ -18,20 +19,23 @@ export interface ResourceTransportConfig extends TransportConfig {
 }
 
 export class ResourceTransport extends BaseTransport {
-    protected readonly transportConfig: Required<ResourceTransportConfig>;
-    private entries: Array<LogEntry<Record<string, unknown>>> = [];
+    private readonly maxEntries: number;
+    private readonly sampleInterval: number;
+    private readonly retentionPeriod: number;
+    private readonly quotaTypes: string[];
+    private entries: Array<LogEntry<ResourceData>> = [];
+    private lastSampleTime = 0;
 
     constructor(config: ResourceTransportConfig = {}) {
-        super(config);
-        this.transportConfig = {
-            enabled: config.enabled ?? true,
-            level: config.level ?? this.config.level,
-            format: config.format ?? this.config.format,
-            maxEntries: config.maxEntries ?? 1000,
-            sampleInterval: config.sampleInterval ?? 1000,
-            retentionPeriod: config.retentionPeriod ?? 3600000,
-            quotaTypes: config.quotaTypes ?? ['script', 'style', 'image', 'font']
-        };
+        super({
+            enabled: true,
+            format: "json"
+        });
+
+        this.maxEntries = config.maxEntries ?? 1000;
+        this.sampleInterval = config.sampleInterval ?? 1000;
+        this.retentionPeriod = config.retentionPeriod ?? 60000;
+        this.quotaTypes = config.quotaTypes ?? ["image", "script", "stylesheet"];
     }
 
     public async write<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void> {
@@ -39,69 +43,75 @@ export class ResourceTransport extends BaseTransport {
             return;
         }
 
-        const resourceData = entry.data as ResourceData | undefined;
-        if (!resourceData || !this.isResourceData(resourceData)) {
+        const data = entry.data as unknown;
+        if (!this.isResourceData(data)) {
             return;
         }
 
-        // Add entry with timestamp
-        const timestamp = entry.context?.timestamp ?? new Date().toISOString();
-        this.entries.push({
-            ...entry,
-            context: {
-                ...entry.context,
-                timestamp
-            }
-        });
-
-        // Enforce entry limit
-        if (this.entries.length > this.transportConfig.maxEntries) {
-            this.entries = this.entries.slice(-this.transportConfig.maxEntries);
+        const now = Date.now();
+        if (now - this.lastSampleTime < this.sampleInterval) {
+            return;
         }
 
-        // Clean up old entries
-        const now = Date.now();
-        this.entries = this.entries.filter(entry => {
-            const entryTime = new Date(entry.context?.timestamp ?? 0).getTime();
-            return now - entryTime < this.transportConfig.retentionPeriod;
-        });
+        this.lastSampleTime = now;
+        this.cleanOldEntries(now);
+
+        if (this.entries.length >= this.maxEntries) {
+            this.entries.shift();
+        }
+
+        const resourceEntry = {
+            ...entry,
+            data: {
+                ...data,
+                timestamp: entry.context?.timestamp ?? now
+            }
+        } as LogEntry<ResourceData>;
+
+        this.entries.push(resourceEntry);
     }
 
     private isResourceData(data: unknown): data is ResourceData {
-        if (typeof data !== 'object' || data === null) {
+        if (!data || typeof data !== "object") {
             return false;
         }
 
-        const rData = data as Partial<ResourceData>;
-
-        if (rData.type !== 'resource') {
-            return false;
-        }
-
-        if (typeof rData.url !== 'string') {
-            return false;
-        }
-
-        if (rData.initiator !== undefined && typeof rData.initiator !== 'string') {
-            return false;
-        }
-
-        if (rData.duration !== undefined && typeof rData.duration !== 'number') {
-            return false;
-        }
-
-        if (rData.size !== undefined && typeof rData.size !== 'number') {
-            return false;
-        }
-
-        if (rData.error !== undefined && !(rData.error instanceof Error)) {
-            return false;
-        }
-
-        return true;
+        const d = data as Partial<ResourceData>;
+        return (
+            d.type === "resource" &&
+            typeof d.url === "string" &&
+            typeof d.initiator === "string" &&
+            typeof d.duration === "number" &&
+            (d.size === undefined || typeof d.size === "number") &&
+            (d.error === undefined || d.error instanceof Error) &&
+            (d.timestamp === undefined || typeof d.timestamp === "number")
+        );
     }
 
-    public getEntries(): ReadonlyArray<LogEntry<Record<string, unknown>>> {
-        return Object.freeze([...this.entries]);
+    private cleanOldEntries(now: number): void {
+        const cutoff = now - this.retentionPeriod;
+        this.entries = this.entries.filter(entry => {
+            const data = entry.data as ResourceData;
+            const timestamp = data.timestamp ?? 0;
+            return timestamp > cutoff;
+        });
+    }
+
+    public getEntries(): ReadonlyArray<LogEntry<ResourceData>> {
+        return [...this.entries];
+    }
+
+    public getQuotaUsage(): Map<string, number> {
+        const usage = new Map<string, number>();
+
+        for (const entry of this.entries) {
+            const data = entry.data as ResourceData;
+            if (data.size && this.quotaTypes.includes(data.initiator)) {
+                const current = usage.get(data.initiator) ?? 0;
+                usage.set(data.initiator, current + data.size);
+            }
+        }
+
+        return usage;
     }
 } 

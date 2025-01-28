@@ -1,0 +1,69 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ESNext",
+        "lib": [
+            "ES2022",
+            "DOM",
+            "DOM.Iterable"
+        ],
+        "moduleResolution": "bundler",
+        "jsx": "react-jsx",
+        "strict": true,
+        "skipLibCheck": true,
+        "esModuleInterop": true,
+        "isolatedModules": true,
+        "resolveJsonModule": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+        "forceConsistentCasingInFileNames": true,
+        "verbatimModuleSyntax": true,
+        "types": [
+            "node",
+            "vitest/globals"
+        ],
+        "paths": {
+            "@core/types": [
+                "./src/types/core.ts"
+            ],
+            "@core/enums": [
+                "./src/types/enums.ts"
+            ],
+            "@core/edge": [
+                "./src/types/edge.ts"
+            ],
+            "@transports/base": [
+                "./src/transports/base.ts"
+            ],
+            "@transports/*": [
+                "./src/transports/*.ts"
+            ],
+            "@processors/*": [
+                "./src/processors/*.ts"
+            ],
+            "@utils/*": [
+                "./src/utils/*.ts"
+            ],
+            "@test/*": [
+                "./__tests__/*.ts"
+            ]
+        },
+        "baseUrl": "."
+    },
+    "include": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "__tests__/**/*.ts",
+        "__tests__/**/*.tsx",
+        "**/*.test.ts",
+        "**/*.spec.ts",
+        "*.config.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "coverage"
+    ]
+}

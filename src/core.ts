@@ -2,7 +2,7 @@ import {
   LogLevels,
   Runtime,
   Environment,
-} from "./types/index.js";
+} from "./types";
 import type {
   JitterbugInstance,
   JitterbugConfig,
@@ -12,10 +12,9 @@ import type {
   RuntimeType,
   EnvironmentType,
   LogTransport,
-  LogProcessor,
   LogLevel,
-} from "./types/index.js";
-import { processLog, writeLog } from "./logger.js";
+} from "./types";
+import { processLog, writeLog } from "./logger";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -80,15 +79,12 @@ export class JitterbugImpl implements JitterbugInstance {
       minLevel: config.minLevel
         ? this.normalizeLogLevel(config.minLevel)
         : this.normalizeLogLevel(config.level ?? LogLevels.INFO),
+      onError: config.onError ?? this.onError,
+      onWarn: config.onWarn ?? this.onWarn
     };
 
     this.enabled = this.config.enabled;
-    this.context = {
-      timestamp: new Date().toISOString(),
-      runtime: this.config.runtime,
-      environment: this.config.environment,
-      namespace: this.config.namespace,
-    };
+    this.context = this.getLogContext();
 
     this.setupTransports();
   }
@@ -96,8 +92,9 @@ export class JitterbugImpl implements JitterbugInstance {
   /**
    * Normalizes log level to uppercase for internal consistency
    */
-  private normalizeLogLevel(level: LogLevel): keyof typeof LogLevels {
-    return level.toUpperCase() as keyof typeof LogLevels;
+  private normalizeLogLevel(level: string): LogLevel {
+    const upperLevel = level.toUpperCase() as keyof typeof LogLevels;
+    return LogLevels[upperLevel];
   }
 
   public debug<T extends Record<string, unknown>>(
@@ -137,9 +134,12 @@ export class JitterbugImpl implements JitterbugInstance {
     void this.log(LogLevels.FATAL, message, data, error);
   }
 
-  render<T extends Record<string, unknown>>(message: string, data?: T): void {
+  public render<T extends Record<string, unknown>>(message: string, data?: T): void {
     const entry = this.createEntry(LogLevels.DEBUG, message, data);
-    entry.context.type = "render";
+    const context = entry.context as LogContext;
+    if (context) {
+      context.type = "render";
+    }
     void this.processAndWrite(entry).catch(this.onError);
   }
 
@@ -164,7 +164,15 @@ export class JitterbugImpl implements JitterbugInstance {
   }
 
   configure(config: Partial<JitterbugConfig>): void {
-    this.config = { ...this.config, ...config };
+    this.config = {
+      ...this.config,
+      ...config,
+      level: config.level ? this.normalizeLogLevel(config.level) : this.config.level,
+      minLevel: config.minLevel
+        ? this.normalizeLogLevel(config.minLevel)
+        : this.config.minLevel
+    };
+    this.enabled = this.config.enabled;
   }
 
   private async processAndWrite<T extends Record<string, unknown>>(
@@ -193,99 +201,58 @@ export class JitterbugImpl implements JitterbugInstance {
   };
 
   private readonly createEntry = <T extends Record<string, unknown>>(
-    level: (typeof LogLevels)[keyof typeof LogLevels],
+    level: LogLevel,
     message: string,
     data?: T,
     error?: Error,
   ): LogEntry<T> => {
+    const context = this.getLogContext();
     return {
       level,
       message,
-      data,
-      error,
-      context: {
-        ...this.context,
-        timestamp: new Date().toISOString(),
-      },
+      context: context as T,
+      ...(data && { data }),
+      ...(error && { error }),
+      _metadata: {
+        queueTime: Date.now(),
+        sequence: 0,
+        _size: 0
+      }
     };
   };
 
-  private getLogContext(context?: LogContext): LogContext {
-    const baseContext = {
+  private getLogContext(): LogContext {
+    return {
       timestamp: new Date().toISOString(),
       runtime: this.config.runtime,
       environment: this.config.environment,
       namespace: this.config.namespace,
+      type: "log"
     };
-
-    if (context === undefined || context === null) {
-      return baseContext;
-    }
-
-    const message = ((): string => {
-      const msg = context.message;
-      if (msg === undefined || msg === null) {
-        return "";
-      }
-      if (typeof msg !== "string") {
-        return "";
-      }
-      if (msg.length === 0) {
-        return "";
-      }
-      return msg;
-    })();
-
-    const updatedContext: LogContext = {
-      ...baseContext,
-      ...context,
-      message,
-    };
-
-    return updatedContext;
   }
-
-  private shouldLog(level: LogLevel): boolean {
-    if (!this.enabled) return false;
-
-    // Check localStorage debug setting in browser environment
-    if (this.config.runtime === Runtime.BROWSER && typeof window !== 'undefined') {
-      const debug = window.localStorage?.getItem('jitterbug');
-      if (debug === '*') return true;
-      if (debug && debug.split(',').includes(this.config.namespace)) return true;
-    }
-
-    const normalizedLevel = this.normalizeLogLevel(level);
-    const normalizedMinLevel = this.normalizeLogLevel(this.config.minLevel);
-    const minLevelIndex =
-      this.config.minLevel !== undefined
-        ? Object.values(LogLevels).indexOf(normalizedMinLevel)
-        : 0;
-    const currentLevelIndex = Object.values(LogLevels).indexOf(normalizedLevel);
-    return currentLevelIndex >= minLevelIndex;
-  }
-
-  private readonly updateConfig = (config: Partial<JitterbugConfig>): void => {
-    this.config = { ...this.config, ...config };
-  };
 
   private async log<T extends Record<string, unknown>>(
-    level: (typeof LogLevels)[keyof typeof LogLevels],
+    level: LogLevel,
     message: string,
     data?: T,
     error?: Error,
   ): Promise<void> {
+    if (!this.enabled) return;
+
+    const levels = Object.values(LogLevels);
+    const configLevel = levels.indexOf(this.config.level);
+    const messageLevel = levels.indexOf(level);
+    if (messageLevel < configLevel) return;
+
     const entry = this.createEntry(level, message, data, error);
     await this.processAndWrite(entry);
   }
 
   private setupTransports(): void {
-    const transports = this.config.transports;
-    if (Array.isArray(transports)) {
-      this.transports = [...transports];
-    } else {
-      this.transports = [];
-    }
+    // Initialize transports from config
+    this.transports = Array.isArray(this.config.transports)
+      ? [...this.config.transports]
+      : [];
   }
 }
 
@@ -318,6 +285,11 @@ export function createDebug(
     environment: config.environment ?? RuntimeDetector.detectEnvironment(),
     processors: config.processors ?? [],
     transports: config.transports ?? [],
+    level: config.level ?? LogLevels.INFO,
+    enabled: config.enabled ?? true,
+    minLevel: config.minLevel ?? LogLevels.INFO,
+    onError: config.onError ?? ((error: Error) => console.error("Error in Jitterbug:", error)),
+    onWarn: config.onWarn ?? ((warning: string) => console.warn("Warning in Jitterbug:", warning))
   };
 
   return createJitterbug({

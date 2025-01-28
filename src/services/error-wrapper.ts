@@ -5,6 +5,7 @@ import type {
   ErrorWrapperConfig,
 } from "../types/errors.js";
 import { RuntimeDetector } from "../utils/runtime-detector.js";
+import type { ErrorHandler } from '../types/core';
 
 /**
  * Default error wrapper configuration
@@ -18,10 +19,12 @@ const DEFAULT_CONFIG: Required<ErrorWrapperConfig> = {
 /**
  * Error wrapper service implementation
  */
-export class ErrorWrapperService {
+export class ErrorWrapperService implements ErrorHandler {
   private config: Required<ErrorWrapperConfig>;
+  private readonly onError: (error: Error) => void;
 
-  constructor(config?: Partial<ErrorWrapperConfig>) {
+  constructor(onError: (error: Error) => void, config?: Partial<ErrorWrapperConfig>) {
+    this.onError = onError;
     this.config = {
       ...DEFAULT_CONFIG,
       ...config,
@@ -29,18 +32,17 @@ export class ErrorWrapperService {
   }
 
   /**
-   * Wrap data as an ExtendedError
+   * Wrap a function to catch and handle errors
    */
-  wrap(data: DebugData): ExtendedError {
-    if (data instanceof Error) {
-      return this.wrapError(data);
-    }
-
-    if (typeof data === "string") {
-      return this.wrapString(data);
-    }
-
-    return this.wrapContext(data);
+  public wrap<T>(fn: () => Promise<T>): Promise<T> {
+    return fn().catch((error: unknown) => {
+      if (error instanceof Error) {
+        this.onError(error);
+      } else {
+        this.onError(new Error(String(error)));
+      }
+      throw error;
+    });
   }
 
   /**
@@ -113,25 +115,18 @@ export class ErrorWrapperService {
     return error;
   }
 
-  private getErrorMessage(error: unknown): string {
-    if (error === undefined || error === null) {
-      return "Unknown error occurred";
+  /**
+   * Wrap debug data as an ExtendedError
+   */
+  public wrapData(data: DebugData): ExtendedError {
+    if (data instanceof Error) {
+      return this.wrapError(data);
     }
 
-    if (error instanceof Error) {
-      const msg = error.message;
-      if (msg === undefined || msg === null) {
-        return "Unknown error occurred";
-      }
-      if (typeof msg !== "string") {
-        return "Unknown error occurred";
-      }
-      if (msg.length === 0) {
-        return "Unknown error occurred";
-      }
-      return msg;
+    if (typeof data === "string") {
+      return this.wrapString(data);
     }
 
-    return "Unknown error occurred";
+    return this.wrapContext(data);
   }
 }

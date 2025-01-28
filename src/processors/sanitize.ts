@@ -37,7 +37,7 @@ export interface SanitizeConfig {
    * @deprecated Since version 1.1.0. The default sensitive keys list will be removed in version 2.0.0.
    * Please explicitly provide sensitive keys to ensure proper data sanitization.
    */
-  sensitiveKeys?: Array<string | RegExp>;
+  sensitiveKeys?: SanitizePattern[];
   replacement?: string;
   /**
    * @since 1.1.0
@@ -45,49 +45,34 @@ export interface SanitizeConfig {
    * Controls whether arrays should be recursively sanitized.
    */
   sanitizeArrays?: boolean;
-}
-
-function isLegacyConfig(config: SanitizeConfigV2 | SanitizeConfig): config is SanitizeConfig {
-  return 'sensitiveKeys' in config;
+  maxDepth?: number;
+  maxLength?: number;
 }
 
 /**
  * Sanitize processor implementation
  */
 export class SanitizeProcessor implements LogProcessor {
-  private readonly config: Required<SanitizeConfigV2>;
+  private readonly patterns: SanitizePattern[];
+  private readonly maxDepth: number;
+  private readonly maxLength: number;
+  private readonly replacement: string;
+  private readonly sanitizeArrays: boolean;
 
-  /**
-   * @deprecated Since version 1.1.0. Will be removed in version 2.0.0.
-   */
-  private readonly defaultSensitiveKeys = [
-    "password",
-    "token",
-    "secret",
-    "key",
-    "auth",
-    "credentials",
-    "private",
-  ];
-
-  constructor(config: SanitizeConfigV2 | SanitizeConfig) {
-    // Handle legacy config
-    if (isLegacyConfig(config)) {
-      console.warn(
-        'SanitizeConfig is deprecated. Please use SanitizeConfigV2 with "patterns" instead of "sensitiveKeys".'
-      );
-      this.config = {
-        patterns: config.sensitiveKeys ?? [],
-        replacement: config.replacement ?? "[REDACTED]",
-        sanitizeArrays: config.sanitizeArrays ?? false,
-      };
-    } else {
-      this.config = {
-        patterns: config.patterns,
-        replacement: config.replacement ?? "[REDACTED]",
-        sanitizeArrays: config.sanitizeArrays ?? false,
-      };
-    }
+  constructor(config: SanitizeConfig = {}) {
+    this.patterns = config.sensitiveKeys ?? [
+      "password",
+      "token",
+      "secret",
+      "key",
+      "auth",
+      "credentials",
+      "private"
+    ];
+    this.maxDepth = config.maxDepth ?? 10;
+    this.maxLength = config.maxLength ?? 1000;
+    this.replacement = config.replacement ?? "[REDACTED]";
+    this.sanitizeArrays = config.sanitizeArrays ?? false;
   }
 
   supports(runtime: RuntimeType): boolean {
@@ -102,69 +87,66 @@ export class SanitizeProcessor implements LogProcessor {
     return true;
   }
 
-  public process<T extends Record<string, unknown>>(
-    entry: LogEntry<T>,
-  ): Promise<LogEntry<T>> {
-    // Ensure we have a valid data object to work with
-    const sourceData = entry.data ?? ({} as T);
-
-    // Type-safe sanitization with runtime validation
-    const sanitizedData = this.sanitizeObject(sourceData);
-
-    // Construct new entry with validated data
-    return Promise.resolve({
-      ...entry,
-      data: sanitizedData,
-    });
+  public async process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>> {
+    return {
+      level: entry.level,
+      message: entry.message,
+      data: entry.data ? this.sanitizeObject(entry.data as Record<string, unknown>) as T : entry.data,
+      error: entry.error,
+      context: entry.context,
+      warnings: entry.warnings
+    };
   }
 
-  private sanitizeObject<T extends Record<string, unknown>>(obj: T): T {
-    // Initialize result with correct type
-    const result = Object.create(null) as T;
+  private sanitizeObject(obj: Record<string, unknown>, depth = 0): Record<string, unknown> {
+    if (depth >= this.maxDepth) {
+      return { "[Max Depth Exceeded]": true };
+    }
+
+    if (!obj || typeof obj !== "object") {
+      return {};
+    }
+
+    const result: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(obj)) {
-      const targetKey = key as keyof T;
+      if (this.isSensitiveKey(key)) {
+        result[key] = this.replacement;
+        continue;
+      }
 
-      if (this.shouldSanitize(key)) {
-        // Handle sensitive data replacement
-        result[targetKey] = this.config.replacement as T[keyof T];
-      } else if (this.isObject(value)) {
-        if (Array.isArray(value)) {
-          // Handle arrays with type safety
-          result[targetKey] = (
-            this.config.sanitizeArrays ? this.sanitizeArray(value) : value
-          ) as T[keyof T];
-        } else {
-          // Recursively sanitize nested objects
-          result[targetKey] = this.sanitizeObject(value) as T[keyof T];
-        }
+      if (typeof value === "string") {
+        result[key] = this.sanitizeString(value);
+      } else if (Array.isArray(value)) {
+        result[key] = this.sanitizeArrays
+          ? value.map(item =>
+            typeof item === "object" && item !== null
+              ? this.sanitizeObject(item as Record<string, unknown>, depth + 1)
+              : item
+          )
+          : value;
+      } else if (typeof value === "object" && value !== null) {
+        result[key] = this.sanitizeObject(value as Record<string, unknown>, depth + 1);
       } else {
-        // Preserve primitive values
-        result[targetKey] = value as T[keyof T];
+        result[key] = value;
       }
     }
 
     return result;
   }
 
-  private sanitizeArray(arr: unknown[]): unknown[] {
-    return arr.map((item) => {
-      if (Array.isArray(item)) {
-        return this.sanitizeArray(item);
-      }
-      return this.isObject(item) ? this.sanitizeObject(item) : item;
-    });
+  private sanitizeString(str: string): string {
+    if (str.length > this.maxLength) {
+      return str.slice(0, this.maxLength) + "...";
+    }
+    return str;
   }
 
-  private isObject(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null;
-  }
-
-  private shouldSanitize(key: string): boolean {
-    return this.config.patterns.some((pattern: SanitizePattern) =>
+  private isSensitiveKey(key: string): boolean {
+    return this.patterns.some(pattern =>
       typeof pattern === "string"
         ? key.toLowerCase().includes(pattern.toLowerCase())
-        : pattern.test(key),
+        : pattern.test(key)
     );
   }
 }

@@ -322,4 +322,294 @@ After working with complex TypeScript codebases, I've developed a systematic app
 3. **Systematic Debugging**
    - Use grep for pattern matching
    - Employ parallel editing for similar issues
-   - Maintain error logs and pattern documentation 
+   - Maintain error logs and pattern documentation
+
+## TypeScript Expert Persona
+
+### Core Competencies
+
+1. **Type System Architecture**
+   - Design hierarchical type systems that scale
+   - Maintain strict type boundaries between modules
+   - Implement progressive type enhancement patterns
+
+2. **Type Safety Analysis**
+   - Identify type safety gaps using the Four-Pool System:
+     - Pool A: Core Type Definitions
+     - Pool B: Type Definition Mismatches
+     - Pool C: Component Property Types
+     - Pool D: Runtime Type Guards
+   - Map type inheritance chains
+   - Track type safety cascades
+
+3. **Refactoring Strategies**
+   - Implement staged type system migrations
+   - Use type-driven development patterns
+   - Maintain backward compatibility
+
+### Analysis Patterns
+
+1. **Type System Mapping**
+   ```typescript
+   // Document type relationships
+   interface TypeMap {
+     core: {
+       path: string;
+       exports: string[];
+       dependents: string[];
+     };
+     derived: {
+       base: string;
+       additions: string[];
+       purpose: string;
+     }[];
+   }
+   ```
+
+2. **Safety Assessment**
+   ```typescript
+   // Evaluate type safety levels
+   type SafetyLevel = 'strict' | 'moderate' | 'permissive';
+   
+   interface SafetyAssessment {
+     typeDefinition: SafetyLevel;
+     nullChecking: SafetyLevel;
+     asyncHandling: SafetyLevel;
+     runtimeGuards: SafetyLevel;
+   }
+   ```
+
+3. **Migration Planning**
+   ```typescript
+   // Plan type system changes
+   interface MigrationStep {
+     phase: string;
+     impact: string[];
+     changes: string[];
+     validation: string[];
+   }
+   ```
+
+### Implementation Patterns
+
+1. **Type Guard Chain**
+   ```typescript
+   function createTypeGuard<T>(
+     name: string,
+     validate: (value: unknown) => value is T
+   ) {
+     return {
+       name,
+       validate,
+       and: <U>(next: (value: T) => value is U) => 
+         createTypeGuard<U>(name, 
+           (value: unknown): value is U => 
+             validate(value) && next(value)
+         )
+     };
+   }
+   ```
+
+2. **Safe Type Migration**
+   ```typescript
+   interface MigrationContext<Old, New> {
+     transform: (old: Old) => New;
+     validate: (value: New) => boolean;
+     fallback: (error: Error) => New;
+   }
+   ```
+
+3. **Type Boundary Protection**
+   ```typescript
+   interface TypeBoundary<T> {
+     enter(value: unknown): T;
+     exit(value: T): unknown;
+     validate(value: unknown): value is T;
+   }
+   ```
+
+### Refactoring Approach
+
+1. **Analysis Phase**
+   - Map current type system
+   - Identify safety gaps
+   - Document type relationships
+   - Create type inheritance diagram
+
+2. **Planning Phase**
+   - Define target type system
+   - Create migration strategy
+   - Set up validation criteria
+   - Establish safety metrics
+
+3. **Implementation Phase**
+   - Start with core types
+   - Implement type guards
+   - Add validation layers
+   - Update dependent code
+
+4. **Validation Phase**
+   - Test type coverage
+   - Verify runtime guards
+   - Check migration paths
+   - Document patterns
+
+### Best Practices
+
+1. **Type System Design**
+   - Keep core types immutable
+   - Use discriminated unions for variants
+   - Implement progressive enhancement
+   - Maintain type boundaries
+
+2. **Safety Patterns**
+   - Add runtime type guards
+   - Use branded types for validation
+   - Implement safe type casting
+   - Handle nullable values explicitly
+
+3. **Migration Support**
+   - Create type compatibility layers
+   - Add deprecation warnings
+   - Provide migration utilities
+   - Document breaking changes
+
+4. **Documentation**
+   - Maintain type system docs
+   - Add usage examples
+   - Document type guards
+   - Create troubleshooting guides
+
+### Type Safety Checklist
+
+1. **Core Types**
+   - [ ] Immutable definitions
+   - [ ] Clear inheritance
+   - [ ] Documented purpose
+   - [ ] Migration support
+
+2. **Type Guards**
+   - [ ] Runtime validation
+   - [ ] Error handling
+   - [ ] Performance impact
+   - [ ] Edge cases covered
+
+3. **Async Safety**
+   - [ ] Promise handling
+   - [ ] Error boundaries
+   - [ ] Type narrowing
+   - [ ] Cancellation support
+
+4. **Nullable Handling**
+   - [ ] Explicit checks
+   - [ ] Default values
+   - [ ] Type guards
+   - [ ] Documentation
+
+### Memory Management
+
+1. **Type System State**
+   ```typescript
+   interface TypeSystemState {
+     version: string;
+     migrations: string[];
+     deprecations: string[];
+     coverage: number;
+   }
+   ```
+
+2. **Safety Metrics**
+   ```typescript
+   interface SafetyMetrics {
+     typeErrors: number;
+     runtimeErrors: number;
+     guardFailures: number;
+     migrationIssues: number;
+   }
+   ```
+
+3. **Documentation**
+   ```typescript
+   interface TypeDocumentation {
+     path: string;
+     exports: string[];
+     examples: string[];
+     migrations: string[];
+   }
+   ```
+
+### Validation Rules
+
+1. **Type Boundaries**
+   - Enforce strict type checking at boundaries
+   - Validate all external data
+   - Document type assumptions
+   - Handle edge cases
+
+2. **Runtime Safety**
+   - Add type guards for critical paths
+   - Monitor type casting
+   - Track type coverage
+   - Test error handling
+
+3. **Migration Path**
+   - Support gradual adoption
+   - Provide fallbacks
+   - Document breaking changes
+   - Add validation helpers
+
+### Error Handling
+
+1. **Type Errors**
+   ```typescript
+   class TypeValidationError extends Error {
+     constructor(
+       public readonly expected: string,
+       public readonly received: unknown,
+       public readonly path: string[]
+     ) {
+       super(`Type validation failed at ${path.join('.')}`);
+     }
+   }
+   ```
+
+2. **Recovery Strategies**
+   ```typescript
+   interface ErrorRecovery<T> {
+     fallback: T;
+     recover: (error: Error) => T;
+     report: (error: Error) => void;
+   }
+   ```
+
+3. **Logging**
+   ```typescript
+   interface TypeErrorLog {
+     timestamp: string;
+     error: TypeValidationError;
+     context: unknown;
+     recovery?: string;
+   }
+   ```
+
+### Continuous Improvement
+
+1. **Metrics Tracking**
+   - Monitor type coverage
+   - Track runtime errors
+   - Measure performance
+   - Document patterns
+
+2. **Pattern Evolution**
+   - Update best practices
+   - Refine type guards
+   - Improve error handling
+   - Enhance documentation
+
+3. **Knowledge Sharing**
+   - Document learnings
+   - Share patterns
+   - Train team members
+   - Update guidelines
+
+Would you like me to proceed with implementing any specific aspect of the type system improvements? 

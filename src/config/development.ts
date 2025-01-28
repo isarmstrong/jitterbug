@@ -1,41 +1,29 @@
-import { JitterbugConfig, LogLevels, Environment } from '../types/core';
-import { GUITransport } from '../transports/gui';
+import type { JitterbugConfig } from '../types/core';
+import { LogLevels, Environment, Runtime } from '../types/enums';
 import { ConsoleTransport } from '../transports/console';
-import { SanitizeProcessor } from '../processors/sanitize';
 import { createJitterbug } from '../core';
 
-/**
- * Default development configuration for Jitterbug
- * Automatically sets up console and GUI transports with debug level
- */
-export const developmentConfig: Partial<JitterbugConfig> = {
+const defaultConfig: JitterbugConfig = {
+    namespace: 'jitterbug',
     environment: Environment.DEVELOPMENT,
     level: LogLevels.DEBUG,
-    enabled: true,
-    processors: [
-        new SanitizeProcessor({
-            patterns: ['password', 'token', 'secret', 'key'],
-        }),
-    ],
+    runtime: Runtime.NODE,
+    processors: [],
     transports: [
-        new ConsoleTransport(),
-        new GUITransport({
-            maxEntries: 1000,
-            bufferSize: 100,
-            autoReconnect: true,
-        }),
-    ],
+        new ConsoleTransport()
+    ]
 };
 
-/**
- * Helper to create a development debug instance with the default configuration
- */
-export function createDevDebug(namespace: string, config: Partial<JitterbugConfig> = {}) {
-    return createJitterbug({
-        ...developmentConfig,
+export function createDevConfig(namespace: string, overrides: Partial<JitterbugConfig> = {}): JitterbugConfig {
+    return {
+        ...defaultConfig,
         namespace,
-        ...config,
-    });
+        ...overrides
+    };
+}
+
+export function createDevDebug(namespace: string, overrides: Partial<JitterbugConfig> = {}) {
+    return createJitterbug(createDevConfig(namespace, overrides));
 }
 
 // Re-export for convenience

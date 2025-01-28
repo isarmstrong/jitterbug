@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { LogType, LogHandlerConfig } from './types';
-import { EdgeTransport, type EdgeTransportConfig } from '@isarmstrong/jitterbug/transports/edge';
-import { ConsoleTransport, LogLevels, createJitterbug } from '@isarmstrong/jitterbug';
+import { createJitterbug } from '@isarmstrong/jitterbug';
 import { detectNextEnvironment, detectNextRuntime, isNext15Plus } from './utils';
 
 // Default configuration that enhances Jitterbug's core defaults for Next.js

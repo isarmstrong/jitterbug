@@ -1,35 +1,47 @@
 {
-    "extends": "../../tsconfig.json",
+    "extends": "../../tsconfig.base.json",
     "compilerOptions": {
-        "target": "es2020",
-        "module": "esnext",
-        "lib": [
-            "esnext",
-            "dom"
-        ],
         "declaration": true,
         "outDir": "dist",
-        "strict": true,
-        "esModuleInterop": true,
-        "skipLibCheck": true,
-        "moduleResolution": "bundler",
         "rootDir": "src",
         "baseUrl": ".",
         "paths": {
-            "*": [
-                "src/*"
+            "@core/types": [
+                "../../src/types/core.ts"
+            ],
+            "@core/enums": [
+                "../../src/types/enums.ts"
+            ],
+            "@core/edge": [
+                "../../src/types/edge.ts"
+            ],
+            "@transports/base": [
+                "../../src/transports/base.ts"
+            ],
+            "@transports/*": [
+                "../../src/transports/*.ts"
+            ],
+            "@processors/*": [
+                "../../src/processors/*.ts"
+            ],
+            "@utils/*": [
+                "../../src/utils/*.ts"
             ]
-        }
+        },
+        "jsx": "preserve",
+        "plugins": [
+            {
+                "name": "next"
+            }
+        ]
     },
     "include": [
-        "src/**/*"
+        "next-env.d.ts",
+        "src/**/*.ts",
+        "src/**/*.tsx"
     ],
     "exclude": [
         "node_modules",
-        "dist",
-        "test",
-        "**/*.test.ts",
-        "**/*.spec.ts",
-        "vitest.config.ts"
+        "dist"
     ]
 }

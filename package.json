@@ -31,6 +31,7 @@
     "scripts": {
         "build": "pnpm clean && tsc",
         "dev": "tsc --watch",
+        "dev:integration": "cd __tests__/integration/next-app && pnpm dev",
         "test": "vitest run",
         "test:watch": "vitest",
         "lint": "eslint . --ext .ts,.js,.jsx --fix",
@@ -57,6 +58,7 @@
         "zod": "^3.22.4"
     },
     "devDependencies": {
+        "@types/glob": "^8.1.0",
         "@types/node": "^20.10.5",
         "@types/react": "^18.2.0",
         "@types/react-dom": "18.2.0",
@@ -65,8 +67,10 @@
         "eslint": "^8.56.0",
         "eslint-import-resolver-typescript": "^3.7.0",
         "eslint-plugin-react": "^7.37.4",
+        "glob": "^11.0.1",
         "prettier": "^3.1.1",
         "rimraf": "^5.0.5",
+        "tsx": "^4.19.2",
         "typescript": "~5.3.3",
         "vitest": "^1.1.0"
     },

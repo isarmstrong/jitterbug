@@ -1,9 +1,10 @@
 /// <reference lib="dom" />
 
 import pThrottle from "p-throttle";
-import { LogEntry, LogTransport } from "../types";
-import { EDGE_DEFAULTS } from '../config/defaults';
+import type { LogEntry, LogLevel } from "../types/core";
 import type { EdgeMemoryMetrics } from '../types/edge';
+import { BaseTransport } from "./types";
+import type { TransportConfig } from "./types";
 
 declare global {
   interface Performance {
@@ -16,21 +17,23 @@ declare global {
   }
 }
 
-export interface EdgeTransportConfig {
+export interface EdgeTransportConfig extends TransportConfig {
   endpoint: string;
   maxEntries?: number;
-  bufferSize?: number;
-  retryInterval?: number;
   maxRetries?: number;
-  maxConnectionDuration?: number;
-  maxPayloadSize?: number;
-  autoReconnect?: boolean;
+  retryDelay?: number;
+  maxQueueSize?: number;
+  maxBatchSize?: number;
+  flushInterval?: number;
+  memoryLimit?: number;
+  persistQueue?: boolean;
   maxConcurrent?: number;
   requestsPerSecond?: number;
-  batchSize?: number;
-  flushInterval?: number;
-  persistQueue?: boolean;
+  autoReconnect?: boolean;
   testMode?: boolean;
+  bufferSize?: number;
+  maxConnectionDuration?: number;
+  maxPayloadSize?: number;
 }
 
 interface StreamMetrics {
@@ -65,13 +68,21 @@ interface BatchMetrics {
   success: boolean;
 }
 
-export class EdgeTransport implements LogTransport {
-  private queue: LogEntry<Record<string, unknown>>[] = [];
-  private flushTimeout: ReturnType<typeof setTimeout> | null = null;
-  private _isConnected = false;
+export class EdgeTransport extends BaseTransport {
+  private readonly maxEntries: number;
+  private readonly maxRetries: number;
+  private readonly retryDelay: number;
+  private readonly maxQueueSize: number;
+  private readonly maxBatchSize: number;
+  private readonly flushInterval: number;
+  private readonly memoryLimit: number;
+  private entries: Array<LogEntry<Record<string, unknown>>> = [];
+  private queue: Array<LogEntry<Record<string, unknown>>> = [];
   private retryCount = 0;
+  private flushTimeout: NodeJS.Timeout | null = null;
+  private _isConnected = false;
   private updateCallbacks: Set<() => void> = new Set();
-  private readonly config: Required<EdgeTransportConfig>;
+  private readonly edgeConfig: Required<EdgeTransportConfig>;
   private throttledSendPayload: (payload: string, batchId: string) => Promise<void>;
   private pendingRequests = 0;
   private readonly maxPendingRequests: number;
@@ -94,11 +105,8 @@ export class EdgeTransport implements LogTransport {
       highWaterMark: 0
     }
   };
-  private processingTimes: number[] = [];
-  private isFlushing = false;
   private flushMutex = new Int32Array(new SharedArrayBuffer(4));
   private batchMetrics: Map<string, BatchMetrics> = new Map();
-  private lastMemoryCheck = 0;
   private readonly MEMORY_CHECK_INTERVAL = 30000; // 30 seconds
 
   /**
@@ -116,30 +124,45 @@ export class EdgeTransport implements LogTransport {
   }
 
   constructor(config: EdgeTransportConfig) {
-    const defaultConfig: Required<EdgeTransportConfig> = {
-      ...EDGE_DEFAULTS,
-      endpoint: '',
-      persistQueue: true
+    const baseConfig: TransportConfig = {
+      level: config.level,
+      format: config.format ?? "json"
     };
+    super(baseConfig);
 
-    this.config = {
-      ...defaultConfig,
-      ...config
-    };
+    this.maxEntries = config.maxEntries ?? 1000;
+    this.maxRetries = config.maxRetries ?? 3;
+    this.retryDelay = config.retryDelay ?? 1000;
+    this.maxQueueSize = config.maxQueueSize ?? 100;
+    this.maxBatchSize = config.maxBatchSize ?? 10;
+    this.flushInterval = config.flushInterval ?? 5000;
+    this.memoryLimit = config.memoryLimit ?? 50 * 1024 * 1024; // 50MB default
 
-    this.maxPendingRequests = this.config.maxConcurrent;
+    this.edgeConfig = {
+      ...baseConfig,
+      endpoint: config.endpoint,
+      maxEntries: this.maxEntries,
+      maxRetries: this.maxRetries,
+      retryDelay: this.retryDelay,
+      maxQueueSize: this.maxQueueSize,
+      maxBatchSize: this.maxBatchSize,
+      flushInterval: this.flushInterval,
+      memoryLimit: this.memoryLimit
+    } as Required<EdgeTransportConfig>;
+
+    this.maxPendingRequests = this.edgeConfig.maxConcurrent;
 
     // Use config to determine if we're in test mode
-    if (this.config.testMode) {
+    if (this.edgeConfig.testMode) {
       this.throttledSendPayload = (payload: string, batchId: string): Promise<void> => this.sendPayload(payload, batchId);
     } else {
       this.throttledSendPayload = pThrottle({
-        limit: this.config.maxConcurrent,
-        interval: 1000 / this.config.requestsPerSecond
+        limit: this.edgeConfig.maxConcurrent,
+        interval: 1000 / this.edgeConfig.requestsPerSecond
       })((payload: string, batchId: string): Promise<void> => this.sendPayload(payload, batchId));
     }
 
-    if (this.config.autoReconnect) {
+    if (this.edgeConfig.autoReconnect) {
       void this.connect().catch(console.error);
     }
 
@@ -189,7 +212,7 @@ export class EdgeTransport implements LogTransport {
     this.metrics.lastBackpressureTime = Date.now();
 
     // Drop oldest entries if queue is too large
-    if (this.queue.length > this.config.bufferSize * 0.9) {
+    if (this.queue.length > this.edgeConfig.bufferSize * 0.9) {
       const toRemove = Math.ceil(this.queue.length * 0.2); // Remove 20% of entries
       this.queue.splice(0, toRemove);
       this.metrics.droppedMessages += toRemove;
@@ -197,28 +220,18 @@ export class EdgeTransport implements LogTransport {
   }
 
   private async persistQueue(): Promise<void> {
-    if (!this.config.persistQueue || this.queue.length === 0) {
+    if (!this.edgeConfig.persistQueue || this.queue.length === 0) {
       return;
     }
     await this.saveQueueToStorage();
   }
 
-  private async restoreQueue(): Promise<void> {
-    if (!this.config.persistQueue) {
-      return;
-    }
-    await this.loadQueueFromStorage();
-  }
 
   private async saveQueueToStorage(): Promise<void> {
     // Implementation for saving queue to storage would go here
     await Promise.resolve(); // Placeholder for actual storage logic
   }
 
-  private async loadQueueFromStorage(): Promise<void> {
-    // Implementation for loading queue from storage would go here
-    await Promise.resolve(); // Placeholder for actual storage logic
-  }
 
   public async flush(): Promise<void> {
     if (!await this.acquireFlushLock()) return;
@@ -242,11 +255,11 @@ export class EdgeTransport implements LogTransport {
 
       const startTime = performance.now();
 
-      while (this.queue.length > 0 && batch.length < this.config.batchSize) {
+      while (this.queue.length > 0 && batch.length < this.edgeConfig.maxBatchSize) {
         const entry = this.queue[0];
         const entrySize = entry._metadata?._size ?? JSON.stringify(entry).length;
 
-        if (payloadSize + entrySize > this.config.maxPayloadSize) {
+        if (payloadSize + entrySize > this.edgeConfig.maxPayloadSize) {
           if (batch.length === 0) {
             // Single entry exceeds max size, drop it
             this.queue.shift();
@@ -281,7 +294,7 @@ export class EdgeTransport implements LogTransport {
       throw error; // Re-throw to ensure test failures are visible
     } finally {
       this.releaseFlushLock();
-      if (this.config.persistQueue) {
+      if (this.edgeConfig.persistQueue) {
         await this.persistQueue();
       }
     }
@@ -306,7 +319,7 @@ export class EdgeTransport implements LogTransport {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const response = await fetch(this.config.endpoint, {
+      const response = await fetch(this.edgeConfig.endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -344,7 +357,7 @@ export class EdgeTransport implements LogTransport {
           });
 
           this.queue = [...newEntries, ...this.queue]
-            .slice(0, this.config.bufferSize);
+            .slice(0, this.edgeConfig.bufferSize);
 
           if (batchMetrics) {
             batchMetrics.retryCount++;
@@ -371,7 +384,7 @@ export class EdgeTransport implements LogTransport {
     try {
       // Validate endpoint with timeout
       const response = await Promise.race([
-        fetch(this.config.endpoint, {
+        fetch(this.edgeConfig.endpoint, {
           method: "HEAD",
           headers: {
             "X-Runtime": "edge",
@@ -401,14 +414,14 @@ export class EdgeTransport implements LogTransport {
       this.metrics.interruptions++;
       this.metrics.lastInterruptionTime = Date.now();
 
-      if (this.retryCount < this.config.maxRetries) {
+      if (this.retryCount < this.edgeConfig.maxRetries) {
         this.retryCount++;
         // Use exponential backoff
-        const backoff = Math.min(
-          this.config.retryInterval * Math.pow(2, this.retryCount - 1),
-          30000 // Max 30 second delay
+        const delay = Math.min(
+          this.edgeConfig.retryDelay * Math.pow(2, this.retryCount - 1),
+          30000
         );
-        await new Promise((resolve) => setTimeout(resolve, backoff));
+        await new Promise((resolve) => setTimeout(resolve, delay));
         return this.connect();
       }
       // Reset state on max retries
@@ -435,59 +448,27 @@ export class EdgeTransport implements LogTransport {
     }
   }
 
-  public async write(entry: LogEntry<Record<string, unknown>>): Promise<void> {
-    const startTime = performance.now();
-
-    if (!this._isConnected && this.config.autoReconnect) {
-      await Promise.race([
-        this.connect(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Connection timeout')), 5000)
-        )
-      ]).catch(() => { });
+  public async write<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void> {
+    if (!super.shouldLog(entry.level as LogLevel)) {
+      return;
     }
 
-    const entrySize = JSON.stringify(entry).length;
-    if (entrySize > this.config.maxPayloadSize) {
-      throw new Error('Entry exceeds maximum payload size');
+    if (this.entries.length >= this.maxEntries) {
+      this.entries.shift();
     }
 
-    const immutableEntry = Object.freeze({
-      ...entry,
-      _metadata: {
-        queueTime: Date.now(),
-        sequence: this.metrics.messageCount++,
-        _size: entrySize
-      }
-    });
+    this.entries.push(entry as LogEntry<Record<string, unknown>>);
+    this.queue.push(entry as LogEntry<Record<string, unknown>>);
 
-    this.queue.push(immutableEntry);
-    this.metrics.bufferUtilization = this.queue.length / this.config.bufferSize;
-
-    // Enforce buffer limits with circular buffer behavior
-    if (this.queue.length > this.config.bufferSize) {
-      this.queue = this.queue.slice(-this.config.bufferSize);
-      this.metrics.backpressureEvents++;
-      this.metrics.lastBackpressureTime = Date.now();
+    if (this.queue.length >= this.maxBatchSize) {
+      await this.flush();
+    } else if (!this.flushTimeout) {
+      this.flushTimeout = setTimeout(() => void this.flush(), this.flushInterval);
     }
-
-    // Immediate flush if batch size reached
-    if (this.queue.length >= this.config.batchSize) {
-      await this.flush().catch(() => { });
-    }
-
-    // Update performance metrics
-    const processingTime = performance.now() - startTime;
-    this.processingTimes.push(processingTime);
-    if (this.processingTimes.length > 100) this.processingTimes.shift();
-    this.metrics.avgProcessingTime =
-      this.processingTimes.reduce((a, b) => a + b, 0) / this.processingTimes.length;
-
-    this.notifyUpdate();
   }
 
   public getEntries(): ReadonlyArray<LogEntry<Record<string, unknown>>> {
-    return Object.freeze([...this.queue]);
+    return [...this.entries];
   }
 
   public onUpdate(callback: () => void): () => void {
@@ -511,7 +492,7 @@ export class EdgeTransport implements LogTransport {
       if (this._isConnected) {
         this.setupFlushInterval();
       }
-    }, this.config.flushInterval);
+    }, this.edgeConfig.flushInterval);
   }
 
   private startFlushTimer(): void {
@@ -521,15 +502,6 @@ export class EdgeTransport implements LogTransport {
     this.setupFlushInterval();
   }
 
-  private notifyUpdate(): void {
-    this.updateCallbacks.forEach((callback) => {
-      try {
-        callback();
-      } catch (error) {
-        console.error('Error in update callback:', error);
-      }
-    });
-  }
 
   public async destroy(): Promise<void> {
     this._isConnected = false;
@@ -568,38 +540,18 @@ export class EdgeTransport implements LogTransport {
     };
   };
 
-  private onMessage = (event: MessageEvent<string>): void => {
-    if (typeof event.data !== 'string' || event.data.length === 0) {
-      return;
-    }
 
-    try {
-      this.processPayload(event.data);
-    } catch (_err) {
-      const error = _err instanceof Error ? _err : new Error('Unknown error processing message');
-      console.error('Error processing message:', error);
-    }
-  };
 
-  private processPayload(_payload: string): void {
-    // Implementation for processing payload
-    // This is a placeholder - actual implementation would go here
-    this.notifyUpdate();
+
+  public getQueueSize(): number {
+    return this.queue.length;
   }
 
-  private onError = (_error: Event): void => {
-    this._isConnected = false;
-    this.metrics.interruptions++;
-    this.metrics.lastInterruptionTime = Date.now();
+  public getMemoryUsage(): number {
+    return process.memoryUsage().heapUsed;
+  }
 
-    if (this.config.autoReconnect && this.retryCount < this.config.maxRetries) {
-      this.retryCount++;
-      setTimeout(() => {
-        void this.connect().catch((err: unknown) => {
-          const error = err instanceof Error ? err : new Error('Unknown error connecting');
-          console.error('Error reconnecting:', error);
-        });
-      }, this.config.retryInterval);
-    }
-  };
+  public isMemoryAvailable(): boolean {
+    return this.getMemoryUsage() < this.memoryLimit;
+  }
 }

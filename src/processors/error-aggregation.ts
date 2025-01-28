@@ -1,206 +1,75 @@
-import { LogLevels, Runtime, Environment } from '../types/core';
-import type { LogEntry, LogProcessor, RuntimeType, EnvironmentType } from '../types/core';
-import { hashString } from "../utils/index.js";
+import type { LogEntry, LogProcessor } from "../types/core";
+import { Runtime, Environment } from "../types/enums";
 
-interface ErrorPattern {
+interface ErrorData {
   message: string;
   stack?: string;
-  frequency: number;
-  similarErrors: Array<{
-    message: string;
-    stack?: string;
-    timestamp: number;
-  }>;
-}
-
-interface ErrorContext {
-  errorId: string;
-  errorType: string;
-  errorMessage: string;
-  stackTrace?: string;
-  frequency: number;
-  firstOccurrence: number;
-  lastOccurrence: number;
-  metadata?: Record<string, unknown>;
-  patternId: string;
-  errorGroup: string;
-  similarErrors: Array<{
-    message: string;
-    stack?: string;
-    timestamp: number;
-  }>;
+  name: string;
+  pattern: string;
+  count: number;
+  firstSeen: string;
+  lastSeen: string;
 }
 
 export class ErrorAggregationProcessor implements LogProcessor {
-  private patterns: Map<string, ErrorPattern> = new Map();
-  private recentErrors: Array<{
-    message: string;
-    stack?: string;
-    timestamp: number;
-  }> = [];
-  private errorMap: Map<string, ErrorContext> = new Map();
-  private readonly supportedRuntimes = new Set<RuntimeType>([
-    Runtime.NODE,
-    Runtime.EDGE
-  ]);
-  private readonly supportedEnvironments = new Set<EnvironmentType>([
-    Environment.DEVELOPMENT,
-    Environment.STAGING,
-    Environment.PRODUCTION
-  ]);
+  private errors: Map<string, ErrorData> = new Map();
 
-  public supports(runtime: RuntimeType): boolean {
-    return this.supportedRuntimes.has(runtime);
+  public supports(runtime: string): boolean {
+    return runtime === Runtime.NODE || runtime === Runtime.EDGE;
   }
 
-  public allowedIn(environment: EnvironmentType): boolean {
-    return this.supportedEnvironments.has(environment);
+  public allowedIn(environment: string): boolean {
+    return environment !== Environment.TEST;
   }
 
-  public get severity(): string {
-    return LogLevels.ERROR;
-  }
-
-  private getErrorKey(error: Error): string {
-    return `${error.message}${error.stack ?? ""}`;
-  }
-
-  private isSimilarError(error1: Error, error2: Error): boolean {
-    const message1 = error1.message.toLowerCase();
-    const message2 = error2.message.toLowerCase();
-    const stack1 = (error1.stack ?? "").toLowerCase();
-    const stack2 = (error2.stack ?? "").toLowerCase();
-
-    // Check if messages are similar
-    if (message1 === message2) return true;
-    if (
-      message1.length > 0 &&
-      message2.length > 0 &&
-      (message1.includes(message2) || message2.includes(message1))
-    )
-      return true;
-
-    // Check if stack traces have similar patterns
-    if (stack1.length > 0 && stack2.length > 0) {
-      const lines1 = stack1.split("\n");
-      const lines2 = stack2.split("\n");
-      const commonLines = lines1.filter((line) => lines2.includes(line));
-      return commonLines.length > 0;
-    }
-
-    return false;
-  }
-
-  public async process<T extends Record<string, unknown>>(
-    entry: LogEntry<T>
-  ): Promise<LogEntry<T>> {
-    if (!entry.error) {
+  public async process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>> {
+    if (!entry.error || entry.level !== "ERROR") {
       return entry;
     }
 
-    const error = entry.error;
-    const errorType = error.constructor.name;
-    const errorMessage = error.message;
-    const stackTrace = error.stack;
+    const pattern = this.getErrorPattern(entry.error);
+    const errorKey = `${entry.error.name}:${pattern}`;
+    const now = new Date().toISOString();
 
-    // Generate consistent error ID based on type and message
-    const errorId = this.generateErrorId(errorType, errorMessage);
-    const patternId = this.detectPattern(error);
-    const errorGroup = this.groupError(error);
-
-    // Find similar errors
-    const now = Date.now();
-    this.recentErrors.push({
-      message: error.message,
-      stack: error.stack,
-      timestamp: now
-    });
-
-    // Keep only errors from the last minute
-    this.recentErrors = this.recentErrors.filter(e => now - e.timestamp < 60000);
-
-    // Find similar errors
-    const similarErrors = this.recentErrors.filter(e =>
-      this.isSimilarError(
-        { message: e.message, stack: e.stack } as Error,
-        error
-      )
-    );
-
-    // Update error tracking
-    let errorContext = this.errorMap.get(errorId);
-    if (!errorContext) {
-      errorContext = {
-        errorId,
-        errorType,
-        errorMessage,
-        stackTrace,
-        frequency: 0,
-        firstOccurrence: now,
-        lastOccurrence: now,
-        metadata: {},
-        patternId,
-        errorGroup,
-        similarErrors: []
-      };
-      this.errorMap.set(errorId, errorContext);
-    }
-
-    // Update frequency and timing
-    errorContext.frequency++;
-    errorContext.lastOccurrence = now;
-    errorContext.similarErrors = similarErrors.slice(0, 5);
-
-    // Extract additional metadata if available
-    if (error instanceof Error && 'metadata' in error) {
-      errorContext.metadata = {
-        ...errorContext.metadata,
-        ...(error as { metadata?: Record<string, unknown> }).metadata
+    let errorData = this.errors.get(errorKey);
+    if (!errorData) {
+      errorData = {
+        message: entry.error.message,
+        stack: entry.error.stack,
+        name: entry.error.name,
+        pattern,
+        count: 0,
+        firstSeen: now,
+        lastSeen: now
       };
     }
 
-    // Merge error data with original entry
+    errorData.count++;
+    errorData.lastSeen = now;
+    this.errors.set(errorKey, errorData);
+
     return {
-      ...entry,
-      level: LogLevels.ERROR,
-      context: {
-        ...entry.context,
-        error: errorContext
-      }
+      level: entry.level,
+      message: entry.message,
+      data: entry.data,
+      error: entry.error,
+      context: entry.context,
+      warnings: entry.warnings
     };
   }
 
-  private generateErrorId(errorType: string, message: string): string {
-    // Create a stable hash of the error type and message
-    const str = `${errorType}:${message}`;
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return hash.toString(36);
+  private getErrorPattern(error: Error): string {
+    if (!error.stack) return error.message;
+
+    const stackLines = error.stack.split("\n");
+    if (stackLines.length < 2) return error.message;
+
+    // Get the first line of the stack trace that's not the error message
+    const firstStackLine = stackLines[1].trim();
+    return firstStackLine.replace(/:\d+:\d+\)$/, ")");
   }
 
-  private detectPattern(error: Error): string {
-    const err = error;
-    const uniqueId = err.stack
-      ? err.stack.split('\n').slice(0, 2).join('|')
-      : Math.random().toString(36).slice(2, 6);
-
-    const patternString = `${err.name}:${err.message}:${uniqueId}`;
-    let hash = 0;
-
-    for (let i = 0; i < patternString.length; i++) {
-      hash = (hash << 5) - hash + patternString.charCodeAt(i);
-      hash |= 0; // Convert to 32-bit integer
-    }
-
-    return `err-${Math.abs(hash)}`;
-  }
-
-  private groupError(error: Error): string {
-    const err = error;
-    return `err-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  public getAggregatedErrors(): ReadonlyMap<string, ErrorData> {
+    return this.errors;
   }
 }

@@ -2,79 +2,62 @@
  * Core constants and types for Jitterbug
  */
 
-// Pool A: Core Constants
-export const LogLevels = Object.freeze({
-    DEBUG: "DEBUG",
-    INFO: "INFO",
-    WARN: "WARN",
-    ERROR: "ERROR",
-    FATAL: "FATAL",
-} as const);
+import { LogLevels, Runtime, Environment } from './enums';
+import type { LogLevel, RuntimeType, EnvironmentType } from './enums';
 
-export const Runtime = Object.freeze({
-    EDGE: "EDGE",
-    NODE: "NODE",
-    BROWSER: "BROWSER",
-} as const);
+export { LogLevels, Runtime, Environment };
+export type { LogLevel, RuntimeType, EnvironmentType };
 
-export const Environment = Object.freeze({
-    DEVELOPMENT: "DEVELOPMENT",
-    STAGING: "STAGING",
-    PRODUCTION: "PRODUCTION",
-    TEST: "TEST",
-} as const);
-
-// Pool B: Core Types
-export type LogLevel = keyof typeof LogLevels | Lowercase<keyof typeof LogLevels>;
-export type RuntimeType = keyof typeof Runtime;
-export type EnvironmentType = keyof typeof Environment;
-
-// Pool B: Core Interfaces
+// Pool A: Core Types
 export interface RequestContext {
-    url?: string;
-    method?: string;
-    headers?: Record<string, string>;
-    params?: Record<string, string>;
-    query?: Record<string, string>;
+    id: string;
+    url: string;
+    method: string;
+    headers: Record<string, string>;
     body?: unknown;
-    requestId?: string;
-    duration?: number;
-    status?: number;
 }
 
 export interface CacheContext {
-    operation: "get" | "set" | "delete" | "has" | "clear";
     key: string;
-    ttl?: number;
-    size?: number;
-    hit?: boolean;
-    duration?: number;
+    ttl: number;
+    hit: boolean;
+    stale: boolean;
 }
 
-export interface LogContext {
+export interface BaseLogContext {
     timestamp: string;
     runtime: RuntimeType;
     environment: EnvironmentType;
     namespace: string;
     request?: RequestContext;
     cache?: CacheContext;
-    [key: string]: unknown;
 }
+
+export type LogContext = BaseLogContext & Record<string, unknown>;
 
 export interface LogEntry<T = Record<string, unknown>> {
     level: LogLevel;
     message: string;
-    data?: T;
+    context?: T;
+    data?: unknown;
     error?: Error;
-    context: LogContext;
     warnings?: string[];
+    _metadata?: {
+        queueTime: number;
+        sequence: number;
+        _size: number;
+    };
+}
+
+export interface ProcessedLogEntry<T = Record<string, unknown>> extends LogEntry<T> {
+    processed: true;
 }
 
 // Pool C: Implementation Interfaces
 export interface LogProcessor {
     process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>>;
-    supports(runtime: RuntimeType): boolean;
-    allowedIn(environment: EnvironmentType): boolean;
+    supports?(runtime: RuntimeType): boolean;
+    allowedIn?(environment: EnvironmentType): boolean;
 }
 
 export interface LogTransport {
@@ -84,13 +67,15 @@ export interface LogTransport {
 // Pool D: Configuration Types
 export interface JitterbugConfig {
     namespace: string;
+    environment: EnvironmentType;
+    level: LogLevel;
+    runtime: RuntimeType;
     enabled?: boolean;
-    level?: LogLevel;
     minLevel?: LogLevel;
-    runtime?: RuntimeType;
-    environment?: EnvironmentType;
     processors?: LogProcessor[];
     transports?: LogTransport[];
+    onError?: (error: Error) => void;
+    onWarn?: (warning: string) => void;
 }
 
 export interface JitterbugInstance {
@@ -119,4 +104,8 @@ export interface JitterbugFactory {
 export type CoreLogEntry = Readonly<LogEntry>;
 export type TransportLogEntry = LogEntry & { warnings?: string[] };
 export type SafeConfig = Readonly<JitterbugConfig>;
-export type RuntimeConfig = Partial<JitterbugConfig>; 
+export type RuntimeConfig = Partial<JitterbugConfig>;
+
+export interface ErrorHandler {
+    wrap<T>(fn: () => Promise<T>): Promise<T>;
+} 
