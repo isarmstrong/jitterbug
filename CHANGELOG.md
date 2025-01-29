@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-rc.1] - 2025-01-29
+
+### Added
+- Complete type-safe logging foundation
+  - Branded types for runtime validation
+  - Strict discriminated unions for type transitions
+  - Exhaustive null/undefined handling
+  - Framework-aware version tracking
+  - Memory-efficient transport implementations
+- Enhanced type system architecture
+  - Const-based enum system with type aliases
+  - Runtime-aware type guards
+  - Transport layer type safety
+  - Strict boolean expression handling
+  - Complete type coverage for edge cases
+- Production-ready test infrastructure
+  - Type-safe test helpers
+  - Framework version validation
+  - Runtime-aware test utilities
+  - Comprehensive type testing
+
+### Changed
+- Migrated from enum-based to const-based type system
+- Enhanced transport layer with strict type validation
+- Improved type safety in hydration tracking
+- Strengthened version transport type guarantees
+- Updated test infrastructure for type safety
+
+### Removed
+- Legacy enum-based type system
+- Unsafe type assertions in transport layer
+- Implicit null/undefined handling
+
+### Security
+- Enforced strict type checking across all boundaries
+- Improved runtime type validation
+- Enhanced type safety in data serialization
+- Strengthened transport layer type guarantees
+
 ## [0.1.4a] - 2025-01-19
 
 ### Added
