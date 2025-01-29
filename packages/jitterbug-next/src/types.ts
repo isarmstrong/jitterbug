@@ -140,4 +140,14 @@ export interface SSETransportConfig {
     autoReconnect?: boolean;
     retryInterval?: number;
     maxDuration?: number;
+}
+
+export interface EdgeTransportConfig {
+    endpoint: string;
+    maxRetries?: number;
+    retryInterval?: number;
+    bufferSize?: number;
+    maxPayloadSize?: number;
+    maxEntries?: number;
+    maxConnectionDuration?: number;
 } 

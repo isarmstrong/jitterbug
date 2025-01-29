@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for the debug panel */
+.jitterbug-debug {
+    @apply min-h-screen bg-gray-50;
+}
+
+.jitterbug-debug-header {
+    @apply py-10;
+}
+
+.jitterbug-debug-title {
+    @apply text-3xl font-bold leading-tight tracking-tight text-gray-900;
+}
+
+.jitterbug-debug-main {
+    @apply mt-8;
+}
+
+.jitterbug-debug-tab {
+    @apply px-3 py-2 text-sm font-medium leading-5 text-gray-500;
+    @apply focus:outline-none focus:ring-2 ring-offset-2 ring-offset-blue-400 ring-white ring-opacity-60;
+}
+
+.jitterbug-debug-tab-selected {
+    @apply border-b-2 border-blue-500 text-blue-600;
+}
+
+.jitterbug-debug-tab-hover {
+    @apply hover:text-gray-700 hover:border-gray-300;
+}
+
+.jitterbug-debug-panel {
+    @apply prose max-w-none;
+}
+
+.jitterbug-debug-container {
+    @apply mx-auto max-w-5xl px-4 sm:px-6 lg:px-8;
+}
+
+.jitterbug-debug-tab-list {
+    @apply flex space-x-4 border-b border-gray-200;
+}
+
+.jitterbug-debug-tab-panels {
+    @apply mt-6;
+}

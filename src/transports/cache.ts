@@ -1,130 +1,69 @@
 import type { LogEntry } from "../types/core";
-import { BaseTransport } from "./types";
-
-export interface CacheMetrics {
-    hits: number;
-    misses: number;
-    evictions: number;
-    staleHits: number;
-    revalidations: number;
-    size: number;
-    lastEvictionTime: number;
-    keyUsage: Map<string, number>;
-    avgRevalidationTime: number;
-}
+import { AsyncBaseTransport } from "./async-base";
+import { isValidNumber, isNonEmptyString } from "../types/guards";
 
 export interface CacheConfig {
-    maxAge: number;
-    staleWhileRevalidate?: number;
     maxEntries?: number;
+    maxAge?: number;
+    namespace?: string;
 }
 
-export class CacheTransport extends BaseTransport {
-    private readonly maxAge: number;
-    private readonly staleWhileRevalidate: number;
-    private readonly maxEntries: number;
-    private readonly cache: Map<string, { entry: LogEntry<unknown>; timestamp: number }>;
-    private metrics: CacheMetrics = {
-        hits: 0,
-        misses: 0,
-        evictions: 0,
-        staleHits: 0,
-        revalidations: 0,
-        size: 0,
-        lastEvictionTime: 0,
-        keyUsage: new Map(),
-        avgRevalidationTime: 0
-    };
+export class CacheTransport extends AsyncBaseTransport {
+    private entries: LogEntry<Record<string, unknown>>[] = [];
+    private readonly config: Required<CacheConfig>;
+    private lastRevalidation: number = Date.now();
 
-    constructor(config: CacheConfig) {
-        super({
-            enabled: true,
-            format: "json"
-        });
-
-        this.maxAge = config.maxAge;
-        this.staleWhileRevalidate = config.staleWhileRevalidate ?? 0;
-        this.maxEntries = config.maxEntries ?? 1000;
-        this.cache = new Map();
+    constructor(config: CacheConfig = {}) {
+        super();
+        this.config = {
+            maxEntries: config.maxEntries ?? 1000,
+            maxAge: config.maxAge ?? 60 * 60 * 1000, // 1 hour default
+            namespace: config.namespace ?? 'default'
+        };
     }
 
-    public async write<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void> {
-        if (!this.shouldLog(entry.level)) {
+    protected async writeToTransport<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void> {
+        // Remove old entries if needed
+        await this.revalidate();
+
+        // Add new entry
+        this.entries.push(entry as LogEntry<Record<string, unknown>>);
+
+        // Trim if over max entries
+        if (this.entries.length > this.config.maxEntries) {
+            this.entries = this.entries.slice(-this.config.maxEntries);
+        }
+    }
+
+    public async revalidate(): Promise<void> {
+        const now = Date.now();
+
+        // Only revalidate if enough time has passed
+        if (now - this.lastRevalidation < this.config.maxAge) {
             return;
         }
 
-        const key = this.generateKey(entry);
-        this.cache.set(key, { entry, timestamp: Date.now() });
-
-        if (this.cache.size > this.maxEntries) {
-            this.evictOldest();
-        }
-    }
-
-    public async read<T extends Record<string, unknown>>(key: string): Promise<LogEntry<T> | null> {
-        const cached = await Promise.resolve(this.cache.get(key));
-        if (!cached) {
-            this.metrics.misses++;
-            return null;
-        }
-
-        const age = Date.now() - cached.timestamp;
-        if (typeof age === 'number' && age <= this.maxAge) {
-            this.metrics.hits++;
-            return cached.entry as LogEntry<T>;
-        }
-
-        if (typeof age === 'number' && age <= this.maxAge + this.staleWhileRevalidate) {
-            this.metrics.staleHits++;
-            this.revalidate(key).catch(console.error);
-            return cached.entry as LogEntry<T>;
-        }
-
-        this.cache.delete(key);
-        this.metrics.evictions++;
-        this.metrics.lastEvictionTime = Date.now();
-        this.metrics.size = this.cache.size;
-        return null;
-    }
-
-    public getMetrics(): Readonly<CacheMetrics> {
-        return Object.freeze({
-            ...this.metrics,
-            keyUsage: new Map(this.metrics.keyUsage)
+        // Remove entries older than maxAge
+        const cutoff = now - this.config.maxAge;
+        this.entries = this.entries.filter(entry => {
+            const timestamp = entry.context?.timestamp;
+            if (!isNonEmptyString(timestamp)) return false;
+            return new Date(timestamp).getTime() > cutoff;
         });
+
+        this.lastRevalidation = now;
     }
 
-    private generateKey(entry: LogEntry<unknown>): string {
-        return `${entry.level}:${entry.message}:${Date.now()}`;
+    public getEntries(): ReadonlyArray<LogEntry<Record<string, unknown>>> {
+        return [...this.entries];
     }
 
-    private evictOldest(): void {
-        const oldestKey = Array.from(this.cache.entries())
-            .reduce((oldest, [key, value]) => {
-                if (!oldest.timestamp || value.timestamp < oldest.timestamp) {
-                    return { key, timestamp: value.timestamp };
-                }
-                return oldest;
-            }, { key: "", timestamp: 0 }).key;
-
-        if (oldestKey) {
-            this.cache.delete(oldestKey);
-            this.metrics.evictions++;
-            this.metrics.lastEvictionTime = Date.now();
-            this.metrics.size = this.cache.size;
-        }
+    public getSize(): number {
+        return this.entries.length;
     }
 
-    private async revalidate(key: string): Promise<void> {
-        try {
-            const cached = this.cache.get(key);
-            if (cached) {
-                const entry = cached.entry;
-                this.cache.set(key, { entry, timestamp: Date.now() });
-                this.metrics.revalidations++;
-            }
-        } catch (error) {
-            console.error("Failed to revalidate cache entry:", error);
-        }
+    protected override async cleanup(): Promise<void> {
+        this.entries = [];
+        await super.cleanup();
     }
 } 

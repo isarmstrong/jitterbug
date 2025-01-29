@@ -1,8 +1,47 @@
+# Development
+.git/
+.github/
+.vscode/
+.idea/
+.DS_Store
+*.log
+*.tgz
+
 # Source
 src/
+tests/
 __tests__/
+examples/
 docs/
-agent/
+scripts/
+
+# Config
+.eslintrc*
+.prettierrc
+.gitignore
+tsconfig*.json
+vitest.config.ts
+
+# Memory and temp files
+__memory__/
+*.tsbuildinfo
+@*.md
+problem.log
+
+# Build artifacts
+coverage/
+.nyc_output/
+*.tgz
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Example specific
+examples/*/node_modules/
+examples/*/.next/
+examples/*/out/
+examples/*/.env*
 
 # Config files
 .eslintrc.cjs

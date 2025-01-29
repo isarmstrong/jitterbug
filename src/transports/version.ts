@@ -1,5 +1,6 @@
 import type { LogEntry } from "../types/core";
 import { BaseTransport } from "./types";
+import { isNonEmptyString } from "../types/guards";
 import semver from "semver";
 
 export interface VersionData {
@@ -49,7 +50,7 @@ export class VersionTransport extends BaseTransport {
             return;
         }
 
-        const data = entry.data as unknown;
+        const data = entry.data;
         if (!this.isVersionData(data)) {
             return;
         }
@@ -68,6 +69,7 @@ export class VersionTransport extends BaseTransport {
         } as LogEntry<VersionData>;
 
         this.entries.push(versionEntry);
+        return Promise.resolve();
     }
 
     private isVersionData(data: unknown): data is VersionData {
@@ -76,26 +78,40 @@ export class VersionTransport extends BaseTransport {
         }
 
         const d = data as Partial<VersionData>;
-        return (
-            d.type === "version" &&
-            typeof d.version === "string" &&
-            typeof d.dependencies === "object" &&
-            d.dependencies !== null &&
-            typeof d.environment === "object" &&
-            d.environment !== null &&
-            (!d.environment.node || typeof d.environment.node === "string") &&
-            (!d.environment.next || typeof d.environment.next === "string") &&
-            (!d.environment.react || typeof d.environment.react === "string")
-        );
+
+        // Type check
+        if (d.type !== "version") return false;
+
+        // Version check
+        if (!isNonEmptyString(d.version)) return false;
+
+        // Dependencies check
+        if (!d.dependencies || typeof d.dependencies !== "object" || d.dependencies === null) {
+            return false;
+        }
+
+        // Environment check
+        if (!d.environment || typeof d.environment !== "object" || d.environment === null) {
+            return false;
+        }
+
+        // Optional environment fields check
+        const { node, next, react } = d.environment;
+        if (node !== undefined && !isNonEmptyString(node)) return false;
+        if (next !== undefined && !isNonEmptyString(next)) return false;
+        if (react !== undefined && !isNonEmptyString(react)) return false;
+
+        return true;
     }
 
     private validateVersions(data: VersionData): boolean {
         // Validate version format
-        if (!this.allowedPatterns.some(pattern =>
-            new RegExp(pattern).test(data.version)
-        )) {
-            return false;
-        }
+        const hasValidPattern = this.allowedPatterns.some(pattern => {
+            const regex = new RegExp(pattern);
+            return isNonEmptyString(data.version) && regex.test(data.version);
+        });
+
+        if (!hasValidPattern) return false;
 
         // Validate required versions
         const { environment } = data;
@@ -106,9 +122,9 @@ export class VersionTransport extends BaseTransport {
         );
     }
 
-    private checkVersion(framework: keyof typeof this.requiredVersions, version?: string): boolean {
+    private checkVersion(framework: keyof typeof this.requiredVersions, version: string | undefined): boolean {
+        if (!isNonEmptyString(version)) return true; // Skip check if version is not provided
         const required = this.requiredVersions[framework];
-        if (!version) return true; // If no version is provided, skip check
         return semver.gte(version, required);
     }
 
@@ -120,10 +136,18 @@ export class VersionTransport extends BaseTransport {
         const latest: Record<string, string> = {};
 
         for (const entry of this.entries) {
-            const { environment } = entry.data as VersionData;
-            if (environment.node) latest.node = environment.node;
-            if (environment.next) latest.next = environment.next;
-            if (environment.react) latest.react = environment.react;
+            const versionData = entry.data as VersionData;
+            const { environment } = versionData;
+
+            if (isNonEmptyString(environment.node)) {
+                latest.node = environment.node;
+            }
+            if (isNonEmptyString(environment.next)) {
+                latest.next = environment.next;
+            }
+            if (isNonEmptyString(environment.react)) {
+                latest.react = environment.react;
+            }
         }
 
         return latest;

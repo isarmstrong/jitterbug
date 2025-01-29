@@ -7,18 +7,23 @@
     "module": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "files": [
-        "dist"
+        "dist",
+        "styles.css"
     ],
     "scripts": {
-        "build": "tsc --project tsconfig.json",
+        "build": "tsc --project tsconfig.json && cp src/styles.css dist/styles.css",
         "prepack": "npm run build",
         "test": "vitest",
         "lint": "eslint src --ext .ts"
     },
+    "dependencies": {
+        "@headlessui/react": "^2.2.0"
+    },
     "peerDependencies": {
         "@isarmstrong/jitterbug": "^0.1.4a",
         "next": ">=13.0.0",
-        "react": ">=18.0.0"
+        "react": ">=18.0.0",
+        "@headlessui/react": "^2.0.0"
     },
     "devDependencies": {
         "@types/node": "^20.0.0",
@@ -37,17 +42,18 @@
             "require": "./dist/index.js",
             "default": "./dist/index.js"
         },
+        "./debug": {
+            "types": "./dist/components/debug/index.d.ts",
+            "import": "./dist/components/debug/index.js",
+            "require": "./dist/components/debug/index.js",
+            "default": "./dist/components/debug/index.js"
+        },
         "./api": {
             "types": "./dist/api/index.d.ts",
             "import": "./dist/api/index.js",
             "require": "./dist/api/index.js",
             "default": "./dist/api/index.js"
         },
-        "./transports/sse": {
-            "types": "./dist/transports/sse/index.d.ts",
-            "import": "./dist/transports/sse/index.js",
-            "require": "./dist/transports/sse/index.js",
-            "default": "./dist/transports/sse/index.js"
-        }
+        "./styles.css": "./dist/styles.css"
     }
 }

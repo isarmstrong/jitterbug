@@ -2,8 +2,11 @@ import type {
   LogEntry,
   LogTransport,
   LogLevel,
+  LogContext,
+  BaseLogContext
 } from "../types/core";
 import { LogLevels } from "../types/enums";
+import { isNonEmptyString } from "../types/guards";
 
 /**
  * Transport configuration interface
@@ -76,19 +79,57 @@ export class BaseTransport implements BaseTransportType {
     return messageLevel >= configLevel;
   }
 
+  private formatTimestamp(timestamp: string | undefined): string {
+    if (!timestamp) return new Date().toISOString();
+    try {
+      return new Date(timestamp).toISOString();
+    } catch {
+      return new Date().toISOString();
+    }
+  }
+
+  private formatContext<T extends Record<string, unknown>>(context: T | undefined): { timestamp: string; namespace: string } {
+    // Handle the case where context might be a BaseLogContext
+    if (context && 'timestamp' in context && 'namespace' in context) {
+      const logContext = context as unknown as BaseLogContext;
+      return {
+        timestamp: this.formatTimestamp(logContext.timestamp),
+        namespace: isNonEmptyString(logContext.namespace) ? logContext.namespace : "unknown"
+      };
+    }
+
+    return {
+      timestamp: new Date().toISOString(),
+      namespace: "unknown"
+    };
+  }
+
+  private formatError(error: unknown): string {
+    if (!error) return "";
+    return error instanceof Error ? `\n${error.stack ?? error.message}` : "";
+  }
+
+  private formatData<T extends Record<string, unknown>>(data: T | undefined): string {
+    if (!data) return "";
+    try {
+      return ` ${JSON.stringify(data)}`;
+    } catch {
+      return " [Unserializable Data]";
+    }
+  }
+
   public formatEntry<T extends Record<string, unknown>>(entry: LogEntry<T>): string {
     if (this.config.format === "json") {
       return JSON.stringify(entry);
     }
 
-    const timestamp = entry.context?.timestamp
-      ? new Date(entry.context.timestamp as number).toISOString()
-      : new Date().toISOString();
+    const { timestamp, namespace } = this.formatContext(entry.context);
     const level = entry.level.padEnd(5);
-    const namespace = entry.context?.namespace ?? "unknown";
     const message = entry.message;
-    const data = entry.data ? JSON.stringify(entry.data) : "";
-    const error = entry.error ? `\n${entry.error.stack}` : "";
+    const data = entry.data && typeof entry.data === 'object'
+      ? this.formatData(entry.data as Record<string, unknown>)
+      : "";
+    const error = this.formatError(entry.error);
 
     return `[${timestamp}] ${level} ${namespace}: ${message}${data}${error}`;
   }

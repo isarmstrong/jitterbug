@@ -62,7 +62,7 @@ export class ErrorWrapperService implements ErrorHandler {
     const extendedError = error as ExtendedError;
 
     // Add runtime context if not present
-    if (!extendedError.context?.runtime) {
+    if ((extendedError.context?.runtime) == null) {
       extendedError.context = {
         ...extendedError.context,
         runtime: RuntimeDetector.detectRuntime(),

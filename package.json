@@ -31,7 +31,6 @@
     "scripts": {
         "build": "pnpm clean && tsc",
         "dev": "tsc --watch",
-        "dev:integration": "cd __tests__/integration/next-app && pnpm dev",
         "test": "vitest run",
         "test:watch": "vitest",
         "lint": "eslint . --ext .ts,.js,.jsx --fix",

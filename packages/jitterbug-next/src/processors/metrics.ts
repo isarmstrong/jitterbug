@@ -1,15 +1,8 @@
-import { Environment, Runtime, LogLevels } from '@isarmstrong/jitterbug';
-import type {
-    LogEntry,
-    LogProcessor,
-    ProcessedLogEntry,
-    BaseLogContext,
-    RuntimeType,
-    EnvironmentType,
-    LogLevel
-} from '@isarmstrong/jitterbug';
+import { Environment, Runtime } from '@isarmstrong/jitterbug';
+import type { RuntimeType, EnvironmentType } from '@isarmstrong/jitterbug';
+import type { LogType, LogContext } from '../types';
 
-interface MetricsContext extends BaseLogContext {
+interface MetricsContext extends LogContext {
     metrics: {
         samples: number;
         eventLoop?: {
@@ -24,78 +17,101 @@ interface MetricsContext extends BaseLogContext {
     };
 }
 
+export interface LogProcessor {
+    supports(runtime: RuntimeType): boolean;
+    allowedIn(environment: EnvironmentType): boolean;
+    process(entry: LogType): Promise<LogType>;
+    cleanup(): void;
+}
+
 export class MetricsProcessor implements LogProcessor {
     private samples = 0;
-    private lastEventLoopCheck = process.hrtime.bigint();
+    private eventLoopTimer: ReturnType<typeof setInterval> | null = null;
+    private lastEventLoopTime = 0;
+    private eventLoopLag = 0;
+    private eventLoopSamples = 0;
 
-    public supports(runtime: RuntimeType): boolean {
+    constructor() {
+        if (typeof process !== 'undefined') {
+            this.startEventLoopMonitoring();
+        }
+    }
+
+    supports(runtime: RuntimeType): boolean {
         return runtime === Runtime.EDGE || runtime === Runtime.NODE;
     }
 
-    public allowedIn(environment: EnvironmentType): boolean {
+    allowedIn(environment: EnvironmentType): boolean {
         return environment === Environment.DEVELOPMENT || environment === Environment.PRODUCTION;
     }
 
-    private getEventLoopLag(): number {
-        const now = process.hrtime.bigint();
-        const lag = Number((now - this.lastEventLoopCheck) / BigInt(1000000)); // Convert to ms
-        this.lastEventLoopCheck = now;
-        return lag;
+    private startEventLoopMonitoring() {
+        if (this.eventLoopTimer) return;
+
+        const interval = 100;
+        this.lastEventLoopTime = Date.now();
+
+        this.eventLoopTimer = setInterval(() => {
+            const now = Date.now();
+            const delta = now - this.lastEventLoopTime;
+            this.eventLoopLag = Math.max(0, delta - interval);
+            this.eventLoopSamples++;
+            this.lastEventLoopTime = now;
+        }, interval);
+
+        if (this.eventLoopTimer.unref) {
+            this.eventLoopTimer.unref();
+        }
     }
 
-    private getMemoryUsage(): MetricsContext['metrics']['memoryUsage'] | undefined {
-        try {
-            const usage = process.memoryUsage();
-            return {
-                heapUsed: usage.heapUsed,
-                heapTotal: usage.heapTotal,
-                external: usage.external
-            };
-        } catch {
-            // Memory usage not available (e.g., in Edge Runtime)
+    private getEventLoopMetrics() {
+        if (!this.eventLoopTimer) return undefined;
+
+        return {
+            lag: this.eventLoopLag,
+            samples: this.eventLoopSamples
+        };
+    }
+
+    private getMemoryMetrics() {
+        if (typeof process === 'undefined' || !process.memoryUsage) {
             return undefined;
         }
+
+        const { heapUsed, heapTotal, external } = process.memoryUsage();
+        return { heapUsed, heapTotal, external };
     }
 
-    private normalizeLogLevel(level: string): LogLevel {
-        const upperLevel = level.toUpperCase() as keyof typeof LogLevels;
-        if (upperLevel in LogLevels) {
-            return LogLevels[upperLevel];
-        }
-        return LogLevels.INFO; // Default to INFO if invalid
-    }
-
-    public async process<T extends Record<string, unknown>>(
-        entry: LogEntry<T & BaseLogContext>
-    ): Promise<ProcessedLogEntry<T & MetricsContext>> {
+    private getMetrics() {
         this.samples++;
 
-        const metrics: MetricsContext['metrics'] = {
+        const eventLoop = this.getEventLoopMetrics();
+        const memoryUsage = this.getMemoryMetrics();
+
+        return {
             samples: this.samples,
-            eventLoop: {
-                lag: this.getEventLoopLag(),
-                samples: this.samples
-            }
+            eventLoop,
+            memoryUsage
         };
+    }
 
-        const memoryUsage = this.getMemoryUsage();
-        if (memoryUsage) {
-            metrics.memoryUsage = memoryUsage;
-        }
-
-        const baseContext = entry.context || {} as T & BaseLogContext;
-        const updatedContext = {
-            ...baseContext,
+    async process(entry: LogType): Promise<LogType> {
+        const metrics = this.getMetrics();
+        const context = {
+            ...entry.context,
             metrics
-        };
+        } as MetricsContext;
 
-        const processedEntry: ProcessedLogEntry<T & MetricsContext> = {
-            message: entry.message,
-            level: this.normalizeLogLevel(entry.level),
-            context: updatedContext as T & MetricsContext,
-            processed: true
+        return {
+            ...entry,
+            context
         };
+    }
 
-        return processedEntry;
+    cleanup() {
+        if (this.eventLoopTimer) {
+            clearInterval(this.eventLoopTimer);
+            this.eventLoopTimer = null;
+        }
     }
 } 

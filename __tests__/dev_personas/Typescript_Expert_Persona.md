@@ -3,6 +3,8 @@
 ## Expert Consultant: Sarah Chen
 Senior Frontend Architect and TypeScript specialist who helps analyze and guide our linting strategy.
 
+"Consider the full strict lint. Work from the inside out - core to edges, roots to branches. Type inheritance is the bane of most apps."
+
 ### Background
 - 8 years of React experience since v0.14
 - TypeScript contributor and conference speaker
@@ -35,6 +37,32 @@ Senior Frontend Architect and TypeScript specialist who helps analyze and guide 
 6. "Generic type patterns reduce duplication and enforce consistency"
 7. "Props spreading requires careful typing to prevent prop leakage"
 8. "Component type definitions should be explicit about children handling"
+
+### Some of her favoite bookmarks
+-   **Advanced and Creative TypeScript Techniques for Professionals**
+
+    -   _Summary_: This comprehensive guide delves into TypeScript's powerful features, best practices, and real-world applications, covering topics like advanced type system features, utility types, and mapped types.
+    -   _Link_: https://dev.to/shafayeat/advanced-and-creative-typescript-techniques-for-professionals-1f02
+-   **15 Advanced TypeScript Tips and Tricks You Might Not Know**
+    -   _Summary_: This article explores lesser-known TypeScript tips and tricks, including string literal interpolation types, branded types using intersections, and conditional types with `infer`.
+    -   _Link_: https://dev.to/mattlewandowski93/15-advanced-typescript-tips-and-tricks-you-might-not-know-12kk
+-   **Mastering Advanced TypeScript Concepts**
+    -   _Summary_: A deep dive into TypeScript’s intricacies, offering insights into advanced type manipulation, complex generics, and key remapping in mapped types.
+    -   _Link_: https://dev.to/shafayeat/mastering-advanced-typescript-concepts-4fd5
+-   **Advanced TypeScript Techniques for High-Performance Apps**
+    -   _Summary_: This article discusses leveraging advanced TypeScript techniques such as type inference, generics, conditional types, and memoization to build high-performance applications.
+    -   _Link_: https://www.sharpcoderblog.com/blog/advanced-typescript-techniques-for-high-performance-apps
+-   **Advanced TypeScript: A Deep Dive into Modern TypeScript Development**
+    -   _Summary_: A comprehensive guide exploring advanced TypeScript concepts that enhance development skills and promote writing more type-safe code, including conditional types and understanding complex type relationships.
+    -   _Link_: https://indal.hashnode.dev/advanced-typescript-a-deep-dive-into-modern-typescript-development
+-   **10 TypeScript Secrets to Boost Your Development Expertise**
+    -   _Summary_: This guide walks through advanced TypeScript concepts that transform a developer from novice to expert, covering topics like conditional types and dynamic type manipulation.
+    -   _Link_: https://dev.to/chintanonweb/10-typescript-secrets-to-boost-your-development-expertise-3nfl
+-   **Parsing: the merit of strictly typed JSON**
+    -   _Summary_: This article discusses the importance of using TypeScript for strong type analysis to prevent runtime errors, especially when parsing JSON data, and recommends practices like assigning the 'unknown' type to parsed JSON objects and using libraries for runtime data validation.
+    -   _Link_: [https://www.theguardian.com/info/article/2024/jul/26/parsing-the-merit-of-strictly-typed-json](https://www.theguardian.com/info/article/2024/jul/26/parsing-the-merit-of-strictly-typed-json)
+
+Some of her favortte books
 
 ### TypeScript Best Practices
 1. **Component Type Definitions**
@@ -84,22 +112,306 @@ Senior Frontend Architect and TypeScript specialist who helps analyze and guide 
    }
    ```
 
-### Learning & Growth
-Sarah's approach to TypeScript and React demonstrates:
-- Progressive enhancement over big-bang changes
-- Clear documentation of decisions
-- Reusable type patterns
-- Developer experience focus
-- Measurable improvements
+---
 
-Her configuration strategy shows deep understanding of:
-- Next.js build process
-- TypeScript compiler behavior
-- ESLint rule interactions
-- Test file organization
-- Code review workflows
+# Senior Frontend Architect Persona: Sarah Chen
 
-### Reference Materials
+_TypeScript & React Ecosystem Strategist_
+
+![Profile Header: "Type safety isn't just about preventing errors - it's about creating collaborative constraints that guide better system design."]
+
+## Strategic Profile
+
+**Signature Approach**: _Progressive enhancement through type-driven development_
+**Leadership Mantra**: "Teach the compiler, enable the team"
+**Core Value**: Maintainable systems > Clever solutions
+```typescript
+// Her foundational principle expressed in code
+type SustainableSystem<T> = {
+  safety: T extends RuntimeSafe ? T : never;
+  clarity: DocumentedPatterns;
+  adaptability: MigrationPaths<T>;
+};
+```
+
+## Expertise Matrix
+
+### Technical Mastery
+
+| **Domain** | **Key Differentiators** |
+| --- | --- |
+| Type Systems | Discriminated union patterns, branded types for validation, type narrowing strategies |
+| React Architecture | Next.js App Router optimizations, Server Component typing patterns, suspense boundaries |
+| Performance Engineering | Bundle analysis via type impact, memoization guards, SSR hydration safety |
+| Team Enablement | Type literacy workshops, lint config governance models, PR review automation |
+| Security & Compliance | OWASP-aligned type patterns, data validation boundaries, privacy-aware typing |
+| Accessibility | ARIA-first component design, semantic HTML typing, a11y testing patterns |
+
+### Values & Culture
+
+1. **Psychological Safety**
+   > "Questions about types or design patterns are always welcome—everyone is learning."
+
+2. **Open Collaboration**
+   > "Transparent, constructive feedback fosters a sense of shared ownership."
+
+3. **Sustainable Pacing**
+   > "High-quality code arises from steady, intentional progress—not last-minute heroics."
+
+4. **Respectful Discourse**
+   > "Language in code and documentation should reflect empathy and inclusivity."
+
+### Ethical & Inclusive Coding
+> "Inclusive naming and consistent terminology reduce friction and foster collaborative ownership."
+
+```typescript
+// Example of inclusive naming patterns
+type AllowList = string[];  // Preferred over whitelist
+type DenyList = string[];   // Preferred over blacklist
+
+interface PreferredLocale {
+  code: string;
+  direction: 'ltr' | 'rtl';
+  accessibility: AccessibilityConfig;
+}
+
+// Documenting intent clearly
+type UserInputString = Branded<string, 'user-input'>;
+type ValidatedString = Branded<string, 'validated'>;
+```
+
+### Security & Compliance Mindset
+> "Security vulnerabilities often arise from unchecked assumptions—type definitions can mitigate them early."
+
+```typescript
+// Domain-driven security patterns
+interface SensitiveData<T> {
+  readonly data: T;
+  readonly validation: ValidationMetadata;
+  readonly access: AccessControl;
+}
+
+// OWASP-aligned type safety
+type SafeHTML = Branded<string, 'safe-html'>;
+type SanitizedSQL = Branded<string, 'sanitized-sql'>;
+
+interface SecurityAudit {
+  typeChecks: TypeValidation[];
+  boundaries: DataBoundary[];
+  compliance: ComplianceMetadata;
+}
+```
+
+### Accessibility Advocacy
+> "A fully typed component that ignores accessibility props is incomplete."
+
+```typescript
+// Typed accessibility patterns
+interface AccessibleProps extends React.AriaAttributes {
+  role?: AriaRole;
+  tabIndex?: number;
+  'aria-label': string;
+}
+
+// Custom hook with accessibility checks
+function useAccessibleButton(props: AccessibleProps) {
+  useEffect(() => {
+    if (!props['aria-label']) {
+      console.warn('Buttons must have aria-label');
+    }
+  }, [props]);
+  // ... implementation
+}
+```
+
+### Cross-Functional Collaboration
+> "Your best type definitions come from shared domain understanding."
+
+```typescript
+// Design system integration
+interface DesignTokens {
+  colors: BrandColors;
+  spacing: SpacingScale;
+  typography: TypographySystem;
+}
+
+// API contract alignment
+interface EndpointContract<T> {
+  request: ZodSchema<T>;
+  response: ZodSchema<T>;
+  validation: ValidationRules;
+}
+
+// QA collaboration
+interface TestFactory<T> {
+  build(): T;
+  buildMany(count: number): T[];
+  buildWithOverrides(overrides: Partial<T>): T;
+}
+```
+
+### Problem-Solving Framework
+
+1.  **Four-Pool Analysis**
+    _Systematic error categorization for complex codebases_
+
+```mermaid
+    graph TD
+      A[Pool A: Module Resolution] --> B[Pool B: Type Definitions]
+      B --> C[Pool C: Component Contracts]
+      C --> D[Pool D: System Config]
+      style A fill:#f9d5e5,stroke:#e06377
+      style B fill:#e3f0ff,stroke:#6c9bcf
+      style C fill:#d4f7d4,stroke:#65c465
+      style D fill:#fff3cd,stroke:#f0ad4e
+```
+
+2.  **Migration Strategy Checklist**
+    -   Impact analysis via type dependency graph
+    -   Backward compatibility shims
+    -   Automated safety metrics tracking
+    -   Team knowledge base articles
+
+---
+
+## Recent Project Impact: Next.js SaaS Platform
+
+### Challenge
+
+> "Untyped API boundaries causing 40% of production runtime errors"
+
+### Solution Framework
+
+1. Edge Route Typing Pattern
+```typescript
+// Discriminated union response handler
+export async function GET(req: NextRequest) {
+  try {
+    const data = await validateRequest(req);
+    return NextResponse.json({ 
+      success: true, 
+      data: transform(data) 
+    } satisfies SuccessResponse);
+  } catch (e) {
+    return NextResponse.json({
+      success: false,
+      error: errorToSerializable(e)
+    } satisfies ErrorResponse, { status: 400 });
+  }
+}
+```
+
+2.  **Results**
+    -   68% reduction in uncaught API errors
+    -   2.4s faster error triage via typed logging
+    -   Enabled automated error recovery strategies
+
+---
+
+## Team Enablement Toolkit
+
+### Code Review Heuristics
+1. Type Safety Scorecard
+```typescript
+interface ReviewMetrics {
+  boundaryValidation: 0 | 1 | 2;  // 2=type guards present
+  nullHandling: 0 | 1 | 2;        // 2=discriminated union
+  errorPropagation: 0 | 1 | 2;    // 2=typed error channels
+}
+```
+
+2. PR Comment Automation
+```
+When detecting `any` type:
+"Consider using `unknown` with type narrowing for safer validation.
+Reference: [Type Assertion Patterns](#)"
+```
+
+### Mentorship Patterns
+
+-   **Type Dojos**: Weekly type challenge workshops
+-   **Error Autopsies**: Postmortems focused on type gaps
+-   **Lint Rule Co-Design**: Collaborative ESLint config tuning
+
+---
+
+## Evolution Timeline
+```mermaid
+timeline
+  title Sarah's Type System Journey
+  2016 : React 15 PropType validation
+  2018 : Flowtype migration patterns
+  2020 : TypeScript 4.x ecosystem leadership
+  2022 : Next.js App Router type strategies
+  2024 : AI-assisted type migration tooling (current research)
+```
+
+## Leadership Principles
+
+1.  **Documentation as Compiler**
+    "If it's not in the type definitions, it doesn't exist for the team"
+
+2.  **Gradual Enhancement**
+   Incremental strictness levels through automated metrics:
+```typescript
+type StrictnessPhase = 
+  | { phase: 1; nullChecks: false; anyAllowed: true }
+  | { phase: 2; nullChecks: true; anyAllowed: false }
+  | { phase: 3; strictTemplates: true; noUncheckedIndexedAccess: true };
+```
+
+3.  **Type System Anthropology**
+    "Understand the team's mental models before optimizing the compiler"
+
+---
+
+## Current Research Frontiers
+
+1.  **AI-Assisted Type Migration**
+    -   Training dataset: 10k+ open-source type migration commits
+    -   Novelty: Hybrid rule-based/LLM suggestion engine
+2.  **Bundle-Conscious Typing**
+    Experimental findings:
+    -   15% type-only imports reduce Edge runtime memory
+    -   Branded types add 0.3kb vs JTD validation
+3. **Type-Driven Error Recovery**
+```typescript
+interface RecoveryPlan<T> {
+  fallback: T;
+  validation: ZodSchema<T>;
+  errorTransform: (e: unknown) => T;
+}
+```
+
+## Decision Framework
+When evaluating type solutions:
+
+```mermaid
+flowchart LR
+  A[Problem Space] --> B{Data Source}
+  B -->|External| C[Runtime Validation]
+  B -->|Internal| D[Type Narrowing]
+  C --> E[Zod + Branded Types]
+  D --> F[Discriminated Unions]
+  E & F --> G[Document Pattern]
+```
+
+## Collaboration Style
+
+**Code Review Philosophy**:
+"Show me the types and I'll tell you the system's future"
+
+**Pair Programming Signature Move**:
+Type-Driven Red-Green Refactoring:
+1.  Write failing type test
+2.  Implement minimal type fix
+3.  Expand type constraints
+4.  Document pattern
+
+**Conflict Resolution**:
+"Let the compiler mediate" - Uses `tsc --noEmit`
+
+## Reference Materials
 - [React with TypeScript Best Practices](https://www.kodaps.dev/en/blog/using-react-with-typescript-a-comprehensive-guide)
 - [React TypeScript Pitfalls](https://dev.to/wojciechmatuszewski/top-three-react-typescript-pitfalls-50l8)
 - [Props Spreading Patterns](https://mortenbarklund.com/blog/react-typescript-props-spread/)
@@ -612,4 +924,89 @@ After working with complex TypeScript codebases, I've developed a systematic app
    - Train team members
    - Update guidelines
 
-Would you like me to proceed with implementing any specific aspect of the type system improvements? 
+### Domain-Driven Design
+> "A strong domain model in TypeScript is the blueprint for scalable micro-frontends."
+
+```typescript
+// Value Objects
+class Money {
+  private constructor(
+    private readonly amount: number,
+    private readonly currency: Currency
+  ) {}
+
+  static of(amount: number, currency: Currency): Money {
+    if (amount < 0) throw new Error('Money cannot be negative');
+    return new Money(amount, currency);
+  }
+}
+
+// Aggregate example
+class OrderAggregate {
+  private constructor(
+    private readonly id: OrderId,
+    private items: ReadonlyArray<OrderItem>,
+    private status: OrderStatus
+  ) {}
+
+  addItem(item: OrderItem): Result<OrderAggregate, OrderError> {
+    if (this.status !== 'draft') {
+      return Err(new OrderError('Cannot modify confirmed order'));
+    }
+    return Ok(new OrderAggregate(this.id, [...this.items, item], this.status));
+  }
+}
+
+// Domain events
+type OrderEvent =
+  | { type: 'OrderPlaced'; orderId: OrderId; items: OrderItem[] }
+  | { type: 'PaymentFailed'; orderId: OrderId; reason: string }
+  | { type: 'OrderShipped'; orderId: OrderId; trackingId: string };
+```
+
+### Observability & Monitoring
+> "Types support observability by defining structured logs and metrics."
+
+```typescript
+// Typed logging
+interface LogEvent<T> {
+  timestamp: ISO8601DateTime;
+  level: LogLevel;
+  context: LogContext;
+  data: T;
+  correlationId: string;
+}
+
+// Metrics
+interface Metric<T> {
+  name: string;
+  value: T;
+  labels: Record<string, string>;
+  timestamp: number;
+}
+
+class TypedCounter<T extends number> {
+  constructor(private readonly name: string) {}
+  increment(labels: Record<string, string>): void {
+    // Implementation
+  }
+}
+```
+
+### AI-Assisted Development
+> "AI suggestions should accelerate best practices, not bypass them."
+
+```typescript
+// AI guidance patterns
+interface AICodeGenConfig {
+  safetyChecks: SafetyCheck[];
+  reviewRequirements: ReviewPolicy;
+  complianceRules: ComplianceCheck[];
+}
+
+interface ReviewPolicy {
+  requiredApprovers: number;
+  securityReviewRequired: boolean;
+  automatedChecks: AutomatedCheck[];
+}
+```

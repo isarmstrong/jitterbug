@@ -1,18 +1,22 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "noEmit": true
+    "types": [
+      "vitest/globals",
+      "node"
+    ],
+    "outDir": "dist-test"
   },
   "include": [
+    "src/**/*",
     "__tests__/**/*",
-    "**/*.test.ts",
-    "**/*.spec.ts",
-    "vitest.config.ts"
+    "test/**/*",
+    "vitest.config.ts",
+    "scripts/**/*"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "coverage",
-    "src/**/*.ts"
+    "dist-test"
   ]
 }

@@ -43,7 +43,7 @@ export class ResourceTransport extends BaseTransport {
             return;
         }
 
-        const data = entry.data as unknown;
+        const data = entry.data;
         if (!this.isResourceData(data)) {
             return;
         }

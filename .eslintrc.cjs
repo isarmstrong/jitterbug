@@ -7,7 +7,7 @@ module.exports = {
     },
     parser: '@typescript-eslint/parser',
     parserOptions: {
-        project: ['./tsconfig.json', './tsconfig.gui.json'],
+        project: ['./tsconfig.json', './tsconfig.gui.json', './tsconfig.test.json'],
         tsconfigRootDir: __dirname,
         sourceType: 'module',
         ecmaVersion: 2022,
@@ -33,8 +33,18 @@ module.exports = {
     },
     ignorePatterns: [
         'dist/**/*',
-        '__tests__/**/*',
-        '*.config.ts',
         'node_modules/**/*'
+    ],
+    overrides: [
+        {
+            files: ['**/__tests__/**/*', '**/test/**/*', '*.config.ts'],
+            parserOptions: {
+                project: './tsconfig.test.json'
+            },
+            rules: {
+                '@typescript-eslint/no-explicit-any': 'warn',
+                '@typescript-eslint/strict-boolean-expressions': 'warn'
+            }
+        }
     ]
 }; 

@@ -1,58 +1,69 @@
-import { LogTransport, createJitterbug, Environment, Runtime } from '@isarmstrong/jitterbug';
-import { ConsoleTransport } from '@isarmstrong/jitterbug/transports/console';
-import { EdgeTransport, type EdgeTransportConfig } from '@isarmstrong/jitterbug/transports/edge';
-import type { NextLoggerConfig } from './types';
-import { detectNextEnvironment, detectNextRuntime } from './utils';
+// Export core functionality
+export {
+    createJitterbugLogger,
+    EdgeTransport,
+    ErrorAggregationProcessor,
+    MetricsProcessor,
+    Environment,
+    Runtime
+} from './logger';
 
-// Re-export types
-export * from './types';
+// Export SSE transport
+export { createSSETransport } from './transports/sse/factory';
+export type { SSETransportConfig } from './types';
 
-// Re-export handlers
-export * from './handlers';
+// Export types
+export type {
+    NextLoggerConfig,
+} from './types';
 
-// Re-export utilities
+// Export utilities
 export * from './utils';
 
-// Export logger functionality
-export function createJitterbugLogger(namespace: string, config: NextLoggerConfig = {}) {
-    const environment = config.environment ?? detectNextEnvironment();
-    const runtime = config.runtime ?? detectNextRuntime();
-    const isDev = environment === Environment.DEVELOPMENT;
+// Export handlers
+export * from './handlers';
 
-    // Configure transports based on environment
-    const transports: LogTransport[] = [];
-
-    // Add console transport in development or browser
-    if (isDev || runtime === Runtime.BROWSER) {
-        transports.push(new ConsoleTransport({
-            colors: true
-        }));
+// Debug panel is opt-in
+export const debug = {
+    /**
+     * Get the Jitterbug debug panel components.
+     * 
+     * @example
+     * Simple usage - copy the debug route to your app:
+     * ```typescript
+     * // app/debug/page.tsx
+     * import { debug } from '@isarmstrong/jitterbug-next';
+     * 
+     * export default async function DebugPage() {
+     *   const { DebugPanel } = await debug.getDebugComponents();
+     *   return <DebugPanel />;
+     * }
+     * ```
+     * 
+     * This will make the debug panel available at /debug in your Next.js app.
+     * 
+     * Custom integration:
+     * ```typescript
+     * // app/your-path/page.tsx
+     * import { debug } from '@isarmstrong/jitterbug-next';
+     * 
+     * export default async function CustomPage() {
+     *   const { DebugPanel } = await debug.getDebugComponents();
+     *   return (
+     *     <div className="your-wrapper">
+     *       <DebugPanel />
+     *     </div>
+     *   );
+     * }
+     * ```
+     * 
+     * @returns Promise containing the DebugPanel component
+     */
+    async getDebugComponents() {
+        if (process.env.NODE_ENV === 'production') {
+            console.warn('Jitterbug debug panel is not recommended for production use');
+        }
+        const { DebugPanel } = await import('./components/debug/DebugPanel');
+        return { DebugPanel };
     }
-
-    // Add edge transport with Next.js specific configuration
-    const endpoint = config.endpoint ?? '/api/logs';
-    const transportConfig: EdgeTransportConfig = {
-        endpoint,
-        maxRetries: isDev ? 0 : 5,
-        bufferSize: isDev ? 50 : 100,
-        maxEntries: isDev ? 100 : 1000,
-        testMode: isDev,
-        maxPayloadSize: 128 * 1024, // 128KB
-        retryInterval: isDev ? 1000 : 5000,
-        maxConnectionDuration: isDev ? 60000 : 4.5 * 60 * 1000
-    };
-
-    transports.push(new EdgeTransport(transportConfig));
-
-    // Create logger with configured transports
-    return createJitterbug({
-        namespace,
-        environment,
-        runtime,
-        transports
-    });
-}
-
-export * from './logger';
-export * from './transports/sse/factory';
-export * from './transports/edge'; 
+}; 

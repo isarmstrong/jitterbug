@@ -15,6 +15,7 @@ import type {
   LogLevel,
 } from "./types";
 import { processLog, writeLog } from "./logger";
+import { isLogLevel, isRuntimeType, isEnvironmentType } from './types/guards';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -45,15 +46,10 @@ class RuntimeDetector {
       hasProcess && process.env !== undefined && process.env !== null;
     const nodeEnv = hasEnv ? process.env.NODE_ENV : undefined;
 
-    if (nodeEnv === "development") {
-      return Environment.DEVELOPMENT;
+    if (isEnvironmentType(nodeEnv)) {
+      return nodeEnv;
     }
-    if (nodeEnv === "production") {
-      return Environment.PRODUCTION;
-    }
-    if (nodeEnv === "test") {
-      return Environment.TEST;
-    }
+
     return Environment.DEVELOPMENT;
   }
 }
@@ -76,7 +72,7 @@ export class JitterbugImpl implements JitterbugInstance {
       processors: config.processors ?? [],
       enabled: config.enabled ?? true,
       level: config.level ? this.normalizeLogLevel(config.level) : LogLevels.INFO,
-      minLevel: config.minLevel
+      minLevel: (config.minLevel != null)
         ? this.normalizeLogLevel(config.minLevel)
         : this.normalizeLogLevel(config.level ?? LogLevels.INFO),
       onError: config.onError ?? this.onError,
@@ -136,9 +132,9 @@ export class JitterbugImpl implements JitterbugInstance {
 
   public render<T extends Record<string, unknown>>(message: string, data?: T): void {
     const entry = this.createEntry(LogLevels.DEBUG, message, data);
-    const context = entry.context as LogContext;
-    if (context) {
-      context.type = "render";
+    const context = entry.context;
+    if (context && 'type' in context) {
+      (context as LogContext).type = "render";
     }
     void this.processAndWrite(entry).catch(this.onError);
   }
@@ -167,8 +163,8 @@ export class JitterbugImpl implements JitterbugInstance {
     this.config = {
       ...this.config,
       ...config,
-      level: config.level ? this.normalizeLogLevel(config.level) : this.config.level,
-      minLevel: config.minLevel
+      level: (config.level != null) ? this.normalizeLogLevel(config.level) : this.config.level,
+      minLevel: (config.minLevel != null)
         ? this.normalizeLogLevel(config.minLevel)
         : this.config.minLevel
     };
@@ -239,9 +235,15 @@ export class JitterbugImpl implements JitterbugInstance {
   ): Promise<void> {
     if (!this.enabled) return;
 
+    if (!isLogLevel(level)) {
+      this.onWarn(`Invalid log level: ${level}`);
+      return;
+    }
+
     const levels = Object.values(LogLevels);
     const configLevel = levels.indexOf(this.config.level);
     const messageLevel = levels.indexOf(level);
+
     if (messageLevel < configLevel) return;
 
     const entry = this.createEntry(level, message, data, error);
@@ -288,8 +290,8 @@ export function createDebug(
     level: config.level ?? LogLevels.INFO,
     enabled: config.enabled ?? true,
     minLevel: config.minLevel ?? LogLevels.INFO,
-    onError: config.onError ?? ((error: Error) => console.error("Error in Jitterbug:", error)),
-    onWarn: config.onWarn ?? ((warning: string) => console.warn("Warning in Jitterbug:", warning))
+    onError: config.onError ?? ((error: Error): void => console.error("Error in Jitterbug:", error)),
+    onWarn: config.onWarn ?? ((warning: string): void => console.warn("Warning in Jitterbug:", warning))
   };
 
   return createJitterbug({
@@ -308,7 +310,10 @@ export const factory: JitterbugFactory = {
   createDebug: (
     namespace: string,
     config?: Partial<JitterbugConfig>,
-  ): JitterbugInstance => createDebug(namespace, config),
-  getRuntime: (): RuntimeType => RuntimeDetector.detectRuntime(),
-  getEnvironment: (): EnvironmentType => RuntimeDetector.detectEnvironment(),
+  ): JitterbugInstance =>
+    createDebug(namespace, config),
+  getRuntime: (): RuntimeType =>
+    RuntimeDetector.detectRuntime(),
+  getEnvironment: (): EnvironmentType =>
+    RuntimeDetector.detectEnvironment(),
 };

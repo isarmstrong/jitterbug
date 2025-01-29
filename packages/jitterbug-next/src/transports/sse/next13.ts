@@ -1,4 +1,3 @@
-import type { LogEntry } from '@isarmstrong/jitterbug';
 import { BaseSSETransport } from './base';
 import type { SSETransportConfig, LogType } from '../../types';
 

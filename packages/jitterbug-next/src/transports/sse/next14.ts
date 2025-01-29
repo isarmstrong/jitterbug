@@ -5,6 +5,7 @@ export class Next14SSETransport extends BaseSSETransport {
     private encoder = new TextEncoder();
     private sequence = 0;
     private activeControllers = new Map<string, AbortController>();
+    private activeWriters = new Map<string, WritableStreamDefaultWriter>();
 
     constructor(config: SSETransportConfig) {
         super(config);
@@ -34,6 +35,7 @@ export class Next14SSETransport extends BaseSSETransport {
         const writer = writable.getWriter();
         const controller = new AbortController();
         this.activeControllers.set(clientId, controller);
+        this.activeWriters.set(clientId, writer);
 
         // Handle stream initialization
         (async () => {
@@ -102,20 +104,17 @@ export class Next14SSETransport extends BaseSSETransport {
     }
 
     public async write(log: LogType): Promise<void> {
-        if (!this.isConnected) return;
-
-        const message = `id: ${this.sequence++}\ndata: ${JSON.stringify(log)}\n\n`;
-        const encoded = this.encoder.encode(message);
-
-        // Write to all active streams
-        const writePromises = Array.from(this.activeControllers.entries()).map(async ([clientId, controller]) => {
+        const writePromises = Array.from(this.activeControllers.entries()).map(async ([clientId]) => {
             try {
-                const { writable } = new TransformStream();
-                const writer = writable.getWriter();
-                await writer.write(encoded);
+                // Write to each active client
+                const writer = this.activeWriters.get(clientId);
+                if (writer) {
+                    const message = `id: ${this.sequence++}\ndata: ${JSON.stringify(log)}\n\n`;
+                    await writer.write(this.encoder.encode(message));
+                }
             } catch (error) {
-                console.error(`[Next14SSE] Failed to write to client ${clientId}:`, error);
-                await this.disconnect();
+                console.error('[Next14SSE] Failed to write to client:', clientId, error);
+                await this.removeClient(clientId);
             }
         });
 
@@ -139,5 +138,25 @@ export class Next14SSETransport extends BaseSSETransport {
         });
 
         this.activeControllers.clear();
+        this.activeWriters.clear();
+    }
+
+    private async removeClient(clientId: string): Promise<void> {
+        const controller = this.activeControllers.get(clientId);
+        const writer = this.activeWriters.get(clientId);
+
+        if (writer) {
+            try {
+                await writer.close();
+            } catch (error) {
+                console.error('[Next14SSE] Error closing writer:', error);
+            }
+            this.activeWriters.delete(clientId);
+        }
+
+        if (controller) {
+            controller.abort();
+            this.activeControllers.delete(clientId);
+        }
     }
 } 
