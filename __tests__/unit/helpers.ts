@@ -1,5 +1,6 @@
 import { expect } from "vitest";
 import { LogLevels, Environment, Runtime } from "../../src/types/enums";
+import type { LogLevel, EnvironmentType, RuntimeType } from "../../src/types/enums";
 import type { LogEntry } from "../../src/types/core";
 
 /**
@@ -7,8 +8,8 @@ import type { LogEntry } from "../../src/types/core";
  */
 interface TestLogContext {
     timestamp: string;
-    runtime: Runtime.EDGE;
-    environment: Environment.DEVELOPMENT;
+    runtime: typeof Runtime.EDGE;
+    environment: typeof Environment.DEVELOPMENT;
     namespace: string;
 }
 
@@ -32,7 +33,7 @@ function createTestContext(): TestLogContext {
  * Creates a test log entry with proper type relationships
  */
 export function createTestEntry<T extends Record<string, unknown>>(
-    level: LogLevels,
+    level: LogLevel,
     message: string,
     data: T
 ): TestLogEntry<T> {
@@ -50,7 +51,7 @@ export function createTestEntry<T extends Record<string, unknown>>(
  */
 export function assertLogEntry<T extends Record<string, unknown>>(
     entry: TestLogEntry<T> | undefined,
-    level: LogLevels,
+    level: LogLevel,
     dataCheck: (data: Record<string, unknown>) => boolean
 ): void {
     if (!entry) {

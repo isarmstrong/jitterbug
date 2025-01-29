@@ -73,14 +73,13 @@ export class VersionTransport extends AsyncBaseTransport {
     protected override async writeToTransport<T extends Record<string, unknown>>(
         entry: Readonly<LogEntry<T>>
     ): Promise<void> {
-        // Add await to satisfy require-await
         await Promise.resolve();
 
         if (!this.isValidEntry(entry)) {
             return;
         }
 
-        const data = entry.data as unknown;
+        const data = entry.data;
         if (!this.isVersionData(data)) {
             return;
         }
@@ -94,7 +93,7 @@ export class VersionTransport extends AsyncBaseTransport {
             level: entry.level,
             message: entry.message,
             data,
-            context: undefined as undefined,  // Version entries don't use context
+            context: undefined,  // Version entries don't use context
             error: entry.error,
             warnings: entry.warnings ? [...entry.warnings] : undefined,
             _metadata: entry._metadata ? { ...entry._metadata } : undefined
@@ -122,7 +121,7 @@ export class VersionTransport extends AsyncBaseTransport {
      * Type guard for version environment data
      */
     private isVersionEnvironment(env: unknown): env is Readonly<VersionEnvironment> {
-        if (!env || typeof env !== "object") {
+        if (env === null || env === undefined || typeof env !== "object") {
             return false;
         }
 
@@ -143,23 +142,31 @@ export class VersionTransport extends AsyncBaseTransport {
         }
 
         const candidate = data as Partial<VersionData>;
-        return (
-            candidate.type === "version" &&
-            isNonEmptyString(candidate.version) &&
-            typeof candidate.dependencies === "object" &&
-            candidate.dependencies !== null &&
-            this.isVersionEnvironment(candidate.environment)
-        );
+        if (candidate.type !== "version" || !isNonEmptyString(candidate.version)) {
+            return false;
+        }
+
+        if (typeof candidate.dependencies !== "object" || candidate.dependencies === null) {
+            return false;
+        }
+
+        return this.isVersionEnvironment(candidate.environment);
     }
 
     /**
      * Type guard for base transport data
      */
     private isBaseTransportData(data: unknown): data is Readonly<BaseTransportData> {
-        return typeof data === "object" &&
-            data !== null &&
-            "type" in data &&
-            typeof data.type === "string";
+        if (typeof data !== "object" || data === null) {
+            return false;
+        }
+
+        const candidate = data as { type?: unknown };
+        if (!("type" in candidate) || typeof candidate.type !== "string") {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -168,6 +175,7 @@ export class VersionTransport extends AsyncBaseTransport {
     private validateVersions(data: Readonly<VersionData>): boolean {
         // Validate version format
         const hasValidPattern = this.allowedPatterns.some(pattern => {
+            if (typeof pattern !== 'string') return false;
             const regex = new RegExp(pattern);
             return regex.test(data.version);
         });
@@ -187,7 +195,9 @@ export class VersionTransport extends AsyncBaseTransport {
      * Type-safe version comparison using semver
      */
     private checkVersion(framework: keyof VersionEnvironment, version: string | undefined): boolean {
-        if (!isNonEmptyString(version)) return true; // Skip check if version is not provided
+        if (typeof version !== 'string' || version.length === 0) {
+            return true; // Skip check if version is not provided or empty
+        }
         const required = this.requiredVersions[framework];
         return semver.gte(version, required);
     }

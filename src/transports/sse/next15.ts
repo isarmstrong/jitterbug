@@ -111,7 +111,7 @@ export class Next15SSETransport extends BaseTransport {
                 setTimeout(() => {
                     clearInterval(heartbeat);
                     if (autoReconnect) {
-                        void (async () => {
+                        void (async (): Promise<void> => {
                             try {
                                 await writer.write(encoder.encode(`event: info\ndata: {"message": "Max duration reached, reconnecting..."}\n\n`));
                             } catch (error) {

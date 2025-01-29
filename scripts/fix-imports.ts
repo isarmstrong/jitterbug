@@ -1,5 +1,4 @@
 import { readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
 import { glob } from 'glob';
 
 // Types that should always be type-only imports
