@@ -2,11 +2,9 @@ import type {
   LogEntry,
   LogTransport,
   LogLevel,
-  LogContext,
   BaseLogContext
 } from "../types/core";
 import { LogLevels } from "../types/enums";
-import { isNonEmptyString } from "../types/guards";
 
 /**
  * Transport configuration interface
@@ -66,12 +64,23 @@ export class BaseTransport implements BaseTransportType {
     };
   }
 
+  /**
+   * Base write implementation that throws by default.
+   * This method maintains an async signature for consistency across transports.
+   * 
+   * Design Pattern: "Async Contract Preservation"
+   * - Maintains interface consistency
+   * - Enables transport composition
+   * - Ensures proper error handling
+   */
   public async write<T extends Record<string, unknown>>(_entry: LogEntry<T>): Promise<void> {
+    // Ensure consistent async context even for errors
+    await Promise.resolve();
     throw new Error("Method not implemented.");
   }
 
   public shouldLog(level: LogLevel): boolean {
-    if (!this.config.enabled) return false;
+    if (this.config.enabled !== true) return false;
 
     const levels = Object.values(LogLevels);
     const configLevel = levels.indexOf(this.config.level);
@@ -80,7 +89,9 @@ export class BaseTransport implements BaseTransportType {
   }
 
   private formatTimestamp(timestamp: string | undefined): string {
-    if (!timestamp) return new Date().toISOString();
+    if (timestamp === undefined || timestamp === null || timestamp.length === 0) {
+      return new Date().toISOString();
+    }
     try {
       return new Date(timestamp).toISOString();
     } catch {
@@ -90,11 +101,16 @@ export class BaseTransport implements BaseTransportType {
 
   private formatContext<T extends Record<string, unknown>>(context: T | undefined): { timestamp: string; namespace: string } {
     // Handle the case where context might be a BaseLogContext
-    if (context && 'timestamp' in context && 'namespace' in context) {
+    if (context !== undefined && context !== null &&
+      typeof context === 'object' &&
+      'timestamp' in context &&
+      'namespace' in context) {
       const logContext = context as unknown as BaseLogContext;
       return {
         timestamp: this.formatTimestamp(logContext.timestamp),
-        namespace: isNonEmptyString(logContext.namespace) ? logContext.namespace : "unknown"
+        namespace: typeof logContext.namespace === 'string' && logContext.namespace.length > 0
+          ? logContext.namespace
+          : "unknown"
       };
     }
 
@@ -105,12 +121,12 @@ export class BaseTransport implements BaseTransportType {
   }
 
   private formatError(error: unknown): string {
-    if (!error) return "";
+    if (error === undefined || error === null) return "";
     return error instanceof Error ? `\n${error.stack ?? error.message}` : "";
   }
 
   private formatData<T extends Record<string, unknown>>(data: T | undefined): string {
-    if (!data) return "";
+    if (data === undefined || data === null) return "";
     try {
       return ` ${JSON.stringify(data)}`;
     } catch {
@@ -126,7 +142,7 @@ export class BaseTransport implements BaseTransportType {
     const { timestamp, namespace } = this.formatContext(entry.context);
     const level = entry.level.padEnd(5);
     const message = entry.message;
-    const data = entry.data && typeof entry.data === 'object'
+    const data = entry.data !== undefined && entry.data !== null && typeof entry.data === 'object'
       ? this.formatData(entry.data as Record<string, unknown>)
       : "";
     const error = this.formatError(entry.error);

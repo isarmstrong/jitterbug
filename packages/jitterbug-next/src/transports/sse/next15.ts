@@ -2,143 +2,128 @@ import { BaseSSETransport } from './base';
 import type { SSETransportConfig, LogType } from '../../types';
 
 export class Next15SSETransport extends BaseSSETransport {
-    private encoder = new TextEncoder();
-    private sequence = 0;
-    private activeStreams = new Map<string, ReadableStreamDefaultController>();
-    private heartbeatIntervals = new Map<string, NodeJS.Timeout>();
+    private writers: Map<string, WritableStreamDefaultWriter> = new Map();
 
     constructor(config: SSETransportConfig) {
         super(config);
     }
 
-    public async handleRequest(req: Request): Promise<Response> {
-        if (!this.validateRequest(req)) {
-            return this.createErrorResponse(415, 'Unsupported Media Type');
-        }
-
-        const clientId = this.getClientId(req);
-        const stream = await this.createStream(clientId);
-
-        return new Response(stream, {
-            headers: this.getSSEHeaders()
-        });
+    private isValidPath(path: string): boolean {
+        // Remove unnecessary escapes while maintaining the pattern
+        return /^\/api\/.*(?:\?.*)?$/.test(path);
     }
 
-    private getClientId(req: Request): string {
-        const matches = req.url.match(/\/logs\/([^\/\?]+)/);
-        return matches?.[1] || `client-${Date.now()}`;
-    }
-
-    protected async createStream(clientId: string): Promise<ReadableStream> {
-        return new ReadableStream({
-            start: async (controller) => {
-                try {
-                    this.activeStreams.set(clientId, controller);
-                    this.isConnected = true;
-
-                    // Send initial connection message
-                    await this.write({
-                        message: 'Connected to SSE stream',
-                        level: 'info',
-                        timestamp: new Date().toISOString(),
-                        context: {
-                            clientId,
-                            transport: 'Next15SSE'
-                        }
-                    });
-
-                    // Setup heartbeat
-                    const heartbeatInterval = setInterval(() => {
-                        if (!this.isConnected || !this.activeStreams.has(clientId)) {
-                            clearInterval(heartbeatInterval);
-                            return;
-                        }
-
-                        this.enqueueMessage(clientId, {
-                            type: 'heartbeat',
-                            timestamp: new Date().toISOString()
-                        });
-                    }, this.config.heartbeatInterval);
-
-                    this.heartbeatIntervals.set(clientId, heartbeatInterval);
-
-                    // Setup max duration timeout
-                    if (this.config.maxDuration) {
-                        setTimeout(() => {
-                            if (this.config.autoReconnect) {
-                                this.enqueueMessage(clientId, {
-                                    type: 'info',
-                                    message: 'Stream duration limit reached, reconnecting...',
-                                    timestamp: new Date().toISOString()
-                                });
-                            }
-                            this.removeClient(clientId);
-                        }, this.config.maxDuration);
-                    }
-
-                } catch (error) {
-                    console.error('[Next15SSE] Stream initialization failed:', error);
-                    this.removeClient(clientId);
-                }
-            },
-            cancel: () => {
-                this.removeClient(clientId);
-            }
-        });
-    }
-
-    private enqueueMessage(clientId: string, data: any) {
-        const controller = this.activeStreams.get(clientId);
-        if (!controller) return;
-
-        try {
-            const message = `id: ${this.sequence++}\ndata: ${JSON.stringify(data)}\n\n`;
-            controller.enqueue(this.encoder.encode(message));
-        } catch (error) {
-            console.error('[Next15SSE] Failed to enqueue message:', error);
-            this.removeClient(clientId);
-        }
-    }
-
-    public async write(log: LogType): Promise<void> {
-        for (const [clientId] of this.activeStreams) {
-            this.enqueueMessage(clientId, log);
-        }
-    }
-
-    private removeClient(clientId: string): void {
-        const controller = this.activeStreams.get(clientId);
-        const heartbeatInterval = this.heartbeatIntervals.get(clientId);
-
-        if (heartbeatInterval) {
-            clearInterval(heartbeatInterval);
-            this.heartbeatIntervals.delete(clientId);
-        }
-
-        if (controller) {
-            try {
-                controller.close();
-            } catch (error) {
-                console.error('[Next15SSE] Error closing stream:', error);
-            }
-            this.activeStreams.delete(clientId);
-        }
-    }
-
-    public async connect(): Promise<void> {
+    async connect(): Promise<void> {
         this.isConnected = true;
     }
 
-    public async disconnect(): Promise<void> {
+    async disconnect(): Promise<void> {
+        for (const writer of this.writers.values()) {
+            try {
+                await writer.close();
+            } catch (error) {
+                console.error('Error closing writer:', error);
+            }
+        }
+        this.writers.clear();
         this.isConnected = false;
+    }
 
-        // Clear all heartbeat intervals
-        this.heartbeatIntervals.forEach((interval) => clearInterval(interval));
-        this.heartbeatIntervals.clear();
+    async handleRequest(req: Request): Promise<Response> {
+        if (!this.validateRequest(req)) {
+            return this.createErrorResponse(400, 'Invalid request');
+        }
 
-        // Close all streams
-        this.activeStreams.forEach((_, clientId) => {
-            this.removeClient(clientId);
-        });
+        const url = new URL(req.url);
+        if (!this.isValidPath(url.pathname)) {
+            return this.createErrorResponse(400, 'Invalid path');
+        }
+
+        // These values are guaranteed to be defined by the base class constructor
+        const config = this.getConfig();
+        const retryInterval = config.retryInterval!;
+        const heartbeatInterval = config.heartbeatInterval!;
+        const maxDuration = config.maxDuration!;
+        const autoReconnect = config.autoReconnect ?? true;
+
+        // Next.js 15 specific headers
+        const headers = new Headers(this.getSSEHeaders());
+        headers.set('X-Accel-Buffering', 'no');
+        headers.set('Retry-After', retryInterval.toString());
+
+        const stream = new TransformStream();
+        const writer = stream.writable.getWriter();
+        const encoder = new TextEncoder();
+
+        // Store the writer for later use
+        const clientId = url.searchParams.get('id') || 'default';
+        this.writers.set(clientId, writer);
+
+        try {
+            await this.connect();
+            // Send initial connection success with retry info
+            await writer.write(encoder.encode(`retry: ${retryInterval}\nevent: connected\ndata: true\n\n`));
+
+            // Setup heartbeat interval
+            const heartbeat = setInterval(async () => {
+                try {
+                    await writer.write(encoder.encode(`event: heartbeat\ndata: ${Date.now()}\n\n`));
+                } catch (error) {
+                    console.error(`Heartbeat failed for client ${clientId}:`, error);
+                    clearInterval(heartbeat);
+                    this.writers.delete(clientId);
+                    if (this.writers.size === 0) {
+                        this.disconnect();
+                    }
+                }
+            }, heartbeatInterval);
+
+            // Setup max duration if configured
+            if (maxDuration) {
+                setTimeout(() => {
+                    clearInterval(heartbeat);
+                    if (autoReconnect) {
+                        writer.write(encoder.encode(`event: info\ndata: {"message": "Max duration reached, reconnecting..."}\n\n`))
+                            .catch(console.error);
+                    }
+                    this.writers.delete(clientId);
+                    if (this.writers.size === 0) {
+                        this.disconnect();
+                    }
+                }, maxDuration);
+            }
+
+            return new Response(stream.readable, {
+                headers,
+                status: 200
+            });
+        } catch (error) {
+            console.error('SSE setup error:', error);
+            await this.disconnect();
+            return this.createErrorResponse(500, 'Internal Server Error');
+        }
+    }
+
+    async write(data: LogType): Promise<void> {
+        if (!this.isConnected) {
+            throw new Error('Transport not connected');
+        }
+
+        const message = `event: message\ndata: ${JSON.stringify(data)}\n\n`;
+        const encoder = new TextEncoder();
+
+        for (const [clientId, writer] of this.writers.entries()) {
+            try {
+                await writer.write(encoder.encode(message));
+            } catch (error) {
+                console.error(`SSE write error for client ${clientId}:`, error);
+                // Remove failed writer
+                this.writers.delete(clientId);
+            }
+        }
+
+        if (this.writers.size === 0) {
+            await this.disconnect();
+        }
     }
 } 

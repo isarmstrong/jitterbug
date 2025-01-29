@@ -1,32 +1,29 @@
-import type { LogEntry, LogTransport, LogLevel } from "../types/core";
+import type { LogEntry } from "../types/core";
 import { BaseTransport } from "./base";
-import { isLogLevel } from "../types/guards";
 
 /**
- * Base class for async transports with proper async/await patterns
+ * Base class for transports that need async capabilities
+ * 
+ * Design Pattern: "Async Contract Preservation"
+ * - Enforces async boundaries for all derived transports
+ * - Maintains type safety through generics
+ * - Enables transport composition
  */
 export abstract class AsyncBaseTransport extends BaseTransport {
     /**
      * Core write implementation that must be provided by concrete transports
      */
-    protected abstract writeToTransport<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void>;
+    protected abstract writeToTransport<T extends Record<string, unknown>>(
+        entry: Readonly<LogEntry<T>>
+    ): Promise<void>;
 
     /**
      * Public write method with proper async handling and type safety
      */
-    public async write<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void> {
-        // Validate log level before processing
-        if (!isLogLevel(entry.level)) {
-            return Promise.resolve();
-        }
-
-        try {
-            // Concrete implementation in derived class
-            await this.writeToTransport(entry);
-        } catch (error) {
-            // Re-throw as Error with context
-            throw error instanceof Error ? error : new Error('Unknown error in transport');
-        }
+    public async write<T extends Record<string, unknown>>(
+        entry: Readonly<LogEntry<T>>
+    ): Promise<void> {
+        await this.writeToTransport(entry);
     }
 
     /**

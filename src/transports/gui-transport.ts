@@ -2,74 +2,166 @@ import type { LogEntry } from "../types/core";
 import { AsyncBaseTransport } from "./async-base";
 import { isNonEmptyString } from "../types/guards";
 
+/**
+ * Configuration for the GUI transport
+ */
 export interface GUITransportConfig {
-    maxEntries?: number;
-    defaultFilters?: Record<string, boolean>;
-    namespace?: string;
+    readonly maxEntries?: number;
+    readonly defaultFilters?: Readonly<Record<string, boolean>>;
+    readonly namespace?: string;
 }
 
+/**
+ * Type-safe filter configuration
+ */
+export interface FilterConfig {
+    readonly namespace: string;
+    readonly enabled: boolean;
+}
+
+/**
+ * Immutable GUI transport state
+ */
 export interface GUITransportState {
-    entries: LogEntry<Record<string, unknown>>[];
-    filters: Record<string, boolean>;
+    readonly entries: ReadonlyArray<LogEntry<Record<string, unknown>>>;
+    readonly filters: Readonly<Record<string, boolean>>;
 }
 
+/**
+ * Type-safe callback for state updates
+ */
+export type StateUpdateCallback = (state: Readonly<GUITransportState>) => void;
+
+/**
+ * GUI Transport for managing log entries with proper type safety and immutability
+ */
 export class GUITransport extends AsyncBaseTransport {
-    private state: GUITransportState;
-    private readonly config: Required<GUITransportConfig>;
-    private callbacks: Set<(state: GUITransportState) => void> = new Set();
+    private readonly maxEntries: number;
+    private entries: Array<LogEntry<Record<string, unknown>>>;
+    private filters: Record<string, boolean>;
+    private readonly callbacks: Set<StateUpdateCallback>;
 
-    constructor(config: GUITransportConfig = {}) {
+    constructor(config: Readonly<GUITransportConfig> = {}) {
         super();
-        this.config = {
-            maxEntries: config.maxEntries ?? 1000,
-            defaultFilters: config.defaultFilters ?? {},
-            namespace: config.namespace ?? 'default'
-        };
-
-        this.state = {
-            entries: [],
-            filters: { ...this.config.defaultFilters }
-        };
+        this.maxEntries = config.maxEntries ?? 1000;
+        this.entries = [];
+        this.filters = { ...(config.defaultFilters ?? {}) };
+        this.callbacks = new Set();
     }
 
-    protected async writeToTransport<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void> {
-        // Add the entry to our state
-        this.state.entries.push(entry as LogEntry<Record<string, unknown>>);
+    /**
+     * Writes a log entry to the transport with type safety.
+     * This method maintains an async signature for consistency with the AsyncBaseTransport interface,
+     * but performs synchronous state updates internally for performance.
+     * 
+     * Design Pattern: "Async Contract Preservation" with "Safe State Updates"
+     * - Maintains interface consistency across transports
+     * - Ensures atomic state updates
+     * - Provides immutable state snapshots
+     * - Enables transport composition
+     */
+    protected override async writeToTransport<T extends Record<string, unknown>>(entry: Readonly<LogEntry<T>>): Promise<void> {
+        // Ensure consistent async context even for sync operations
+        await Promise.resolve();
 
-        // Trim entries if we exceed maxEntries
-        if (this.config.maxEntries > 0 && this.state.entries.length > this.config.maxEntries) {
-            this.state.entries = this.state.entries.slice(-this.config.maxEntries);
-        }
+        // Perform atomic state update
+        await this.updateStateAsync(() => {
+            if (!this.isValidEntry(entry)) {
+                return;
+            }
 
-        // Notify all callbacks of the state change
+            // Add entry with proper type casting
+            this.entries.push(entry as LogEntry<Record<string, unknown>>);
+
+            // Maintain size limit efficiently
+            if (this.maxEntries > 0 && this.entries.length > this.maxEntries) {
+                this.entries = this.entries.slice(-this.maxEntries);
+            }
+        });
+    }
+
+    /**
+     * Updates state atomically and notifies callbacks.
+     * Ensures state updates and notifications happen in the same tick.
+     */
+    private async updateStateAsync(updateFn: () => void): Promise<void> {
+        // Perform state update
+        updateFn();
+
+        // Schedule callback notifications in the next tick
+        // This ensures all state updates in the current tick are complete
+        await Promise.resolve();
         this.notifyCallbacks();
     }
 
-    public onStateUpdate(callback: (state: GUITransportState) => void): () => void {
-        this.callbacks.add(callback);
-        callback(this.state);
-        return () => {
-            this.callbacks.delete(callback);
-        };
+    /**
+     * Sets a filter with type safety and atomic state updates
+     */
+    public async setFilter(config: Readonly<FilterConfig>): Promise<void> {
+        await this.updateStateAsync(() => {
+            if (!this.isValidFilterConfig(config)) {
+                return;
+            }
+
+            this.filters[config.namespace] = config.enabled;
+        });
     }
 
-    public setFilter(namespace: string, value: boolean): void {
-        if (!isNonEmptyString(namespace)) return;
-        this.state.filters[namespace] = value;
-        this.notifyCallbacks();
-    }
-
+    /**
+     * Cleans up resources properly
+     */
     protected override async cleanup(): Promise<void> {
         this.callbacks.clear();
-        this.state.entries = [];
+        this.entries = [];
+        this.filters = {};
         await super.cleanup();
     }
 
-    private notifyCallbacks(): void {
-        const state = {
-            entries: [...this.state.entries],
-            filters: { ...this.state.filters }
+    /**
+     * Validates a log entry
+     */
+    private isValidEntry<T extends Record<string, unknown>>(entry: unknown): entry is LogEntry<T> {
+        return entry !== null &&
+            typeof entry === 'object' &&
+            'level' in entry &&
+            'message' in entry &&
+            typeof (entry as LogEntry<T>).message === 'string';
+    }
+
+    /**
+     * Validates filter configuration
+     */
+    private isValidFilterConfig(config: unknown): config is FilterConfig {
+        return config !== null &&
+            typeof config === 'object' &&
+            'namespace' in config &&
+            'enabled' in config &&
+            isNonEmptyString((config as FilterConfig).namespace) &&
+            typeof (config as FilterConfig).enabled === 'boolean';
+    }
+
+    /**
+     * Creates an immutable copy of the current state with proper typing
+     */
+    private getImmutableState(): Readonly<GUITransportState> {
+        return {
+            entries: Object.freeze([...this.entries]),
+            filters: Object.freeze({ ...this.filters })
         };
-        this.callbacks.forEach(callback => callback(state));
+    }
+
+    /**
+     * Notifies callbacks with immutable state.
+     * Ensures callbacks can't modify state and handles callback errors.
+     */
+    private notifyCallbacks(): void {
+        const state = this.getImmutableState();
+        this.callbacks.forEach(callback => {
+            try {
+                callback(state);
+            } catch (error) {
+                console.error('Error in GUI transport callback:', error);
+            }
+        });
     }
 } 

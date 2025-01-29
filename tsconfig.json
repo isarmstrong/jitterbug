@@ -6,7 +6,9 @@
     "sourceMap": true
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "scripts/**/*.ts",
+    "src/types/enums.js"
   ],
   "exclude": [
     "node_modules",

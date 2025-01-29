@@ -1,5 +1,6 @@
 import type { LogEntry, LogProcessor } from "../types/core";
-import { Runtime, Environment } from "../types/enums";
+import { Runtime, Environment, LogLevels, isRuntime, isEnvironment, isLogLevel } from "../types/enums";
+import type { RuntimeType, EnvironmentType } from "../types/enums";
 
 interface ErrorData {
   message: string;
@@ -11,19 +12,49 @@ interface ErrorData {
   lastSeen: string;
 }
 
+interface AggregatedError extends Error {
+  _aggregated: boolean;
+  _pattern: string;
+  _occurrences: number;
+}
+
+/**
+ * Processor that aggregates similar errors to detect patterns
+ * and reduce noise in error reporting.
+ */
 export class ErrorAggregationProcessor implements LogProcessor {
   private errors: Map<string, ErrorData> = new Map();
 
-  public supports(runtime: string): boolean {
-    return runtime === Runtime.NODE || runtime === Runtime.EDGE;
+  public supports(runtime: unknown): runtime is RuntimeType {
+    return isRuntime(runtime) && (runtime === Runtime.NODE || runtime === Runtime.EDGE);
   }
 
-  public allowedIn(environment: string): boolean {
-    return environment !== Environment.TEST;
+  public allowedIn(environment: unknown): environment is EnvironmentType {
+    return isEnvironment(environment) && environment !== Environment.TEST;
   }
 
+  /**
+   * Process a log entry for error aggregation.
+   * This method maintains an async signature for consistency with the LogProcessor interface,
+   * but performs synchronous processing internally for performance.
+   * 
+   * Design Pattern: "Async Contract Preservation"
+   * - Maintains interface consistency across processors
+   * - Allows for future async extensions
+   * - Enables processor composition
+   */
   public async process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>> {
-    if (!entry.error || entry.level !== "ERROR") {
+    // Ensure consistent async context even for sync operations
+    await Promise.resolve();
+    return this.processSync(entry);
+  }
+
+  /**
+   * Internal synchronous implementation of error processing.
+   * Separated to make the sync nature explicit and allow for direct calls when async isn't needed.
+   */
+  private processSync<T extends Record<string, unknown>>(entry: LogEntry<T>): LogEntry<T> {
+    if (!entry.error || !isLogLevel(entry.level) || entry.level !== LogLevels.ERROR) {
       return entry;
     }
 
@@ -48,21 +79,30 @@ export class ErrorAggregationProcessor implements LogProcessor {
     errorData.lastSeen = now;
     this.errors.set(errorKey, errorData);
 
+    // Create a new Error object with aggregation metadata
+    const aggregatedError = new Error(entry.error.message) as AggregatedError;
+    Object.assign(aggregatedError, entry.error, {
+      _aggregated: true,
+      _pattern: pattern,
+      _occurrences: errorData.count
+    });
+
+    // Return a new object to avoid mutating the input
     return {
-      level: entry.level,
-      message: entry.message,
-      data: entry.data,
-      error: entry.error,
-      context: entry.context,
-      warnings: entry.warnings
+      ...entry,
+      error: aggregatedError
     };
   }
 
   private getErrorPattern(error: Error): string {
-    if (!error.stack) return error.message;
+    if (typeof error.stack !== 'string') {
+      return error.message;
+    }
 
     const stackLines = error.stack.split("\n");
-    if (stackLines.length < 2) return error.message;
+    if (stackLines.length < 2) {
+      return error.message;
+    }
 
     // Get the first line of the stack trace that's not the error message
     const firstStackLine = stackLines[1].trim();

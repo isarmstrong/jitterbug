@@ -1,5 +1,5 @@
 /**
- * Runtime environment types
+ * Runtime environment types for Jitterbug
  */
 export enum Runtime {
     EDGE = 'edge',
@@ -8,7 +8,7 @@ export enum Runtime {
 }
 
 /**
- * Log levels in order of severity
+ * Log levels following standard logging conventions
  */
 export enum LogLevels {
     DEBUG = 'DEBUG',
@@ -19,7 +19,7 @@ export enum LogLevels {
 }
 
 /**
- * Deployment environment types
+ * Deployment environments
  */
 export enum Environment {
     DEVELOPMENT = 'development',
@@ -28,7 +28,9 @@ export enum Environment {
     TEST = 'test'
 }
 
-// Type guards for runtime type safety
+/**
+ * Type guards for runtime type checking
+ */
 export const isRuntime = (value: unknown): value is Runtime => {
     return typeof value === 'string' && Object.values(Runtime).includes(value as Runtime);
 };
@@ -39,6 +41,30 @@ export const isLogLevel = (value: unknown): value is LogLevels => {
 
 export const isEnvironment = (value: unknown): value is Environment => {
     return typeof value === 'string' && Object.values(Environment).includes(value as Environment);
+};
+
+/**
+ * Type assertions for development
+ */
+export const assertRuntime = (value: unknown): Runtime => {
+    if (!isRuntime(value)) {
+        throw new TypeError(`Invalid runtime: ${String(value)}`);
+    }
+    return value;
+};
+
+export const assertLogLevel = (value: unknown): LogLevels => {
+    if (!isLogLevel(value)) {
+        throw new TypeError(`Invalid log level: ${String(value)}`);
+    }
+    return value;
+};
+
+export const assertEnvironment = (value: unknown): Environment => {
+    if (!isEnvironment(value)) {
+        throw new TypeError(`Invalid environment: ${String(value)}`);
+    }
+    return value;
 };
 
 // Export types based on the const values

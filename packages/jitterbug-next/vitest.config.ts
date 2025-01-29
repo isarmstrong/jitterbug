@@ -2,8 +2,16 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
     test: {
-        include: ['test/**/*.test.ts'],
+        globals: true,
         environment: 'node',
-        globals: true
+        include: ['test/**/*.test.ts', '../../__tests__/**/*.test.ts'],
+    },
+    resolve: {
+        alias: {
+            '@core': '../../src/types',
+            '@transports': '../../src/transports',
+            '@processors': '../../src/processors',
+            '@utils': '../../src/utils'
+        }
     }
 }); 

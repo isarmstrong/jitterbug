@@ -1,4 +1,4 @@
-import type { EdgeTransportConfig } from '../types';
+import type { EdgeTransportConfig, LogType } from '../types';
 
 export class EdgeTransport {
     private config: EdgeTransportConfig;
@@ -18,7 +18,7 @@ export class EdgeTransport {
         this.retryInterval = config.retryInterval ?? 1000;
     }
 
-    async write(data: any): Promise<void> {
+    async write(data: LogType): Promise<void> {
         try {
             await this.sendToEndpoint(data);
             this.retryCount = 0;
@@ -34,7 +34,7 @@ export class EdgeTransport {
         }
     }
 
-    private async sendToEndpoint(data: any): Promise<void> {
+    private async sendToEndpoint(data: LogType): Promise<void> {
         const response = await fetch(this.config.endpoint, {
             method: 'POST',
             headers: {

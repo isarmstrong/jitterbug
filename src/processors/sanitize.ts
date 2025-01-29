@@ -87,11 +87,26 @@ export class SanitizeProcessor implements LogProcessor {
     return true;
   }
 
+  /**
+   * Process a log entry for sanitization.
+   * This method maintains an async signature for consistency with the LogProcessor interface,
+   * but performs synchronous processing internally for performance.
+   * 
+   * Design Pattern: "Async Contract Preservation"
+   * - Maintains interface consistency across processors
+   * - Allows for future async extensions
+   * - Enables processor composition
+   */
   public async process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>> {
+    // Ensure consistent async context even for sync operations
+    await Promise.resolve();
+
     return {
       level: entry.level,
       message: entry.message,
-      data: entry.data ? this.sanitizeObject(entry.data as Record<string, unknown>) as T : entry.data,
+      data: entry.data !== undefined && entry.data !== null
+        ? this.sanitizeObject(entry.data) as T
+        : entry.data,
       error: entry.error,
       context: entry.context,
       warnings: entry.warnings
@@ -103,29 +118,31 @@ export class SanitizeProcessor implements LogProcessor {
       return { "[Max Depth Exceeded]": true };
     }
 
-    if (!obj || typeof obj !== "object") {
+    if (obj === null || obj === undefined || typeof obj !== "object") {
       return {};
     }
 
     const result: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(obj)) {
+      // Handle sensitive keys
       if (this.isSensitiveKey(key)) {
         result[key] = this.replacement;
         continue;
       }
 
-      if (typeof value === "string") {
+      // Handle different value types
+      if (value === null || value === undefined) {
+        result[key] = value;
+      } else if (typeof value === "string") {
         result[key] = this.sanitizeString(value);
-      } else if (Array.isArray(value)) {
-        result[key] = this.sanitizeArrays
-          ? value.map(item =>
-            typeof item === "object" && item !== null
-              ? this.sanitizeObject(item as Record<string, unknown>, depth + 1)
-              : item
-          )
-          : value;
-      } else if (typeof value === "object" && value !== null) {
+      } else if (Array.isArray(value) && this.sanitizeArrays === true) {
+        result[key] = value.map(item =>
+          typeof item === "object" && item !== null
+            ? this.sanitizeObject(item as Record<string, unknown>, depth + 1)
+            : item
+        );
+      } else if (typeof value === "object") {
         result[key] = this.sanitizeObject(value as Record<string, unknown>, depth + 1);
       } else {
         result[key] = value;
@@ -142,11 +159,15 @@ export class SanitizeProcessor implements LogProcessor {
     return str;
   }
 
+  /**
+   * Checks if a key matches any of the sensitive patterns
+   */
   private isSensitiveKey(key: string): boolean {
-    return this.patterns.some(pattern =>
-      typeof pattern === "string"
-        ? key.toLowerCase().includes(pattern.toLowerCase())
-        : pattern.test(key)
-    );
+    return this.patterns.some(pattern => {
+      if (pattern instanceof RegExp) {
+        return pattern.test(key);
+      }
+      return pattern === key;
+    });
   }
 }

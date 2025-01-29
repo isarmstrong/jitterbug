@@ -1,4 +1,4 @@
-import type { JitterbugConfig } from '../types/core';
+import type { JitterbugConfig, JitterbugInstance } from '../types/core';
 import { LogLevels, Environment, Runtime } from '../types/enums';
 import { ConsoleTransport } from '../transports/console';
 import { createJitterbug } from '../core';
@@ -22,7 +22,10 @@ export function createDevConfig(namespace: string, overrides: Partial<JitterbugC
     };
 }
 
-export function createDevDebug(namespace: string, overrides: Partial<JitterbugConfig> = {}) {
+export function createDevDebug(
+    namespace: string,
+    overrides: Partial<JitterbugConfig> = {}
+): JitterbugInstance {
     return createJitterbug(createDevConfig(namespace, overrides));
 }
 

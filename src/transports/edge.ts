@@ -5,38 +5,72 @@ import type { LogEntry, LogLevel } from "../types/core";
 import type { EdgeMemoryMetrics } from '../types/edge';
 import { BaseTransport } from "./types";
 import type { TransportConfig } from "./types";
+import { LogLevels } from "../types/enums";
 
 declare global {
   interface Performance {
-    memory?: {
+    memory?: Readonly<{
       usedJSHeapSize: number;
       totalJSHeapSize: number;
       jsExternalHeapSize?: number;
       arrayBuffers?: number;
-    };
+    }>;
   }
 }
 
+/**
+ * Type-safe configuration for edge transport
+ */
 export interface EdgeTransportConfig extends TransportConfig {
-  endpoint: string;
-  maxEntries?: number;
-  maxRetries?: number;
-  retryDelay?: number;
-  maxQueueSize?: number;
-  maxBatchSize?: number;
-  flushInterval?: number;
-  memoryLimit?: number;
-  persistQueue?: boolean;
-  maxConcurrent?: number;
-  requestsPerSecond?: number;
-  autoReconnect?: boolean;
-  testMode?: boolean;
-  bufferSize?: number;
-  maxConnectionDuration?: number;
-  maxPayloadSize?: number;
+  readonly endpoint: string;
+  readonly maxEntries?: number;
+  readonly maxRetries?: number;
+  readonly retryDelay?: number;
+  readonly maxQueueSize?: number;
+  readonly maxBatchSize?: number;
+  readonly flushInterval?: number;
+  readonly memoryLimit?: number;
+  readonly persistQueue?: boolean;
+  readonly maxConcurrent?: number;
+  readonly requestsPerSecond?: number;
+  readonly autoReconnect?: boolean;
+  readonly testMode?: boolean;
+  readonly bufferSize?: number;
+  readonly maxConnectionDuration?: number;
+  readonly maxPayloadSize?: number;
 }
 
+/**
+ * Type-safe stream metrics
+ */
 interface StreamMetrics {
+  readonly messageCount: number;
+  readonly avgProcessingTime: number;
+  readonly backpressureEvents: number;
+  readonly lastBackpressureTime: number | null;
+  readonly interruptions: number;
+  readonly lastInterruptionTime: number | null;
+  readonly bufferUtilization: number;
+  readonly lastFlushTime: number | null;
+  readonly memoryUsage: Readonly<{
+    readonly heapUsed: number;
+    readonly heapTotal: number;
+    readonly external: number;
+    readonly arrayBuffers: number;
+  }> | null;
+  readonly batchSuccessRate: number;
+  readonly avgBatchSize: number;
+  readonly droppedMessages: number;
+  readonly debugMetrics: Readonly<{
+    readonly droppedEntries: number;
+    readonly highWaterMark: number;
+  }>;
+}
+
+/**
+ * Internal mutable stream metrics
+ */
+interface MutableStreamMetrics {
   messageCount: number;
   avgProcessingTime: number;
   backpressureEvents: number;
@@ -60,7 +94,10 @@ interface StreamMetrics {
   };
 }
 
-interface BatchMetrics {
+/**
+ * Internal mutable batch metrics
+ */
+interface MutableBatchMetrics {
   size: number;
   entryCount: number;
   processingTime: number;
@@ -68,6 +105,16 @@ interface BatchMetrics {
   success: boolean;
 }
 
+/**
+ * Edge transport for handling log entries with proper type safety and immutability
+ * 
+ * Type Invariant: All entries and queue items are properly validated before processing
+ * This is maintained by:
+ * 1. Only processing entries through write() which validates the data
+ * 2. Using type-safe methods for all operations
+ * 3. Immutable configuration prevents runtime modifications
+ * 4. Proper cleanup and resource management
+ */
 export class EdgeTransport extends BaseTransport {
   private readonly maxEntries: number;
   private readonly maxRetries: number;
@@ -76,37 +123,20 @@ export class EdgeTransport extends BaseTransport {
   private readonly maxBatchSize: number;
   private readonly flushInterval: number;
   private readonly memoryLimit: number;
-  private entries: Array<LogEntry<Record<string, unknown>>> = [];
-  private queue: Array<LogEntry<Record<string, unknown>>> = [];
-  private retryCount = 0;
-  private flushTimeout: NodeJS.Timeout | null = null;
-  private _isConnected = false;
-  private updateCallbacks: Set<() => void> = new Set();
-  private readonly edgeConfig: Required<EdgeTransportConfig>;
-  private throttledSendPayload: (payload: string, batchId: string) => Promise<void>;
-  private pendingRequests = 0;
+  private entries: Array<Readonly<LogEntry<Record<string, unknown>>>>;
+  private queue: Array<Readonly<LogEntry<Record<string, unknown>>>>;
+  private retryCount: number;
+  private flushTimeout: NodeJS.Timeout | null;
+  private _isConnected: boolean;
+  private readonly updateCallbacks: Set<() => void>;
+  private readonly edgeConfig: Readonly<Required<EdgeTransportConfig>>;
+  private readonly throttledSendPayload: (payload: string, batchId: string) => Promise<void>;
+  private pendingRequests: number;
   private readonly maxPendingRequests: number;
-  private abortController: AbortController | null = null;
-  private metrics: StreamMetrics = {
-    messageCount: 0,
-    avgProcessingTime: 0,
-    backpressureEvents: 0,
-    lastBackpressureTime: null,
-    interruptions: 0,
-    lastInterruptionTime: null,
-    bufferUtilization: 0,
-    lastFlushTime: null,
-    memoryUsage: null,
-    batchSuccessRate: 1,
-    avgBatchSize: 0,
-    droppedMessages: 0,
-    debugMetrics: {
-      droppedEntries: 0,
-      highWaterMark: 0
-    }
-  };
-  private flushMutex = new Int32Array(new SharedArrayBuffer(4));
-  private batchMetrics: Map<string, BatchMetrics> = new Map();
+  private abortController: AbortController | null;
+  private metrics: MutableStreamMetrics;
+  private readonly flushMutex: Int32Array;
+  private readonly batchMetrics: Map<string, MutableBatchMetrics>;
   private readonly MEMORY_CHECK_INTERVAL = 30000; // 30 seconds
 
   /**
@@ -120,13 +150,18 @@ export class EdgeTransport extends BaseTransport {
    * Get current stream metrics
    */
   public getMetrics(): Readonly<StreamMetrics> {
-    return Object.freeze({ ...this.metrics });
+    return Object.freeze({
+      ...this.metrics,
+      memoryUsage: this.metrics.memoryUsage ? Object.freeze({ ...this.metrics.memoryUsage }) : null,
+      debugMetrics: Object.freeze({ ...this.metrics.debugMetrics })
+    });
   }
 
-  constructor(config: EdgeTransportConfig) {
-    const baseConfig: TransportConfig = {
-      level: config.level,
-      format: config.format ?? "json"
+  constructor(config: Readonly<EdgeTransportConfig>) {
+    const baseConfig: Required<TransportConfig> = {
+      level: config.level ?? LogLevels.INFO,
+      format: config.format ?? "json",
+      enabled: config.enabled ?? true
     };
     super(baseConfig);
 
@@ -138,7 +173,7 @@ export class EdgeTransport extends BaseTransport {
     this.flushInterval = config.flushInterval ?? 5000;
     this.memoryLimit = config.memoryLimit ?? 50 * 1024 * 1024; // 50MB default
 
-    this.edgeConfig = {
+    this.edgeConfig = Object.freeze({
       ...baseConfig,
       endpoint: config.endpoint,
       maxEntries: this.maxEntries,
@@ -147,14 +182,52 @@ export class EdgeTransport extends BaseTransport {
       maxQueueSize: this.maxQueueSize,
       maxBatchSize: this.maxBatchSize,
       flushInterval: this.flushInterval,
-      memoryLimit: this.memoryLimit
-    } as Required<EdgeTransportConfig>;
+      memoryLimit: this.memoryLimit,
+      persistQueue: config.persistQueue ?? false,
+      maxConcurrent: config.maxConcurrent ?? 5,
+      requestsPerSecond: config.requestsPerSecond ?? 10,
+      autoReconnect: config.autoReconnect ?? true,
+      testMode: config.testMode ?? false,
+      bufferSize: config.bufferSize ?? 1000,
+      maxConnectionDuration: config.maxConnectionDuration ?? 300000,
+      maxPayloadSize: config.maxPayloadSize ?? 5 * 1024 * 1024 // 5MB default
+    });
 
     this.maxPendingRequests = this.edgeConfig.maxConcurrent;
+    this.entries = [];
+    this.queue = [];
+    this.retryCount = 0;
+    this.flushTimeout = null;
+    this._isConnected = false;
+    this.updateCallbacks = new Set();
+    this.pendingRequests = 0;
+    this.abortController = null;
+    this.flushMutex = new Int32Array(new SharedArrayBuffer(4));
+    this.batchMetrics = new Map();
+
+    this.metrics = {
+      messageCount: 0,
+      avgProcessingTime: 0,
+      backpressureEvents: 0,
+      lastBackpressureTime: null,
+      interruptions: 0,
+      lastInterruptionTime: null,
+      bufferUtilization: 0,
+      lastFlushTime: null,
+      memoryUsage: null,
+      batchSuccessRate: 1,
+      avgBatchSize: 0,
+      droppedMessages: 0,
+      debugMetrics: {
+        droppedEntries: 0,
+        highWaterMark: 0
+      }
+    };
 
     // Use config to determine if we're in test mode
     if (this.edgeConfig.testMode) {
-      this.throttledSendPayload = (payload: string, batchId: string): Promise<void> => this.sendPayload(payload, batchId);
+      this.throttledSendPayload = (payload: string, batchId: string): Promise<void> =>
+        this.sendPayload(payload, batchId);
     } else {
       this.throttledSendPayload = pThrottle({
         limit: this.edgeConfig.maxConcurrent,
@@ -245,7 +318,7 @@ export class EdgeTransport extends BaseTransport {
       const batch = [] as LogEntry<Record<string, unknown>>[];
       let payloadSize = 0;
       const batchId = crypto.randomUUID();
-      const batchMetrics: BatchMetrics = {
+      const batchMetrics: MutableBatchMetrics = {
         size: 0,
         entryCount: 0,
         processingTime: 0,
@@ -300,7 +373,7 @@ export class EdgeTransport extends BaseTransport {
     }
   }
 
-  private updateBatchMetrics(metrics: BatchMetrics): void {
+  private updateBatchMetrics(metrics: MutableBatchMetrics): void {
     // Update running averages
     const alpha = 0.1; // Smoothing factor
     this.metrics.avgBatchSize = (1 - alpha) * this.metrics.avgBatchSize + alpha * metrics.entryCount;
@@ -467,8 +540,11 @@ export class EdgeTransport extends BaseTransport {
     }
   }
 
-  public getEntries(): ReadonlyArray<LogEntry<Record<string, unknown>>> {
-    return [...this.entries];
+  /**
+   * Returns a readonly view of all entries
+   */
+  public getEntries(): ReadonlyArray<Readonly<LogEntry<Record<string, unknown>>>> {
+    return Object.freeze([...this.entries]);
   }
 
   public onUpdate(callback: () => void): () => void {
@@ -543,14 +619,23 @@ export class EdgeTransport extends BaseTransport {
 
 
 
+  /**
+   * Returns current queue size
+   */
   public getQueueSize(): number {
     return this.queue.length;
   }
 
+  /**
+   * Returns current memory usage
+   */
   public getMemoryUsage(): number {
     return process.memoryUsage().heapUsed;
   }
 
+  /**
+   * Checks if memory is available
+   */
   public isMemoryAvailable(): boolean {
     return this.getMemoryUsage() < this.memoryLimit;
   }

@@ -2,21 +2,25 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "types": [
-      "vitest/globals",
-      "node"
+      "node",
+      "jest",
+      "@testing-library/jest-dom"
     ],
-    "outDir": "dist-test"
+    "outDir": "dist-test",
+    "jsx": "react-jsx"
   },
   "include": [
-    "src/**/*",
-    "__tests__/**/*",
-    "test/**/*",
+    "__tests__/**/*.ts",
+    "__tests__/**/*.tsx",
+    "__tests__/**/*.jsx",
+    "__tests__/**/*.js",
+    "test/**/*.ts",
+    "test/**/*.tsx",
     "vitest.config.ts",
-    "scripts/**/*"
+    "packages/*/test/**/*"
   ],
   "exclude": [
-    "node_modules",
-    "dist",
-    "dist-test"
+    "dist-test",
+    "examples"
   ]
 }

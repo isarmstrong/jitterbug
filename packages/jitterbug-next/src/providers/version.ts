@@ -1,4 +1,5 @@
 import React, { createContext, useContext, type ReactNode } from 'react';
+import type { NEXT_DATA } from 'next/dist/shared/lib/utils';
 
 export interface NextVersionInfo {
     major: number;
@@ -19,17 +20,34 @@ interface NextVersionContextValue {
 
 const NextVersionContext = createContext<NextVersionContextValue | null>(null);
 
+declare global {
+    interface Window {
+        React?: {
+            version: string;
+        };
+    }
+}
+
+// Augment the global scope
+declare global {
+    const __NEXT_DATA__: NEXT_DATA;
+}
+
 export function detectNextVersion(): NextVersionInfo {
     // Try to get version from Next.js data
-    const nextData = (globalThis as any)?.__NEXT_DATA__;
-    if (nextData?.version) {
-        const [major = 0, minor = 0, patch = 0] = nextData.version.split('.').map(Number);
-        console.log('[Jitterbug Version] Detected Next.js version from __NEXT_DATA__:', nextData.version);
-        return { major, minor, patch, raw: nextData.version };
+    try {
+        const nextData = window.__NEXT_DATA__;
+        if (nextData?.buildId) {  // Next.js doesn't expose version directly, use buildId as fallback
+            console.log('[Jitterbug Version] Found Next.js build ID:', nextData.buildId);
+            // Default to Next 15 if we find Next.js data
+            return { major: 15, minor: 0, patch: 0, raw: '15.0.0' };
+        }
+    } catch {
+        // Ignore errors accessing __NEXT_DATA__
     }
 
     // Fallback to checking React version for hints
-    const reactVersion = (globalThis as any)?.React?.version;
+    const reactVersion = window?.React?.version;
     if (reactVersion) {
         console.log('[Jitterbug Version] Found React version:', reactVersion);
         // Next.js version hints based on React version

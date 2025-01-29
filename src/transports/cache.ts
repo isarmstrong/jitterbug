@@ -1,6 +1,6 @@
 import type { LogEntry } from "../types/core";
 import { AsyncBaseTransport } from "./async-base";
-import { isValidNumber, isNonEmptyString } from "../types/guards";
+import { isNonEmptyString } from "../types/guards";
 
 export interface CacheConfig {
     maxEntries?: number;
@@ -43,13 +43,22 @@ export class CacheTransport extends AsyncBaseTransport {
             return;
         }
 
-        // Remove entries older than maxAge
+        // Remove entries older than maxAge with async validation
         const cutoff = now - this.config.maxAge;
-        this.entries = this.entries.filter(entry => {
-            const timestamp = entry.context?.timestamp;
-            if (!isNonEmptyString(timestamp)) return false;
-            return new Date(timestamp).getTime() > cutoff;
-        });
+        this.entries = await Promise.all(
+            this.entries.filter(async entry => {
+                const timestamp = entry.context?.timestamp;
+                if (!isNonEmptyString(timestamp)) return false;
+
+                // Add async validation for timestamp parsing
+                try {
+                    const time = await Promise.resolve(new Date(timestamp).getTime());
+                    return time > cutoff;
+                } catch {
+                    return false;
+                }
+            })
+        );
 
         this.lastRevalidation = now;
     }

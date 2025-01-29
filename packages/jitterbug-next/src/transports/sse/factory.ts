@@ -1,12 +1,34 @@
+import type { SSETransportConfig, LogType } from '../../types';
 import { Next13SSETransport } from './next13';
 import { Next14SSETransport } from './next14';
 import { Next15SSETransport } from './next15';
-import type { SSETransportConfig } from '../../types';
 
 type NextVersion = '13' | '14' | '15';
 
 interface SSETransportOptions extends SSETransportConfig {
     forceVersion?: NextVersion;
+}
+
+/**
+ * Type guard for Next.js build data
+ * Only checks for buildId as it's the most stable feature across versions
+ */
+function isNextBuildData(data: unknown): data is { buildId: string } {
+    return typeof data === 'object' &&
+        data !== null &&
+        'buildId' in data &&
+        typeof (data as { buildId: unknown }).buildId === 'string';
+}
+
+/**
+ * Safely checks for Next.js build data in the window object
+ * Uses type narrowing instead of global augmentation
+ */
+function getNextBuildData(): { buildId: string } | undefined {
+    if (typeof window === 'undefined') return undefined;
+
+    const data = (window as { __NEXT_DATA__?: unknown }).__NEXT_DATA__;
+    return isNextBuildData(data) ? data : undefined;
 }
 
 async function detectNextVersion(): Promise<NextVersion> {
@@ -19,13 +41,13 @@ async function detectNextVersion(): Promise<NextVersion> {
         }
     } catch {
         // Fallback detection logic
-        if (typeof window !== 'undefined') {
-            // Client-side detection based on features
-            if ((window as any).__NEXT_DATA__?.buildId) {
-                return '15'; // Next 15 always includes buildId
-            }
-        } else {
-            // Server-side detection based on available APIs
+        const buildData = getNextBuildData();
+        if (buildData?.buildId) {
+            return '15'; // Next 15 always includes buildId
+        }
+
+        // Server-side detection based on available APIs
+        if (typeof window === 'undefined') {
             try {
                 await import('next/headers');
                 return '15'; // headers export was changed in Next 15
@@ -63,7 +85,7 @@ export async function createSSETransport(options: SSETransportOptions) {
             return transport.handleRequest(req);
         },
 
-        async write(data: any): Promise<void> {
+        async write(data: LogType): Promise<void> {
             return transport.write(data);
         },
 

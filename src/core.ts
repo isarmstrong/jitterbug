@@ -15,7 +15,7 @@ import type {
   LogLevel,
 } from "./types";
 import { processLog, writeLog } from "./logger";
-import { isLogLevel, isRuntimeType, isEnvironmentType } from './types/guards';
+import { isLogLevel, isEnvironmentType } from './types/guards';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -27,12 +27,14 @@ declare global {
  */
 class RuntimeDetector {
   static detectRuntime(): RuntimeType {
-    if (typeof EdgeRuntime !== "undefined") return Runtime.EDGE;
+    if (typeof EdgeRuntime === "string" && EdgeRuntime.length > 0) return Runtime.EDGE;
 
     if (
-      typeof window !== "undefined" &&
-      typeof window.document !== "undefined" &&
-      typeof window.document.createElement !== "undefined"
+      typeof window === "object" &&
+      window !== null &&
+      typeof window.document === "object" &&
+      window.document !== null &&
+      typeof window.document.createElement === "function"
     ) {
       return Runtime.BROWSER;
     }
@@ -41,9 +43,10 @@ class RuntimeDetector {
   }
 
   static detectEnvironment(): EnvironmentType {
-    const hasProcess = typeof process !== "undefined";
-    const hasEnv =
-      hasProcess && process.env !== undefined && process.env !== null;
+    const hasProcess = typeof process === "object" && process !== null;
+    const hasEnv = hasProcess &&
+      typeof process.env === "object" &&
+      process.env !== null;
     const nodeEnv = hasEnv ? process.env.NODE_ENV : undefined;
 
     if (isEnvironmentType(nodeEnv)) {
@@ -71,8 +74,10 @@ export class JitterbugImpl implements JitterbugInstance {
       transports: config.transports ?? [],
       processors: config.processors ?? [],
       enabled: config.enabled ?? true,
-      level: config.level ? this.normalizeLogLevel(config.level) : LogLevels.INFO,
-      minLevel: (config.minLevel != null)
+      level: config.level !== undefined && config.level !== null
+        ? this.normalizeLogLevel(config.level)
+        : LogLevels.INFO,
+      minLevel: config.minLevel !== undefined && config.minLevel !== null
         ? this.normalizeLogLevel(config.minLevel)
         : this.normalizeLogLevel(config.level ?? LogLevels.INFO),
       onError: config.onError ?? this.onError,
@@ -236,7 +241,7 @@ export class JitterbugImpl implements JitterbugInstance {
     if (!this.enabled) return;
 
     if (!isLogLevel(level)) {
-      this.onWarn(`Invalid log level: ${level}`);
+      this.onWarn(`Invalid log level: ${String(level)}`);
       return;
     }
 
@@ -281,6 +286,11 @@ export function createDebug(
       ? appName.trim()
       : defaultNamespace;
 
+  // Ensure namespace is a valid string
+  const safeNamespace = typeof namespace === "string" && namespace.trim().length > 0
+    ? namespace.trim()
+    : "default";
+
   const baseConfig: JitterbugConfig = {
     namespace: baseNamespace,
     runtime: config.runtime ?? RuntimeDetector.detectRuntime(),
@@ -294,9 +304,12 @@ export function createDebug(
     onWarn: config.onWarn ?? ((warning: string): void => console.warn("Warning in Jitterbug:", warning))
   };
 
+  // Create a type-safe namespace string
+  const combinedNamespace = `${baseNamespace}:${safeNamespace}`;
+
   return createJitterbug({
     ...baseConfig,
-    namespace: `${baseNamespace}:${namespace}`,
+    namespace: combinedNamespace,
     ...config,
   });
 }

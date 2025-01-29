@@ -25,7 +25,7 @@ export class Next14SSETransport extends BaseSSETransport {
     }
 
     private getClientId(req: Request): string {
-        const matches = req.url.match(/\/logs\/([^\/\?]+)/);
+        const matches = req.url.match(/\/logs\/([^/]+)/);
         return matches?.[1] || `client-${Date.now()}`;
     }
 

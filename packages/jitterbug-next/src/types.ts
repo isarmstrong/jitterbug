@@ -2,7 +2,33 @@ import { Environment, Runtime } from '@isarmstrong/jitterbug';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'ERROR';
 
-export interface ErrorContext {
+export type BaseErrorValue = string | number | boolean | null;
+export type ErrorValue = BaseErrorValue | Record<string, BaseErrorValue | undefined> | BaseErrorValue[];
+
+export interface EventLoopMetrics {
+    lag?: number;
+    samples?: number;
+}
+
+export interface MemoryUsageMetrics {
+    heapUsed?: number;
+    heapTotal?: number;
+    external?: number;
+}
+
+export interface LogMetrics {
+    samples?: number;
+    eventLoop?: EventLoopMetrics;
+    memoryUsage?: MemoryUsageMetrics;
+}
+
+export interface SimilarError {
+    message: string;
+    stack?: string;
+    timestamp: number;
+}
+
+export interface ErrorContextValue {
     errorId?: string;
     errorType?: string;
     errorMessage?: string;
@@ -12,12 +38,10 @@ export interface ErrorContext {
     lastOccurrence?: number;
     patternId?: string;
     errorGroup?: string;
-    similarErrors?: Array<{
-        message: string;
-        stack?: string;
-        timestamp: number;
-    }>;
+    similarErrors?: SimilarError[];
 }
+
+export type ErrorContext = ErrorContextValue;
 
 export interface LogContext {
     runtime?: string;
@@ -25,19 +49,14 @@ export interface LogContext {
     namespace?: string;
     timestamp?: string;
     error?: ErrorContext;
-    metrics?: {
-        samples?: number;
-        eventLoop?: {
-            lag?: number;
-            samples?: number;
-        };
-        memoryUsage?: {
-            heapUsed?: number;
-            heapTotal?: number;
-            external?: number;
-        };
-    };
-    [key: string]: any;
+    metrics?: LogMetrics;
+    [key: string]: BaseErrorValue | ErrorContext | LogMetrics | undefined;
+}
+
+export interface LogMetadata {
+    queueTime?: number;
+    sequence?: number;
+    _size?: number;
 }
 
 export interface LogType {
@@ -45,12 +64,8 @@ export interface LogType {
     level: LogLevel;
     timestamp: string;
     context?: LogContext;
-    error?: Record<string, any>;
-    _metadata?: {
-        queueTime?: number;
-        sequence?: number;
-        _size?: number;
-    };
+    error?: Record<string, BaseErrorValue>;
+    _metadata?: LogMetadata;
 }
 
 export interface LogHandlerConfig {

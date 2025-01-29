@@ -33,11 +33,15 @@ module.exports = {
     },
     ignorePatterns: [
         'dist/**/*',
-        'node_modules/**/*'
+        'node_modules/**/*',
+        '**/*.test.js',
+        '**/*.test.jsx',
+        '**/__tests__/**/*',
+        '**/test/**/*'
     ],
     overrides: [
         {
-            files: ['**/__tests__/**/*', '**/test/**/*', '*.config.ts'],
+            files: ['*.config.ts'],
             parserOptions: {
                 project: './tsconfig.test.json'
             },

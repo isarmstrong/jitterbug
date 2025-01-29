@@ -1,5 +1,7 @@
 import type { LogEntry, LogProcessor } from "../types/core";
 import { Runtime, Environment } from "../types/enums";
+import type { RuntimeType, EnvironmentType } from "../types/enums";
+import { isRuntimeType, isEnvironmentType } from "../types/guards";
 
 interface MetricsData {
   timestamp: number;
@@ -15,20 +17,25 @@ interface MetricsData {
   };
 }
 
+/**
+ * Processor that collects system metrics at specified intervals.
+ * Uses type-safe runtime detection and proper async boundaries.
+ */
 export class MetricsProcessor implements LogProcessor {
   private lastCheck: number = 0;
   private readonly interval: number;
+  private metricsPromise: Promise<MetricsData> | null = null;
 
   constructor(interval: number = 1000) {
     this.interval = interval;
   }
 
-  public supports(runtime: string): boolean {
-    return runtime === Runtime.NODE || runtime === Runtime.EDGE;
+  public supports(runtime: unknown): runtime is RuntimeType {
+    return isRuntimeType(runtime) && (runtime === Runtime.NODE || runtime === Runtime.EDGE);
   }
 
-  public allowedIn(environment: string): boolean {
-    return environment !== Environment.TEST;
+  public allowedIn(environment: unknown): environment is EnvironmentType {
+    return isEnvironmentType(environment) && environment !== Environment.TEST;
   }
 
   public async process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>> {
@@ -38,24 +45,34 @@ export class MetricsProcessor implements LogProcessor {
     }
 
     this.lastCheck = now;
-    const metrics = await this.collectMetrics();
+
+    // Reuse in-flight metrics collection if one exists
+    if (!this.metricsPromise) {
+      this.metricsPromise = this.collectMetrics().finally(() => {
+        this.metricsPromise = null;
+      });
+    }
+
+    const metrics = await this.metricsPromise;
 
     return {
-      level: entry.level,
-      message: entry.message,
+      ...entry,
       data: {
         ...(entry.data as Record<string, unknown>),
         metrics
-      },
-      error: entry.error,
-      context: entry.context
+      }
     };
   }
 
   private async collectMetrics(): Promise<MetricsData> {
     const start = performance.now();
-    const memory = this.getMemoryMetrics();
-    const cpu = this.getCPUMetrics();
+
+    // Collect metrics concurrently
+    const [memory, cpu] = await Promise.all([
+      this.getMemoryMetricsAsync(),
+      this.getCPUMetricsAsync()
+    ]);
+
     const duration = performance.now() - start;
 
     return {
@@ -66,13 +83,19 @@ export class MetricsProcessor implements LogProcessor {
     };
   }
 
-  private getMemoryMetrics() {
-    if (typeof process !== "undefined" && process.memoryUsage) {
+  private async getMemoryMetricsAsync(): Promise<MetricsData['memory']> {
+    // Ensure consistent async context
+    await Promise.resolve();
+
+    if (typeof process === "object" && process !== null && typeof process.memoryUsage === "function") {
       const { heapUsed, heapTotal, external } = process.memoryUsage();
       return { heapUsed, heapTotal, external };
     }
 
-    if (typeof performance !== "undefined" && performance.memory) {
+    if (typeof performance === "object" &&
+      performance !== null &&
+      typeof performance.memory === "object" &&
+      performance.memory !== null) {
       const { usedJSHeapSize, totalJSHeapSize } = performance.memory;
       return {
         heapUsed: usedJSHeapSize,
@@ -88,8 +111,13 @@ export class MetricsProcessor implements LogProcessor {
     };
   }
 
-  private getCPUMetrics() {
-    if (typeof process !== "undefined" && process.cpuUsage) {
+  private async getCPUMetricsAsync(): Promise<MetricsData['cpu']> {
+    // Ensure consistent async context
+    await Promise.resolve();
+
+    if (typeof process === "object" &&
+      process !== null &&
+      typeof process.cpuUsage === "function") {
       const { user, system } = process.cpuUsage();
       return { user, system };
     }
