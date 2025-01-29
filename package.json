@@ -23,6 +23,12 @@
             "import": "./dist/src/processors/*.js",
             "require": "./dist/src/processors/*.js",
             "default": "./dist/src/processors/*.js"
+        },
+        "./extensions/*": {
+            "types": "./dist/src/extensions/*.d.ts",
+            "import": "./dist/src/extensions/*.js",
+            "require": "./dist/src/extensions/*.js",
+            "default": "./dist/src/extensions/*.js"
         }
     },
     "files": [
