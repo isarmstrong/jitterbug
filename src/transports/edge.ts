@@ -198,7 +198,7 @@ export class EdgeTransport implements LogTransport {
         return;
       }
 
-      let batch = [];
+      const batch = [];
       let payloadSize = 0;
       const batchId = crypto.randomUUID();
       const batchMetrics: BatchMetrics = {
