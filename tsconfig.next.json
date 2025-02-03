@@ -1,0 +1,23 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "baseUrl": "./",
+        "paths": {
+            "@components/*": [
+                "src/next/components/*"
+            ],
+            "@hooks/*": [
+                "src/next/hooks/*"
+            ],
+            "@lib/*": [
+                "src/next/lib/*"
+            ],
+            "@types/*": [
+                "src/next/types/*"
+            ]
+        }
+    },
+    "include": [
+        "src/next/**/*"
+    ]
+}

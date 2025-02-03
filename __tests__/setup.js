@@ -1,4 +1,4 @@
-const { vi } = require("vitest");
+import { vi } from 'vitest';
 
 // Mock environment variables
 const env = {
