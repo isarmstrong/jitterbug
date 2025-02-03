@@ -1,8 +1,8 @@
 import {
   type LogEntry,
-  type LogTransport,
   type LogLevel,
   LogLevels,
+  type LogTransport,
 } from "../types";
 
 /**
@@ -51,12 +51,12 @@ export abstract class BaseTransport implements LogTransport {
       return JSON.stringify(entry);
     }
 
-    const timestamp = new Date(entry.context.timestamp).toISOString();
+    const timestamp = new Date(Number(entry.context?.timestamp ?? 0)).toISOString();
     const level = entry.level.padEnd(5);
-    const namespace = entry.context.namespace;
+    const namespace = String(entry.context?.namespace ?? "");
     const message = entry.message;
-    const data = entry.data ? JSON.stringify(entry.data) : "";
-    const error = entry.error ? `\n${entry.error.stack}` : "";
+    const data = (entry as any).data ? JSON.stringify((entry as any).data) : "";
+    const error = (entry as any).error ? `\n${(entry as any).error.stack}` : "";
 
     return `[${timestamp}] ${level} ${namespace}: ${message}${data}${error}`;
   }

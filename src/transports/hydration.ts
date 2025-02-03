@@ -1,4 +1,4 @@
-import { LogEntry, LogTransport, LogLevel, Runtime } from "../types";
+import { LogEntry, LogTransport, Runtime } from "../types";
 import { BaseTransport, TransportConfig } from "./types";
 
 export interface HydrationMetrics {
@@ -98,15 +98,15 @@ export class HydrationTransport extends BaseTransport implements LogTransport {
         entry: LogEntry<T>
     ): boolean {
         return (
-            entry.context.runtime === Runtime.BROWSER &&
-            entry.data?.type === 'hydration'
+            entry.context?.runtime === Runtime.BROWSER &&
+            (entry as any).data?.type === 'hydration'
         );
     }
 
     private parseHydrationEvent<T extends Record<string, unknown>>(
         entry: LogEntry<T>
     ): HydrationEvent | null {
-        const data = entry.data as Record<string, unknown>;
+        const data = (entry as any).data as Record<string, unknown>;
 
         if (!data.eventType || typeof data.eventType !== 'string') {
             return null;
@@ -116,7 +116,7 @@ export class HydrationTransport extends BaseTransport implements LogTransport {
             type: data.eventType as HydrationEvent['type'],
             component: data.component as string | undefined,
             duration: typeof data.duration === 'number' ? data.duration : 0,
-            timestamp: new Date(entry.context.timestamp).getTime(),
+            timestamp: new Date(Number(entry.context?.timestamp ?? 0)).getTime(),
             error: data.error as Error | undefined,
             mismatchType: data.mismatchType as HydrationEvent['mismatchType'],
             details: data.details as Record<string, unknown> | undefined

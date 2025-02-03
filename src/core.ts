@@ -1,21 +1,6 @@
-import {
-  LogLevels,
-  Runtime,
-  Environment,
-} from "./types/index.js";
-import type {
-  JitterbugInstance,
-  JitterbugConfig,
-  LogContext,
-  LogEntry,
-  JitterbugFactory,
-  RuntimeType,
-  EnvironmentType,
-  LogTransport,
-  LogProcessor,
-  LogLevel,
-} from "./types/index.js";
 import { processLog, writeLog } from "./logger.js";
+import type { EnvironmentType, JitterbugConfig, JitterbugFactory, JitterbugInstance, LogContext, LogEntry, LogLevel, LogTransport, RuntimeType } from "./types/index";
+import { Environment, LogLevels, Runtime } from "./types/index";
 
 declare global {
   // eslint-disable-next-line no-var

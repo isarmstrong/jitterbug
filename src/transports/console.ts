@@ -1,5 +1,5 @@
+import type { LogEntry, LogTransport } from "../types";
 import { LogLevels } from "../types";
-import type { LogEntry, LogLevel, LogTransport } from "../types";
 import { BaseTransport, type TransportConfig } from "./types";
 
 /**
@@ -41,18 +41,18 @@ export class ConsoleTransport extends BaseTransport implements LogTransport {
   }
 
   async write<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void> {
-    const level = entry.level.toUpperCase() as keyof typeof LogLevels;
-    const method = this.methods[level];
+    const e = entry as unknown as LogEntry<T>;
+    const levelKey = e.level.toUpperCase() as keyof typeof LogLevels;
+    const method = this.methods[levelKey];
 
-    if (!this.shouldLog(level)) return Promise.resolve();
+    if (!this.shouldLog(levelKey)) return Promise.resolve();
 
-    const message = this.formatEntry(entry);
+    const message = this.formatEntry(e);
 
-    // Browser-friendly console output
-    if (entry.error) {
-      console[method](message, entry.error);
-    } else if (entry.data) {
-      console[method](message, entry.data);
+    if ('error' in e && e.error && e.error instanceof Error) {
+      console[method](message, e.error);
+    } else if ('data' in e && e.data) {
+      console[method](message, e.data);
     } else {
       console[method](message);
     }
@@ -60,19 +60,23 @@ export class ConsoleTransport extends BaseTransport implements LogTransport {
     return Promise.resolve();
   }
 
-  protected override formatEntry<T extends Record<string, unknown>>(
-    entry: LogEntry<T>,
-  ): string {
-    const timestamp = entry.context.timestamp;
-    const level = entry.level.toUpperCase() as keyof typeof LogLevels;
-    const namespace = entry.context.namespace;
-    const message = entry.message;
-    const color = this.colors[level];
+  protected override formatEntry<T extends Record<string, unknown>>(entry: LogEntry<T>): string {
+    const e = entry as unknown as LogEntry<T>;
+    const timestamp = e.context && typeof e.context.timestamp === 'string'
+      ? new Date(e.context.timestamp).toISOString()
+      : 'unknown';
+    const levelKey = e.level.toUpperCase() as keyof typeof LogLevels;
+    const namespace = e.context && typeof e.context.namespace === 'string'
+      ? e.context.namespace
+      : 'unknown';
+    const message = e.message;
+    const errorInfo = 'error' in e && e.error instanceof Error ? ` Error: ${e.error.message}` : '';
+    const dataInfo = 'data' in e && e.data ? ` Data: ${JSON.stringify(e.data)}` : '';
 
     if (this.config.colors) {
-      return `${color}[${timestamp}] ${level} ${namespace}:${this.reset} ${message}`;
+      return `${this.colors[levelKey]}[${timestamp}] ${levelKey} ${namespace}:${this.reset} ${message}${errorInfo}${dataInfo}`;
     }
 
-    return `[${timestamp}] ${level} ${namespace}: ${message}`;
+    return `[${timestamp}] ${levelKey} ${namespace}: ${message}${errorInfo}${dataInfo}`;
   }
 }

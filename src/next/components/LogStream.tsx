@@ -1,9 +1,8 @@
 'use client';
 
+import type { LogType } from '@/types/index';
 import React, { useEffect, useState } from 'react';
-import { useEventSource } from '../hooks/useEventSource';
-import { logger } from '../lib/logger';
-import type { LogType } from '@isarmstrong/jitterbug-next';
+import { EConnectionState, useEventSource } from '../hooks/useEventSource';
 
 export const LogStream: React.FC = () => {
     const { status, messages, error } = useEventSource();
@@ -51,11 +50,11 @@ export const LogStream: React.FC = () => {
             </div>
 
             <div className="text-sm text-gray-500">
-                {status === 'OPEN' ? (
+                {status === EConnectionState.CONNECTED ? (
                     <span className="text-green-600">● Connected</span>
-                ) : status === 'CONNECTING' ? (
+                ) : status === EConnectionState.CONNECTING ? (
                     <span className="text-yellow-600">◌ Connecting...</span>
-                ) : status === 'ERROR' ? (
+                ) : status === EConnectionState.FAILED ? (
                     <span className="text-red-600">✕ Connection Error</span>
                 ) : (
                     <span className="text-gray-600">○ Disconnected</span>

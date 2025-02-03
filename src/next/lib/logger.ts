@@ -1,31 +1,13 @@
-'use client';
-
-import type { LogType } from '@isarmstrong/jitterbug-next';
-
-const DEBUG_NAMESPACE = 'jitterbug:test';
-
+// Core logger types
 interface Logger {
     info: (message: string, data?: any) => void;
     warn: (message: string, data?: any) => void;
     error: (message: string, data?: any) => void;
 }
 
-// Simple client ID generation
-export const getClientId = () => {
-    if (typeof window === 'undefined') return 'server';
+const DEBUG_NAMESPACE = 'jitterbug:test';
 
-    const storageKey = 'jitterbug_client_id';
-    let clientId = localStorage.getItem(storageKey);
-
-    if (!clientId) {
-        clientId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        localStorage.setItem(storageKey, clientId);
-    }
-
-    return clientId;
-};
-
-// Direct console logging
+// Direct console logging (works in both environments)
 function log(level: string, message: string, data?: any) {
     const timestamp = new Date().toISOString();
     const prefix = `[${timestamp}] [${DEBUG_NAMESPACE}] [${level.toUpperCase()}]`;

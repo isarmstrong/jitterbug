@@ -1,4 +1,4 @@
-import type { LogLevel, ProcessedLogEntry } from './types/core';
+import type { LogLevel, ProcessedLogEntry } from './types';
 
 interface CacheKeyParams {
   level: LogLevel;

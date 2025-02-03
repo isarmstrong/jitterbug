@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { LogStream } from '../components/LogStream';
-import { logger } from '../lib/logger';
-import { triggerServerError } from './actions';
+import { LogStream } from '../../components/LogStream';
+import { logger } from '../../lib/logger';
 
 // Function to cause a type error
 function causeTypeError(): never {
@@ -41,11 +40,10 @@ export default function Home() {
   const handleServerError = async () => {
     setIsLoading(true);
     try {
-      await triggerServerError();
+      throw new Error("Simulated server error");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      setLastError(errorMessage);
-      logger.error('Server-side error occurred', error instanceof Error ? error : new Error(errorMessage));
+      console.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

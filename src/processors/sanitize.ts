@@ -1,5 +1,4 @@
-import type { LogEntry, LogProcessor, RuntimeType } from "../types";
-import { Runtime } from "../types";
+import type { EnvironmentType, LogEntry, LogProcessor, RuntimeType } from '../types/index';
 
 /**
  * Sanitize processor configuration
@@ -24,6 +23,7 @@ export interface SanitizeConfig {
  */
 export class SanitizeProcessor implements LogProcessor {
   private readonly config: Required<SanitizeConfig>;
+  private sensitiveKeys: string[];
 
   /**
    * @deprecated Since version 1.1.0. Will be removed in version 2.0.0.
@@ -48,34 +48,29 @@ export class SanitizeProcessor implements LogProcessor {
       replacement: config?.replacement ?? "[REDACTED]",
       sanitizeArrays: config?.sanitizeArrays ?? false,
     };
+    this.sensitiveKeys = this.config.sensitiveKeys as string[];
   }
 
-  supports(runtime: RuntimeType): boolean {
-    return (
-      runtime === Runtime.NODE ||
-      runtime === Runtime.EDGE ||
-      runtime === Runtime.BROWSER
-    );
+  public async process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>> {
+    const sourceData = entry.data ?? ({} as T);
+    // Sanitize by removing sensitive keys
+    const sanitizedData = { ...sourceData };
+    for (const key of this.sensitiveKeys) {
+      if (key in sanitizedData) {
+        delete sanitizedData[key as keyof T];
+      }
+    }
+    return { ...entry, data: sanitizedData } as LogEntry<T>;
   }
 
-  allowedIn(): boolean {
+  public supports(runtime: RuntimeType): boolean {
+    // Supports all runtimes for now
     return true;
   }
 
-  public process<T extends Record<string, unknown>>(
-    entry: LogEntry<T>,
-  ): Promise<LogEntry<T>> {
-    // Ensure we have a valid data object to work with
-    const sourceData = entry.data ?? ({} as T);
-
-    // Type-safe sanitization with runtime validation
-    const sanitizedData = this.sanitizeObject(sourceData);
-
-    // Construct new entry with validated data
-    return Promise.resolve({
-      ...entry,
-      data: sanitizedData,
-    });
+  public allowedIn(environment: EnvironmentType): boolean {
+    // Allowed in all environments for now
+    return true;
   }
 
   private sanitizeObject<T extends Record<string, unknown>>(obj: T): T {
@@ -121,7 +116,7 @@ export class SanitizeProcessor implements LogProcessor {
   }
 
   private shouldSanitize(key: string): boolean {
-    return this.config.sensitiveKeys.some((pattern: string | RegExp) =>
+    return this.sensitiveKeys.some((pattern: string | RegExp) =>
       typeof pattern === "string"
         ? key.toLowerCase().includes(pattern.toLowerCase())
         : pattern.test(key),

@@ -1,6 +1,6 @@
+import * as semver from "semver";
 import { LogEntry, LogTransport, Runtime } from "../types";
 import { BaseTransport, TransportConfig } from "./types";
-import * as semver from "semver";
 
 interface EdgeRuntimeGlobal {
     name: string;
@@ -179,13 +179,13 @@ export class VersionTransport extends BaseTransport implements LogTransport {
     private isVersionEntry<T extends Record<string, unknown>>(
         entry: LogEntry<T>
     ): boolean {
-        return entry.data?.type === 'version';
+        return (entry as any).data?.type === 'version';
     }
 
     private parseVersionEvent<T extends Record<string, unknown>>(
         entry: LogEntry<T>
     ): VersionEvent | null {
-        const data = entry.data as Record<string, unknown>;
+        const data = (entry as any).data as Record<string, unknown>;
 
         if (!data.eventType || typeof data.eventType !== 'string') {
             return null;

@@ -1,10 +1,18 @@
 'use client';
 
+import type { LogType, SerializedLogType } from '@/types/index';
+import { isSerializedErrorLog } from '@/types/index';
 import { useEffect, useState } from 'react';
-import type { ConnectionState, LogType, SerializedLogType, isSerializedErrorLog } from '../../types';
-import { getClientId } from '../lib/logger';
+import { getClientId } from '../lib/client';
 
-type EventSourceStatus = ConnectionState;
+export enum EConnectionState {
+    CONNECTING = 'CONNECTING',
+    CONNECTED = 'CONNECTED',
+    FAILED = 'FAILED',
+    DISCONNECTED = 'DISCONNECTED'
+}
+
+type EventSourceStatus = EConnectionState;
 
 interface UseEventSourceResult {
     status: EventSourceStatus;
@@ -13,7 +21,7 @@ interface UseEventSourceResult {
 }
 
 export function useEventSource(): UseEventSourceResult {
-    const [status, setStatus] = useState<EventSourceStatus>('CLOSED');
+    const [status, setStatus] = useState<EConnectionState>(EConnectionState.DISCONNECTED);
     const [messages, setMessages] = useState<LogType[]>([]);
     const [error, setError] = useState<Error | null>(null);
     const [eventSource, setEventSource] = useState<EventSource | null>(null);
@@ -24,15 +32,15 @@ export function useEventSource(): UseEventSourceResult {
 
         const es = new EventSource(url);
         setEventSource(es);
-        setStatus('CONNECTING');
+        setStatus(EConnectionState.CONNECTING);
 
         es.onopen = () => {
-            setStatus('OPEN');
+            setStatus(EConnectionState.CONNECTED);
             setError(null);
         };
 
         es.onerror = (e) => {
-            setStatus('ERROR');
+            setStatus(EConnectionState.FAILED);
             setError(new Error('EventSource failed to connect'));
             es.close();
         };
@@ -55,7 +63,7 @@ export function useEventSource(): UseEventSourceResult {
 
         return () => {
             es.close();
-            setStatus('CLOSED');
+            setStatus(EConnectionState.DISCONNECTED);
         };
     }, []);
 

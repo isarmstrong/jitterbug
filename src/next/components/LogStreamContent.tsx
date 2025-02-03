@@ -1,7 +1,9 @@
+'use client';
+
+import type { LogType } from '@/types/index';
 import React from 'react';
 import { useEventSource } from '../hooks/useEventSource';
 import { logger } from '../lib/logger';
-import type { LogType } from '@isarmstrong/jitterbug-next';
 
 export const LogStreamContent: React.FC = () => {
     const { status, messages = [], error } = useEventSource();

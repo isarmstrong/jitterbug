@@ -70,6 +70,9 @@ export interface LogEntry<T = Record<string, unknown>> {
     warnings?: string[];
 }
 
+// Temporary fix: Define ProcessedLogEntry as a generic alias for LogEntry
+export type ProcessedLogEntry<T = Record<string, unknown>> = LogEntry<T>;
+
 // Pool C: Implementation Interfaces
 export interface LogProcessor {
     process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>>;

@@ -1,18 +1,17 @@
 import React, {
-  useEffect,
-  useState,
-  useMemo,
-  useCallback,
-  type ReactElement,
-  useRef,
-  useTransition,
+  Component,
   Suspense,
-  Component
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type ReactElement
 } from "react";
 import type { LogEntry } from "../types";
-import { GUITransport } from "./gui-transport";
 import type { GUITransportState } from "./gui-transport";
-import { GUI_DEFAULTS } from '../config/defaults';
+import { GUITransport } from "./gui-transport";
 
 interface GUIProps {
   maxEntries?: number;
@@ -165,3 +164,5 @@ export function GUI(props: GUIProps): ReactElement {
     </GUIErrorBoundary>
   );
 }
+
+export { GUITransport };

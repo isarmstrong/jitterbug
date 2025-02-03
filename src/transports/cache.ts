@@ -1,4 +1,4 @@
-import { LogEntry, LogTransport, LogLevel } from "../types";
+import { LogEntry, LogLevel, LogTransport } from "../types";
 import { BaseTransport, TransportConfig } from "./types";
 
 export interface CacheMetrics {
@@ -86,7 +86,7 @@ export class CacheTransport extends BaseTransport implements LogTransport {
         level: LogLevel,
         timestamp?: number
     ): Promise<LogEntry<T> | null> {
-        const key = this.generateKeyFromParts(namespace, level, timestamp);
+        const key = this.generateKeyFromParts(level, String(namespace), timestamp);
         const now = Date.now();
         const entry = this.cache.get(key);
 
@@ -160,18 +160,18 @@ export class CacheTransport extends BaseTransport implements LogTransport {
 
     private generateKey(entry: LogEntry<Record<string, unknown>>): string {
         return this.generateKeyFromParts(
-            entry.context.namespace,
-            entry.level,
-            new Date(entry.context.timestamp).getTime()
+            entry.level as LogLevel,
+            String(entry.context?.namespace ?? ""),
+            new Date(Number(entry.context?.timestamp ?? 0)).getTime()
         );
     }
 
     private generateKeyFromParts(
-        namespace: string,
         level: LogLevel,
+        namespace: string,
         timestamp?: number
     ): string {
-        return `${namespace}:${level}${timestamp ? `:${timestamp}` : ''}`;
+        return `${level}:${namespace}${timestamp ? `:${timestamp}` : ''}`;
     }
 
     private evictOldest(): void {

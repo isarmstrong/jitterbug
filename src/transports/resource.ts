@@ -1,4 +1,4 @@
-import { LogEntry, LogTransport, Runtime } from "../types";
+import { LogEntry, LogTransport } from "../types";
 import { BaseTransport, TransportConfig } from "./types";
 
 export interface ResourceMetrics {
@@ -120,13 +120,13 @@ export class ResourceTransport extends BaseTransport implements LogTransport {
     private isResourceEntry<T extends Record<string, unknown>>(
         entry: LogEntry<T>
     ): boolean {
-        return entry.data?.type === 'resource';
+        return (entry as any).data?.type === 'resource';
     }
 
     private processResourceEvent<T extends Record<string, unknown>>(
         entry: LogEntry<T>
     ): void {
-        const data = entry.data as Record<string, unknown>;
+        const data = (entry as any).data as Record<string, unknown>;
 
         switch (data.eventType) {
             case 'connection':

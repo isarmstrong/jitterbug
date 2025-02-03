@@ -1,8 +1,35 @@
-export * from './core';
+/**
+ * Consolidated core type definitions for Jitterbug
+ */
 
-// Internal types (full type information)
-export type LogLevel = 'info' | 'warn' | 'error';
+/* Pool A: Core Constants */
+export const LogLevels = Object.freeze({
+    DEBUG: "DEBUG",
+    INFO: "INFO",
+    WARN: "WARN",
+    ERROR: "ERROR",
+    FATAL: "FATAL",
+} as const);
 
+export const Runtime = Object.freeze({
+    EDGE: "EDGE",
+    NODE: "NODE",
+    BROWSER: "BROWSER",
+} as const);
+
+export const Environment = Object.freeze({
+    DEVELOPMENT: "DEVELOPMENT",
+    STAGING: "STAGING",
+    PRODUCTION: "PRODUCTION",
+    TEST: "TEST",
+} as const);
+
+/* Core Types */
+export type LogLevel = keyof typeof LogLevels | Lowercase<keyof typeof LogLevels>;
+export type RuntimeType = keyof typeof Runtime;
+export type EnvironmentType = keyof typeof Environment;
+
+/* Log Interfaces */
 export interface BaseLog {
     timestamp: string;
     level: LogLevel;
@@ -10,40 +37,127 @@ export interface BaseLog {
 }
 
 export interface InfoLog extends BaseLog {
-    level: 'info';
+    level: 'INFO' | 'info';
     data?: unknown;
 }
 
 export interface WarnLog extends BaseLog {
-    level: 'warn';
+    level: 'WARN' | 'warn';
     data?: unknown;
 }
 
 export interface ErrorLog extends BaseLog {
-    level: 'error';
+    level: 'ERROR' | 'error';
     error: Error;
     stack?: string;
 }
 
-// Wire types (serialization-safe)
+/* Serialized Log */
 export interface SerializedErrorLog extends Omit<ErrorLog, 'error'> {
-    level: 'error';
+    level: 'ERROR' | 'error';
     errorMessage: string;
     errorName: string;
     errorStack?: string;
 }
 
 export type SerializedLogType = InfoLog | WarnLog | SerializedErrorLog;
-
-// Type guards for runtime validation
-export const isSerializedErrorLog = (log: SerializedLogType): log is SerializedErrorLog =>
-    log.level === 'error' && 'errorMessage' in log;
-
-// Connection states (shared between client/server)
-export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'failed';
-
-// Re-export core types to maintain single source of truth
-export type { EdgeBoundaryLayer } from './ebl/core';
-
-// Add back the LogType export that was accidentally removed
 export type LogType = InfoLog | WarnLog | ErrorLog;
+
+/* Type Guard */
+export const isSerializedErrorLog = (log: SerializedLogType): log is SerializedErrorLog =>
+    (log.level === 'ERROR' || log.level === 'error') && 'errorMessage' in log;
+
+/* Extended Core Interfaces */
+export interface RequestContext {
+    url?: string;
+    method?: string;
+    headers?: Record<string, string>;
+    params?: Record<string, string>;
+    query?: Record<string, string>;
+    body?: unknown;
+    requestId?: string;
+    duration?: number;
+    status?: number;
+}
+
+export interface CacheContext {
+    operation: "get" | "set" | "delete" | "has" | "clear";
+    key: string;
+    ttl?: number;
+    size?: number;
+    hit?: boolean;
+    duration?: number;
+}
+
+export interface LogContext {
+    timestamp: string;
+    runtime: RuntimeType;
+    environment: EnvironmentType;
+    namespace: string;
+    request?: RequestContext;
+    cache?: CacheContext;
+    [key: string]: unknown;
+}
+
+export interface LogEntry<T = Record<string, unknown>> {
+    level: LogLevel;
+    message: string;
+    data?: T;
+    error?: Error;
+    context: LogContext;
+    warnings?: string[];
+}
+
+export type ProcessedLogEntry<T = Record<string, unknown>> = LogEntry<T>;
+
+/* Implementation Interfaces */
+export interface LogProcessor {
+    process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>>;
+    supports(runtime: RuntimeType): boolean;
+    allowedIn(environment: EnvironmentType): boolean;
+}
+
+export interface LogTransport {
+    write<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void>;
+}
+
+/* Configuration Types */
+export interface JitterbugConfig {
+    namespace: string;
+    enabled?: boolean;
+    level?: LogLevel;
+    minLevel?: LogLevel;
+    runtime?: RuntimeType;
+    environment?: EnvironmentType;
+    processors?: LogProcessor[];
+    transports?: LogTransport[];
+}
+
+export interface JitterbugInstance {
+    debug<T extends Record<string, unknown>>(message: string, data?: T): void;
+    info<T extends Record<string, unknown>>(message: string, data?: T): void;
+    warn<T extends Record<string, unknown>>(message: string, data?: T): void;
+    error(message: string, error: Error, data?: Record<string, unknown>): void;
+    fatal(message: string, error: Error, data?: Record<string, unknown>): void;
+    render<T extends Record<string, unknown>>(message: string, data?: T): void;
+    setContext(context: Partial<LogContext>): void;
+    getContext(): LogContext;
+    enable(): void;
+    disable(): void;
+    isEnabled(): boolean;
+    configure(config: Partial<JitterbugConfig>): void;
+}
+
+export interface JitterbugFactory {
+    create: (config: JitterbugConfig) => JitterbugInstance;
+    createDebug: (namespace: string, config?: Partial<JitterbugConfig>) => JitterbugInstance;
+    getRuntime: () => RuntimeType;
+    getEnvironment: () => EnvironmentType;
+}
+
+/* Additional Types */
+export type CoreLogEntry = Readonly<LogEntry>;
+export type TransportLogEntry = LogEntry & { warnings?: string[] };
+export type SafeConfig = Readonly<JitterbugConfig>;
+export type RuntimeConfig = Partial<JitterbugConfig>;
+
