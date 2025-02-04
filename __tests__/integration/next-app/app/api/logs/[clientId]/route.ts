@@ -1,8 +1,6 @@
-import { NextResponse } from 'next/server';
+import { createLogHandler, createSSETransport, type LogHandler, type LogType } from '@jitterbug-next/api';
 import type { NextRequest } from 'next/server';
-import { createLogHandler } from '@isarmstrong/jitterbug-next/api';
-import { createSSETransport } from '@isarmstrong/jitterbug-next';
-import { headers } from 'next/headers';
+import { NextResponse } from 'next/server';
 
 // Support both Edge and Node.js runtimes
 export const runtime = 'edge';
@@ -83,18 +81,17 @@ function getRetryDelay(retryCount: number): number {
 const transport = createSSETransport({
     endpoint: '/api/logs',
     heartbeatInterval: 30000,
-    maxDuration: 35000,
-    autoReconnect: true
+    maxDuration: 35000
 });
 
 // Create a single handler instance
 const handler = createLogHandler({
     cors: true,
-    processLogs: async (logs) => {
+    processLogs: async (logs: LogType[]) => {
         console.log('[Jitterbug Route] Received logs:', logs);
         await transport.write(logs);
     }
-});
+}) as LogHandler;
 
 function createSSEStream(clientId: string) {
     let heartbeatInterval: NodeJS.Timeout;

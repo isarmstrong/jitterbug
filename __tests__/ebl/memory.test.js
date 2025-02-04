@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MemoryManager } from '../../dist/src/types/ebl/memory.js';
+import { MemoryManager } from '../../src/types/ebl/memory';
 
 describe('MemoryManager', () => {
     it('initializes with current metrics', () => {

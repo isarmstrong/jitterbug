@@ -1,12 +1,27 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "types": [
+      "vitest/globals",
+      "node"
+    ],
+    "isolatedModules": false,
+    "allowJs": true,
     "noEmit": true
   },
   "include": [
     "__tests__/**/*.ts",
     "__tests__/**/*.tsx",
+    "__tests__/**/*.js",
     "__tests__/**/*.jsx",
-    "*.config.ts"
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.test.js",
+    "src/**/*.test.jsx",
+    "__tests__/setup.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
   ]
 }

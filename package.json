@@ -1,6 +1,7 @@
 {
     "name": "@isarmstrong/jitterbug",
     "version": "0.1.6",
+    "description": "Edge-first debugger with runtime component",
     "type": "module",
     "main": "./dist/src/index.js",
     "module": "./dist/src/index.js",
@@ -11,6 +12,18 @@
             "import": "./dist/src/index.js",
             "require": "./dist/src/index.js",
             "default": "./dist/src/index.js"
+        },
+        "./next": {
+            "types": "./dist/next/src/next/index.d.ts",
+            "import": "./dist/next/src/next/index.js",
+            "require": "./dist/next/src/next/index.js",
+            "default": "./dist/next/src/next/index.js"
+        },
+        "./ebl": {
+            "types": "./dist/src/types/ebl/index.d.ts",
+            "import": "./dist/src/types/ebl/index.js",
+            "require": "./dist/src/types/ebl/index.js",
+            "default": "./dist/src/types/ebl/index.js"
         },
         "./transports/*": {
             "types": "./dist/src/transports/*.d.ts",
@@ -29,28 +42,42 @@
         "dist"
     ],
     "scripts": {
-        "build": "pnpm clean && tsc",
-        "dev": "tsc --watch",
-        "test": "vitest run",
+        "build": "pnpm run build:clean && pnpm run build:all",
+        "build:clean": "rm -rf dist",
+        "build:all": "tsc -b packages/jitterbug-types packages/jitterbug-next src/next",
+        "clean": "tsc --build --clean",
+        "dev": "pnpm run build --watch",
+        "test": "vitest",
         "test:watch": "vitest",
         "test:strategy": "vitest --config vitest.strategy.config.js",
         "test:core": "vitest --config vitest.core.config.js",
         "test:memory": "vitest --config vitest.memory.config.js",
         "test:guards": "vitest --config vitest.guards.config.js",
         "test:hydration": "vitest --config vitest.hydration.config.js",
-        "lint": "eslint . --ext .ts,.js,.jsx --fix",
+        "test:coverage": "vitest run --coverage",
+        "lint": "eslint . --ext .ts,.tsx",
         "lint:strict": "eslint . --ext .ts,.js,.jsx --max-warnings=0",
         "lint:react": "eslint --config .eslintrc.test.cjs 'src/transports/**/*.{ts,tsx}' --max-warnings 0",
         "lint:core": "eslint --config .eslintrc.test.cjs 'src/core.ts' --max-warnings 0",
         "lint:all": "pnpm lint:core && pnpm lint:react",
-        "format": "prettier --write \"**/*.{ts,js,json,md}\"",
+        "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
         "format:check": "prettier --check \"**/*.{ts,js,json,md}\"",
         "typecheck": "tsc --noEmit",
-        "clean": "rimraf dist",
         "prepublishOnly": "pnpm build",
         "type-coverage": "type-coverage --detail --strict --ignore-files \"dist/**\"",
-        "check-types": "tsc --noEmit && pnpm type-coverage"
+        "check-types": "tsc --noEmit && pnpm type-coverage",
+        "typecheck:tests": "tsc --noEmit --skipLibCheck --project tsconfig.test.json",
+        "typecheck:integration": "cd __tests__/integration/next-app && pnpm tsc --noEmit"
     },
+    "keywords": [
+        "edge",
+        "debugger",
+        "runtime",
+        "sentry",
+        "logging"
+    ],
+    "author": "Ian Armstrong",
+    "license": "MIT",
     "optionalDependencies": {
         "next": "^14.0.0",
         "react": "^18.2.0"
@@ -64,18 +91,19 @@
         "zod": "^3.22.4"
     },
     "devDependencies": {
-        "@types/node": "^20.10.5",
-        "@types/react": "^18.2.0",
-        "@types/react-dom": "18.2.0",
-        "@typescript-eslint/eslint-plugin": "^6.15.0",
-        "@typescript-eslint/parser": "^6.15.0",
+        "@types/node": "^20.11.5",
+        "@types/react": "^18.2.48",
+        "@types/react-dom": "^18.2.18",
+        "@typescript-eslint/eslint-plugin": "^6.19.0",
+        "@typescript-eslint/parser": "^6.19.0",
+        "@vitest/coverage-v8": "^1.2.1",
         "eslint": "^8.56.0",
-        "eslint-import-resolver-typescript": "^3.7.0",
-        "eslint-plugin-react": "^7.37.4",
-        "prettier": "^3.1.1",
+        "eslint-config-prettier": "^9.1.0",
+        "eslint-plugin-prettier": "^5.1.3",
+        "prettier": "^3.2.4",
         "rimraf": "^5.0.5",
-        "typescript": "~5.3.3",
-        "vitest": "^1.1.0",
+        "typescript": "^5.3.3",
+        "vitest": "^1.2.1",
         "type-coverage": "^2.27.0"
     },
     "engines": {
@@ -83,5 +111,9 @@
     },
     "publishConfig": {
         "access": "public"
-    }
+    },
+    "workspaces": [
+        "packages/*"
+    ],
+    "private": true
 }

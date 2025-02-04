@@ -1,0 +1,46 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+        "outDir": "../../dist/next-app",
+        "rootDir": "../../",
+        "composite": true,
+        "tsBuildInfoFile": "../../dist/next-app/.tsbuildinfo",
+        "jsx": "react-jsx",
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "./*"
+            ],
+            "@isarmstrong/jitterbug": [
+                "../../src"
+            ],
+            "@isarmstrong/jitterbug/*": [
+                "../../src/*"
+            ],
+            "@isarmstrong/jitterbug-types": [
+                "../../packages/jitterbug-types/src"
+            ],
+            "@isarmstrong/jitterbug-types/*": [
+                "../../packages/jitterbug-types/src/*"
+            ],
+            "@jitterbug-next/*": [
+                "../../packages/jitterbug-next/src/*"
+            ]
+        }
+    },
+    "references": [
+        {
+            "path": "../../packages/jitterbug-types"
+        },
+        {
+            "path": "../../packages/jitterbug-next"
+        }
+    ],
+    "include": [
+        "./**/*"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist"
+    ]
+}

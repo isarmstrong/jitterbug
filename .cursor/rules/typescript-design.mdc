@@ -1,0 +1,86 @@
+---
+description: Typescript Philosophy & Rules
+globs: *.tsx, *.ts\
+---
+ # TypeScript Design Philosophy
+
+## 1. Progressive Enhancement via Type-Driven Development
+- Start with minimal types, enhance as patterns emerge
+- Use type inference where possible
+- Add explicit types for public APIs and interfaces
+- Leverage union types for better type safety
+
+## 2. Edge-First and Memory-Conscious Design
+- Optimize for Edge runtime constraints
+- Use WeakMap and WeakSet for caching
+- Implement cleanup strategies
+- Monitor memory thresholds
+
+## 3. Systematic Error Resolution (Four-Pool Analysis)
+- Pool A: Module Resolution
+- Pool B: Type Safety
+- Pool C: Component Type Safety
+- Pool D: System Configuration
+
+## 4. Collaborative Constraints
+- Document type decisions
+- Use TypeScript project references
+- Maintain strict null checks
+- Enforce explicit return types
+
+## Implementation Guidelines
+
+### Type Organization
+1. Core Types (src/types/core.ts)
+   - Base interfaces
+   - Type constants
+   - Shared utilities
+
+2. Feature Types (src/types/features/*)
+   - Feature-specific interfaces
+   - Component types
+   - Utility types
+
+3. Edge Boundary Layer (src/types/ebl/*)
+   - Runtime guards
+   - Memory management
+   - Validation strategies
+
+### Type Safety Levels
+1. Strict Mode
+   - noImplicitAny
+   - strictNullChecks
+   - strictFunctionTypes
+   - strictBindCallApply
+
+2. Edge Runtime
+   - Limited global scope
+   - Memory constraints
+   - No Node.js types
+
+3. Component Safety
+   - Props validation
+   - Event handlers
+   - Lifecycle methods
+
+### Memory Management
+1. WeakMap Caching
+   - Type-safe cache initialization
+   - Automatic cleanup
+   - Memory monitoring
+
+2. Edge Thresholds
+   - Monitor heap usage
+   - Implement cleanup triggers
+   - Track allocations
+
+### Error Handling
+1. Type-Safe Errors
+   - Custom error types
+   - Error boundaries
+   - Telemetry hooks
+
+2. Validation
+   - Runtime checks
+   - Type guards
+   - Assertion functions

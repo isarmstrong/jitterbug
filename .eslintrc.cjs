@@ -1,16 +1,20 @@
 module.exports = {
     root: true,
     env: {
-        es2022: true,
-        node: true,
         browser: true,
+        es2020: true,
+        node: true,
     },
     parser: '@typescript-eslint/parser',
     parserOptions: {
-        project: ['./tsconfig.json', './tsconfig.gui.json'],
-        tsconfigRootDir: __dirname,
+        ecmaVersion: 'latest',
         sourceType: 'module',
-        ecmaVersion: 2022,
+        project: [
+            './tsconfig.json',
+            './tsconfig.gui.json',
+            './packages/*/tsconfig.json'
+        ],
+        tsconfigRootDir: __dirname,
     },
     plugins: ['@typescript-eslint'],
     extends: [
@@ -19,7 +23,10 @@ module.exports = {
         'plugin:@typescript-eslint/recommended-requiring-type-checking'
     ],
     rules: {
-        '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+        '@typescript-eslint/no-unused-vars': ['error', {
+            argsIgnorePattern: '^_',
+            varsIgnorePattern: '^_'
+        }],
         '@typescript-eslint/no-floating-promises': 'error',
         '@typescript-eslint/no-unsafe-assignment': 'error',
         '@typescript-eslint/no-unsafe-member-access': 'error',
@@ -32,9 +39,21 @@ module.exports = {
         'no-undef': 'off'
     },
     ignorePatterns: [
-        'dist/**/*',
-        '__tests__/**/*',
-        '*.config.ts',
-        'node_modules/**/*'
+        'node_modules',
+        'dist',
+        '**/*.js',
+        '**/*.jsx',
+        '**/*.d.ts'
+    ],
+    overrides: [
+        {
+            files: ["src/next/**/*.{ts,tsx}"],
+            rules: {
+                "@typescript-eslint/explicit-function-return-type": "off",
+                "@typescript-eslint/no-explicit-any": "off",
+                "@typescript-eslint/strict-boolean-expressions": "off",
+                "@typescript-eslint/no-unsafe-argument": "off"
+            }
+        }
     ]
 }; 

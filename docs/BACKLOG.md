@@ -594,7 +594,7 @@
 - Improved error handling patterns
 - Enhanced type definitions
 - Reduced dependency footprint
-- Package renamed to @isarmstrong/jitterbug
+- Package renamed to @jitterbug
 
 ### 6. Build Process
 

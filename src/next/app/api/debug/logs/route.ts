@@ -1,39 +1,34 @@
-import type { NextApiRequest, NextApiResponse } from "next";
-import { createLogHandler } from "../../../../../../packages/jitterbug-next/api";
+import { createLogHandler } from "@jitterbug-next/api";
+import { NextRequest } from "next/server";
 
 // Set runtime to edge
 export const runtime = "edge";
 
-// Define a type for the processLogs function parameter
-type ProcessLogsType = (logs: unknown[]) => Promise<void> | void;
-
 // Create a log handler using the re-exported function
-interface LogHandler {
-    (req: NextApiRequest, res: NextApiResponse): Promise<void>;
-    processLogs?: ProcessLogsType;
-}
-const logHandler = createLogHandler() as LogHandler;
+const apiHandler = createLogHandler({
+    processLogs: async (logs) => {
+        console.log('Processing logs:', logs);
+    }
+}) as unknown as ((req: NextRequest) => Promise<Response>) & { processLogs?: (logs: unknown[]) => Promise<void> | void };
+
+export const GET = apiHandler;
+export const POST = apiHandler;
+export const HEAD = apiHandler;
+export const OPTIONS = apiHandler;
 
 // Default export API route handler that handles all HTTP methods
-export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
+export default async function defaultHandler(req: NextRequest): Promise<Response> {
     if (req.method === "POST") {
-        let logs: unknown[] = [];
-        try {
-            // Assuming req.body is already parsed
-            logs = req.body as unknown[];
-        } catch (error) {
-            console.error("Failed to parse logs:", error);
+        const logs = await req.json();
+        if (apiHandler.processLogs) {
+            await apiHandler.processLogs(logs);
         }
-        // If logHandler has a processLogs method, call it with explicit type annotation
-        if (typeof logHandler.processLogs === "function") {
-            await logHandler.processLogs(logs);
-        }
-        res.status(200).json({ success: true });
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
     } else if (req.method === "OPTIONS") {
-        res.status(204).end();
+        return new Response(null, { status: 204 });
     } else if (req.method === "HEAD") {
-        res.status(200).end();
+        return new Response(null, { status: 200 });
     } else {
-        res.status(200).json({ status: "ok" });
+        return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
     }
 } 

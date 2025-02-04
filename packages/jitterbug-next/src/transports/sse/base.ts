@@ -1,4 +1,5 @@
-import type { SSETransportConfig, LogType } from '../../types';
+import type { ValidationResult } from '@isarmstrong/jitterbug';
+import type { LogType, SSETransportConfig } from '../../types';
 
 export abstract class BaseSSETransport {
     protected config: SSETransportConfig;
@@ -30,13 +31,13 @@ export abstract class BaseSSETransport {
      * Connect to the SSE stream
      * This is called automatically by handleRequest
      */
-    abstract connect(): Promise<void>;
+    abstract connect(): Promise<ValidationResult>;
 
     /**
      * Disconnect from the SSE stream
      * This is called automatically when the stream ends
      */
-    abstract disconnect(): Promise<void>;
+    abstract disconnect(): Promise<ValidationResult>;
 
     /**
      * Check if the transport is connected
@@ -52,9 +53,14 @@ export abstract class BaseSSETransport {
         return { ...this.config };
     }
 
-    protected validateRequest(req: Request): boolean {
+    protected validateRequest(req: Request): ValidationResult {
         const accept = req.headers.get('accept') || '';
-        return accept.includes('text/event-stream');
+        const isValid = accept.includes('text/event-stream');
+
+        return {
+            isValid,
+            errors: isValid ? undefined : ['Unsupported media type: Expected text/event-stream']
+        };
     }
 
     protected getSSEHeaders(): HeadersInit {

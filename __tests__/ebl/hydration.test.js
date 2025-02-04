@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DefaultHydrationLayer } from '../../dist/src/types/ebl/hydration.js';
+import { DefaultHydrationLayer } from '../../src/types/ebl/hydration';
 
 describe('Hydration Layer', () => {
     const hydrationLayer = new DefaultHydrationLayer();

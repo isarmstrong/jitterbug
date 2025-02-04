@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CoreValidationLayer } from '../../dist/src/types/ebl/core.js';
+import { CoreValidationLayer } from '../../src/types/ebl/core';
 
 describe('CoreValidationLayer', () => {
     it('validates input', () => {
         const layer = new CoreValidationLayer();
-        expect(layer.validate({ test: 'data' })).toBe(true);
-        expect(layer.validate('string')).toBe(true);
-        expect(layer.validate(123)).toBe(true);
+        expect(layer.validate({ test: 'data' }).isValid).toBe(true);
+        expect(layer.validate('string').isValid).toBe(true);
+        expect(layer.validate(123).isValid).toBe(true);
     });
 
     it('processes input', () => {
@@ -23,6 +23,6 @@ describe('CoreValidationLayer', () => {
         const error = new Error('test');
         layer.reportError(error);
 
-        expect(mockHandler).toHaveBeenCalledWith('error', { error });
+        expect(mockHandler).toHaveBeenCalledWith('error', { message: error.message });
     });
 }); 

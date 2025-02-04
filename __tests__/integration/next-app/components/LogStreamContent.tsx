@@ -1,7 +1,7 @@
 import React from 'react';
 import { useEventSource } from '../hooks/useEventSource';
 import { logger } from '../lib/logger';
-import type { LogType } from '@isarmstrong/jitterbug-next';
+import type { LogType } from '@jitterbug-next';
 
 export const LogStreamContent: React.FC = () => {
     const { status, messages = [], error } = useEventSource();

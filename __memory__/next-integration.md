@@ -4,7 +4,7 @@
 ## Route Handler Configuration
 
 ### Current Understanding
-- Using `@isarmstrong/jitterbug-next/api` version of `createLogHandler`
+- Using `@jitterbug-next/api` version of `createLogHandler`
 - Supports both React 18.2 and newer versions
 - Handles standard `Request` objects without version-specific wrappers
 - SSE configuration is handled internally

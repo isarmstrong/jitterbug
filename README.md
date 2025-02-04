@@ -5,46 +5,43 @@ Edge-first debugging system for Next.js applications with type safety and runtim
 ## Key Features
 
 - 🔒 **Type Safety**
-
-  - Full TypeScript support with generic constraints
-  - Runtime-aware type guards
-  - Interface contracts for extensibility
+  - Edge Boundary Layer (EBL) for runtime validation
+  - Memory-efficient type validation
+  - WeakMap-based validation caching
+  - Progressive type enhancement
 
 - 🌐 **Edge Runtime First**
-
   - Built for Next.js 13+ Edge Runtime
   - SSE-based real-time logging
-  - Memory-efficient streaming
-  - Automatic runtime detection
+  - Memory threshold monitoring
   - Rate limiting and backpressure handling
 
 - 📊 **Smart Processing**
-
-  - Error aggregation and correlation
-  - Performance metrics tracking
+  - Strict and lenient validation strategies
   - Automatic sensitive data redaction
-  - Custom processors support
+  - Custom processor support
+  - Memory usage tracking
 
-- 🎯 **Visual Debugging**
-  - Real-time log visualization
-  - React component lifecycle tracking
-  - Server/client boundary monitoring
-  - Interactive filtering and search
+- 🎯 **Runtime Awareness**
+  - Automatic runtime detection
+  - SSR hydration validation
+  - Framework version validation
+  - Edge-specific optimizations
 
 ## Installation
 
 ```bash
-npm install @isarmstrong/jitterbug
+npm install @jitterbug
 # or
-yarn add @isarmstrong/jitterbug
+yarn add @jitterbug
 # or
-pnpm add @isarmstrong/jitterbug
+pnpm add @jitterbug
 ```
 
 ## Quick Start
 
 ```typescript
-import { createJitterbug } from "@isarmstrong/jitterbug";
+import { createJitterbug } from "@jitterbug";
 
 // Create a type-safe debugger
 const debug = createJitterbug({
@@ -62,7 +59,7 @@ debug.info("API Route accessed", {
   duration: 45,
 });
 
-// Error tracking with aggregation
+// Error tracking with type safety
 try {
   throw new Error("Database timeout");
 } catch (error) {
@@ -71,13 +68,6 @@ try {
     table: "users",
   });
 }
-
-// Component lifecycle debugging
-debug.render("UserProfile mounted", {
-  props: { userId: "123" },
-  renderTime: 25,
-  hydrated: true,
-});
 ```
 
 ## Edge Runtime Usage
@@ -86,7 +76,7 @@ Jitterbug is optimized for Next.js Edge Runtime with built-in rate limiting:
 
 ```typescript
 // app/api/logs/route.ts
-import { createDebug } from "@isarmstrong/jitterbug";
+import { createDebug } from "@jitterbug";
 
 // Configure Edge transport with rate limiting
 const debug = createDebug("api:logs", {
@@ -101,28 +91,15 @@ const debug = createDebug("api:logs", {
 });
 
 export async function GET() {
-  debug.info("SSE connection established", {
-    debugContext: {
-      connectionType: "SSE",
-      clientInfo: headers.get("user-agent"),
-      protocolVersion: "2024-1"
-    }
-  });
+  debug.info("SSE connection established");
 
   const stream = new ReadableStream({
     start(controller) {
-      debug.info("Stream controller initialized", {
-        // Track debugger internals
-        backpressureStatus: controller.desiredSize,
-        streamState: "open"
+      debug.info("Stream initialized", {
+        backpressure: controller.desiredSize
       });
     },
   });
 
-  return new Response(stream, {
-    headers: debug.injectDiagnosticHeaders({
-      'x-jitterbug-session': crypto.randomUUID()
-    })
-  });
+  return new Response(stream);
 }
-```

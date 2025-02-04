@@ -1,43 +1,53 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "forceConsistentCasingInFileNames": true,
     "noEmit": false,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "rootDir": ".",
-    "outDir": "./dist",
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
+    "outDir": "dist/core",
     "jsx": "react-jsx",
-    "incremental": true,
+    "baseUrl": ".",
+    "composite": true,
+    "declaration": true,
     "paths": {
       "@/*": [
-        "./src/*"
+        "src/*"
+      ],
+      "@types/*": [
+        "src/types/*"
+      ],
+      "@utils/*": [
+        "src/utils/*"
+      ],
+      "@transports/*": [
+        "src/transports/*"
+      ],
+      "@ebl/*": [
+        "src/types/ebl/*"
+      ],
+      "@isarmstrong/jitterbug": [
+        "src"
+      ],
+      "@isarmstrong/jitterbug/*": [
+        "src/*"
+      ],
+      "@isarmstrong/jitterbug-types": [
+        "packages/jitterbug-types/src"
+      ],
+      "@isarmstrong/jitterbug-types/*": [
+        "packages/jitterbug-types/src/*"
       ]
     }
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "vitest.config.ts"
+  "references": [
+    {
+      "path": "./src"
+    },
+    {
+      "path": "./packages/jitterbug-types"
+    },
+    {
+      "path": "./packages/jitterbug-next"
+    }
   ],
-  "exclude": [
-    "node_modules",
-    ".next",
-    "dist",
-    "build"
-  ]
+  "files": [],
+  "include": []
 }

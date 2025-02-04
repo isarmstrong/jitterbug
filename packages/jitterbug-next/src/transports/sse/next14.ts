@@ -1,5 +1,6 @@
+import { ValidationResult } from '@isarmstrong/jitterbug';
+import type { LogType, SSETransportConfig } from '../../types';
 import { BaseSSETransport } from './base';
-import type { SSETransportConfig, LogType } from '../../types';
 
 export class Next14SSETransport extends BaseSSETransport {
     private encoder = new TextEncoder();
@@ -122,11 +123,12 @@ export class Next14SSETransport extends BaseSSETransport {
         await Promise.all(writePromises);
     }
 
-    public async connect(): Promise<void> {
+    public async connect(): Promise<ValidationResult> {
         this.isConnected = true;
+        return { isValid: true };
     }
 
-    public async disconnect(): Promise<void> {
+    public async disconnect(): Promise<ValidationResult> {
         this.isConnected = false;
 
         // Abort all active controllers
@@ -139,5 +141,7 @@ export class Next14SSETransport extends BaseSSETransport {
         });
 
         this.activeControllers.clear();
+
+        return { isValid: true };
     }
 } 

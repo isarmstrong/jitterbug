@@ -1,8 +1,10 @@
 /// <reference lib="dom" />
 
 import pThrottle from "p-throttle";
-import { LogEntry, LogTransport } from "../types";
 import { EDGE_DEFAULTS } from '../config/defaults';
+import { LogEntry, LogTransport } from "../types";
+import { ValidationResult } from '../types/ebl/core';
+import { MemoryMetricKey, MemoryMetrics, MemoryUnit } from '../types/ebl/memory';
 
 export interface EdgeTransportConfig {
   endpoint: string;
@@ -30,12 +32,7 @@ interface StreamMetrics {
   lastInterruptionTime: number | null;
   bufferUtilization: number;
   lastFlushTime: number | null;
-  memoryUsage: {
-    heapUsed: number;
-    heapTotal: number;
-    external: number;
-    arrayBuffers: number;
-  } | null;
+  memoryUsage: MemoryMetrics | null;
   batchSuccessRate: number;
   avgBatchSize: number;
   droppedMessages: number;
@@ -135,9 +132,14 @@ export class EdgeTransport implements LogTransport {
     this.startMemoryMonitoring();
   }
 
-  private async acquireFlushLock(): Promise<boolean> {
+  private async acquireFlushLock(): Promise<ValidationResult> {
     const view = new Int32Array(this.flushMutex.buffer);
-    return Atomics.compareExchange(view, 0, 0, 1) === 0;
+    const acquired = Atomics.compareExchange(view, 0, 0, 1) === 0;
+
+    return {
+      isValid: acquired,
+      errors: acquired ? undefined : ['Failed to acquire flush lock']
+    };
   }
 
   private releaseFlushLock(): void {
@@ -146,20 +148,37 @@ export class EdgeTransport implements LogTransport {
   }
 
   private startMemoryMonitoring(): void {
-    const checkMemory = () => {
-      if (typeof performance !== 'undefined' && 'memory' in performance) {
-        const memory = (performance as any).memory;
-        this.metrics.memoryUsage = {
-          heapUsed: memory.usedJSHeapSize,
-          heapTotal: memory.totalJSHeapSize,
-          external: memory.jsExternalHeapSize || 0,
-          arrayBuffers: memory.arrayBuffers || 0
+    const checkMemory = (): void => {
+      if (typeof performance === 'undefined' || !('memory' in performance)) {
+        return;
+      }
+
+      try {
+        const memoryInfo = performance.memory as {
+          usedJSHeapSize: number;
+          totalJSHeapSize: number;
+          jsExternalHeapSize?: number;
+          arrayBuffers?: number;
         };
 
+        this.metrics.memoryUsage = {
+          rss: memoryInfo.totalJSHeapSize / MemoryUnit.MB,
+          [MemoryMetricKey.HeapUsed]: memoryInfo.usedJSHeapSize / MemoryUnit.MB,
+          [MemoryMetricKey.HeapTotal]: memoryInfo.totalJSHeapSize / MemoryUnit.MB,
+          [MemoryMetricKey.External]: memoryInfo.jsExternalHeapSize ? memoryInfo.jsExternalHeapSize / MemoryUnit.MB : 0,
+          [MemoryMetricKey.ArrayBuffers]: memoryInfo.arrayBuffers ? memoryInfo.arrayBuffers / MemoryUnit.MB : 0,
+          [MemoryMetricKey.Threshold]: EDGE_DEFAULTS.maxPayloadSize / MemoryUnit.MB
+        } as MemoryMetrics;
+
         // Implement backpressure if memory usage is high
-        if (this.metrics.memoryUsage.heapUsed / this.metrics.memoryUsage.heapTotal > 0.9) {
+        if (this.metrics.memoryUsage &&
+          this.metrics.memoryUsage[MemoryMetricKey.HeapUsed] /
+          this.metrics.memoryUsage[MemoryMetricKey.HeapTotal] > 0.9) {
           this.handleBackpressure();
         }
+      } catch (error) {
+        console.error('Memory monitoring error:', error);
+        this.metrics.memoryUsage = null;
       }
     };
 
@@ -179,18 +198,41 @@ export class EdgeTransport implements LogTransport {
     }
   }
 
-  private async persistQueue(): Promise<void> {
-    if (!this.config.persistQueue) return;
-    // Edge-specific persistence logic can be added later
+  private async persistQueue(): Promise<ValidationResult> {
+    if (!this.config.persistQueue) {
+      return { isValid: true };
+    }
+
+    try {
+      // Edge-specific persistence logic can be added later
+      return { isValid: true };
+    } catch (error) {
+      return {
+        isValid: false,
+        errors: [(error as Error).message]
+      };
+    }
   }
 
-  private async restoreQueue(): Promise<void> {
-    if (!this.config.persistQueue) return;
-    // Edge-specific restoration logic can be added later
+  private async restoreQueue(): Promise<ValidationResult> {
+    if (!this.config.persistQueue) {
+      return { isValid: true };
+    }
+
+    try {
+      // Edge-specific restoration logic can be added later
+      return { isValid: true };
+    } catch (error) {
+      return {
+        isValid: false,
+        errors: [(error as Error).message]
+      };
+    }
   }
 
   public async flush(): Promise<void> {
-    if (!await this.acquireFlushLock()) return;
+    const lockResult = await this.acquireFlushLock();
+    if (!lockResult.isValid) return;
 
     try {
       if (!this._isConnected) {

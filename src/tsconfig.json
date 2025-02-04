@@ -1,0 +1,40 @@
+{
+    "extends": "../tsconfig.base.json",
+    "compilerOptions": {
+        "outDir": "../dist/src",
+        "rootDir": ".",
+        "composite": true,
+        "jsx": "react-jsx",
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "./*"
+            ],
+            "@types/*": [
+                "./types/*"
+            ],
+            "@utils/*": [
+                "./utils/*"
+            ],
+            "@transports/*": [
+                "./transports/*"
+            ],
+            "@ebl/*": [
+                "./types/ebl/*"
+            ],
+            "@jitterbug-next/*": [
+                "./next/*"
+            ]
+        }
+    },
+    "include": [
+        "**/*.ts",
+        "**/*.tsx"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "**/*.test.ts",
+        "**/*.spec.ts"
+    ]
+}

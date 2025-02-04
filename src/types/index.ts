@@ -161,3 +161,17 @@ export type TransportLogEntry = LogEntry & { warnings?: string[] };
 export type SafeConfig = Readonly<JitterbugConfig>;
 export type RuntimeConfig = Partial<JitterbugConfig>;
 
+// Re-export all core types
+export * from './core';
+
+// Add a default export with LogLevels
+export default {
+    LogLevels: {
+        DEBUG: 'debug',
+        INFO: 'info',
+        WARN: 'warn',
+        ERROR: 'error',
+        FATAL: 'fatal'
+    }
+};
+

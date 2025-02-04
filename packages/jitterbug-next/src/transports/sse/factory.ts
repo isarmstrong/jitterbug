@@ -1,17 +1,26 @@
+import type { ValidationResult } from '@isarmstrong/jitterbug';
+import type { SSETransportConfig } from '../../types';
 import { Next13SSETransport } from './next13';
 import { Next14SSETransport } from './next14';
 import { Next15SSETransport } from './next15';
-import type { SSETransportConfig } from '../../types';
 
 type NextVersion = '13' | '14' | '15';
+
+type ExtendedValidationResult = ValidationResult & { data: NextVersion; isValid: boolean };
 
 interface SSETransportOptions extends SSETransportConfig {
     forceVersion?: NextVersion;
 }
 
+interface SSETransport {
+    handleRequest(req: Request): Promise<Response>;
+    write(data: unknown): Promise<void>;
+    disconnect(): Promise<ValidationResult>;
+}
+
 export class SSETransportFactory {
     private static instance: SSETransportFactory;
-    private transportMap: Map<string, any> = new Map();
+    private transportMap: Map<string, SSETransport> = new Map();
 
     private constructor() { }
 
@@ -22,36 +31,46 @@ export class SSETransportFactory {
         return SSETransportFactory.instance;
     }
 
-    private detectNextVersion(): NextVersion {
+    private detectNextVersion(): ExtendedValidationResult {
         try {
             // Try to detect from next/package.json if available
             const nextPkg = require('next/package.json');
             const version = nextPkg.version.split('.')[0];
             if (['13', '14', '15'].includes(version)) {
-                return version as NextVersion;
+                return {
+                    isValid: true,
+                    data: version // data now holds the version
+                };
             }
         } catch {
             // Fallback detection logic
-            if (typeof window !== 'undefined') {
-                // Client-side detection based on features
-                if ((window as any).__NEXT_DATA__?.buildId) {
-                    return '15'; // Next 15 always includes buildId
+            if (typeof window !== 'undefined' && '__NEXT_DATA__' in window) {
+                const nextData = window.__NEXT_DATA__;
+                if (nextData?.buildId) {
+                    return {
+                        isValid: true,
+                        data: '15'
+                    };
                 }
             } else {
-                // Server-side detection based on available APIs
                 try {
                     require('next/headers');
-                    return '15'; // headers export was changed in Next 15
+                    return {
+                        isValid: true,
+                        data: '15'
+                    };
                 } catch {
-                    // Fallback to Next 14 as it's most common
-                    return '14';
+                    return {
+                        isValid: true,
+                        data: '14'
+                    };
                 }
             }
         }
-        return '14'; // Default to 14 if detection fails
+        return { isValid: true, data: '14' };
     }
 
-    private createTransport(version: NextVersion, config: SSETransportConfig) {
+    private createTransport(version: NextVersion, config: SSETransportConfig): SSETransport {
         switch (version) {
             case '15':
                 return new Next15SSETransport(config);
@@ -64,41 +83,36 @@ export class SSETransportFactory {
         }
     }
 
-    getTransport(options: SSETransportOptions) {
-        const version = options.forceVersion || this.detectNextVersion();
-        const key = `${version}-${options.endpoint}`;
+    getTransport(options: SSETransportOptions): SSETransport {
+        const versionResult = options.forceVersion ?
+            { isValid: true, data: options.forceVersion } :
+            this.detectNextVersion();
+
+        if (!versionResult.isValid || !versionResult.data) {
+            throw new Error('Failed to detect Next.js version');
+        }
+
+        const key = `${versionResult.data}-${options.endpoint}`;
 
         if (!this.transportMap.has(key)) {
-            const transport = this.createTransport(version, options);
+            const transport = this.createTransport(versionResult.data, options);
             this.transportMap.set(key, transport);
         }
 
-        return this.transportMap.get(key);
+        const transport = this.transportMap.get(key);
+        if (!transport) {
+            throw new Error('Failed to create transport');
+        }
+
+        return transport;
     }
 
-    /**
-     * Creates a unified SSE interface that works across Next.js versions
-     */
-    createSSEHandler(options: SSETransportOptions) {
-        const transport = this.getTransport(options);
-
-        return {
-            async handleRequest(req: Request): Promise<Response> {
-                return transport.handleRequest(req);
-            },
-
-            async write(data: any): Promise<void> {
-                return transport.write(data);
-            },
-
-            async cleanup(): Promise<void> {
-                return transport.disconnect();
-            }
-        };
+    createSSEHandler(options: SSETransportOptions): SSETransport {
+        return this.getTransport(options);
     }
 }
 
 // Export a simplified interface for users
-export function createSSETransport(options: SSETransportOptions) {
+export function createSSETransport(options: SSETransportOptions): SSETransport {
     return SSETransportFactory.getInstance().createSSEHandler(options);
 } 

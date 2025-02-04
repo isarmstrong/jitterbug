@@ -3,55 +3,135 @@
  * Provides validation guards specific to SSR and Edge environments
  */
 
-type RuntimeEnvironment = 'edge' | 'ssr' | 'hybrid';
+export enum RuntimeEnvironment {
+    Edge = 'edge',
+    SSR = 'ssr',
+    Hybrid = 'hybrid'
+}
+
+export interface ValidationResult {
+    isValid: boolean;
+    environment: RuntimeEnvironment;
+    errors?: string[];
+}
 
 export interface RuntimeGuard<T> {
-    validate(input: T): boolean;
+    /**
+     * Validates input in the current runtime environment
+     * @param input The value to validate
+     * @returns ValidationResult containing validation status and environment info
+     */
+    validate(input: T): ValidationResult;
+
+    /**
+     * Gets the current runtime environment
+     * @returns The current RuntimeEnvironment
+     */
     getEnvironment(): RuntimeEnvironment;
 }
 
 export class SSRGuard<T> implements RuntimeGuard<T> {
-    validate(input: T): boolean {
-        if (typeof window !== 'undefined') {
-            return false; // SSR guards should only run on server
+    validate(input: T): ValidationResult {
+        if (input == null) {
+            return {
+                isValid: false,
+                environment: this.getEnvironment(),
+                errors: ['Input cannot be null or undefined']
+            };
         }
-        return true;
+
+        if (typeof window !== 'undefined') {
+            return {
+                isValid: false,
+                environment: this.getEnvironment(),
+                errors: ['SSR guards can only run on server']
+            };
+        }
+
+        return {
+            isValid: true,
+            environment: this.getEnvironment()
+        };
     }
 
     getEnvironment(): RuntimeEnvironment {
-        return 'ssr';
+        return RuntimeEnvironment.SSR;
     }
 }
 
 export class EdgeGuard<T> implements RuntimeGuard<T> {
-    validate(input: T): boolean {
-        // Check for Edge runtime environment
-        if (process.env.EDGE_RUNTIME !== 'edge-runtime') {
-            return false;
+    validate(input: T): ValidationResult {
+        if (input == null) {
+            return {
+                isValid: false,
+                environment: this.getEnvironment(),
+                errors: ['Input cannot be null or undefined']
+            };
         }
-        return true;
+
+        // Check for Edge runtime environment
+        const isEdgeRuntime = process.env.EDGE_RUNTIME === 'edge-runtime';
+        if (!isEdgeRuntime) {
+            return {
+                isValid: false,
+                environment: this.getEnvironment(),
+                errors: ['Not running in Edge runtime']
+            };
+        }
+
+        return {
+            isValid: true,
+            environment: this.getEnvironment()
+        };
     }
 
     getEnvironment(): RuntimeEnvironment {
-        return 'edge';
+        return RuntimeEnvironment.Edge;
     }
 }
 
 export class HybridGuard<T> implements RuntimeGuard<T> {
-    private ssrGuard: SSRGuard<T>;
-    private edgeGuard: EdgeGuard<T>;
+    private readonly ssrGuard: SSRGuard<T>;
+    private readonly edgeGuard: EdgeGuard<T>;
 
     constructor() {
         this.ssrGuard = new SSRGuard();
         this.edgeGuard = new EdgeGuard();
     }
 
-    validate(input: T): boolean {
+    validate(input: T): ValidationResult {
+        if (input == null) {
+            return {
+                isValid: false,
+                environment: this.getEnvironment(),
+                errors: ['Input cannot be null or undefined']
+            };
+        }
+
         // Try Edge first, fall back to SSR
-        return this.edgeGuard.validate(input) || this.ssrGuard.validate(input);
+        const edgeResult = this.edgeGuard.validate(input);
+        if (edgeResult.isValid) {
+            return edgeResult;
+        }
+
+        const ssrResult = this.ssrGuard.validate(input);
+        if (ssrResult.isValid) {
+            return ssrResult;
+        }
+
+        // Neither environment is valid
+        return {
+            isValid: false,
+            environment: this.getEnvironment(),
+            errors: [
+                'Failed validation in both Edge and SSR environments',
+                ...(edgeResult.errors || []),
+                ...(ssrResult.errors || [])
+            ]
+        };
     }
 
     getEnvironment(): RuntimeEnvironment {
-        return 'hybrid';
+        return RuntimeEnvironment.Hybrid;
     }
 } 

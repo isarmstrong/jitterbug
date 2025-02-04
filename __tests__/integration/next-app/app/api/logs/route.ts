@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createLogHandler } from '@isarmstrong/jitterbug-next/api';
+import { createLogHandler } from '@jitterbug-next/api';
 import { headers } from 'next/headers';
 
 // Support both Edge and Node.js runtimes

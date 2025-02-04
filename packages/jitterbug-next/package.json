@@ -16,7 +16,7 @@
         "lint": "eslint src --ext .ts"
     },
     "peerDependencies": {
-        "@isarmstrong/jitterbug": "^0.1.6",
+        "@isarmstrong/jitterbug": "workspace:*",
         "next": ">=13.0.0",
         "react": ">=18.0.0"
     },
@@ -49,5 +49,8 @@
             "require": "./dist/transports/sse/index.js",
             "default": "./dist/transports/sse/index.js"
         }
+    },
+    "dependencies": {
+        "@isarmstrong/jitterbug-types": "workspace:*"
     }
 }

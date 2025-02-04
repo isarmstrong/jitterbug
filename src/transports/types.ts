@@ -4,6 +4,7 @@ import {
   LogLevels,
   type LogTransport,
 } from "../types";
+import { ValidationResult } from "../types/ebl/core";
 
 /**
  * Transport configuration interface
@@ -55,9 +56,28 @@ export abstract class BaseTransport implements LogTransport {
     const level = entry.level.padEnd(5);
     const namespace = String(entry.context?.namespace ?? "");
     const message = entry.message;
-    const data = (entry as any).data ? JSON.stringify((entry as any).data) : "";
-    const error = (entry as any).error ? `\n${(entry as any).error.stack}` : "";
 
-    return `[${timestamp}] ${level} ${namespace}: ${message}${data}${error}`;
+    // Format context data if available
+    const contextData = entry.context ? ` ${JSON.stringify(entry.context)}` : "";
+
+    return `[${timestamp}] ${level} ${namespace}: ${message}${contextData}`;
+  }
+
+  protected validateEntry<T extends Record<string, unknown>>(entry: LogEntry<T>): ValidationResult {
+    if (!entry) {
+      return {
+        isValid: false,
+        errors: ['Entry cannot be null or undefined']
+      };
+    }
+
+    if (!entry.level || !Object.values(LogLevels).includes(entry.level.toUpperCase() as keyof typeof LogLevels)) {
+      return {
+        isValid: false,
+        errors: ['Invalid log level']
+      };
+    }
+
+    return { isValid: true };
   }
 }

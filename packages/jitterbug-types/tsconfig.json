@@ -1,0 +1,32 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+        "outDir": "../../dist/jitterbug-types",
+        "rootDir": "./src",
+        "composite": true,
+        "tsBuildInfoFile": "../../dist/jitterbug-types/.tsbuildinfo",
+        "baseUrl": ".",
+        "paths": {
+            "@isarmstrong/jitterbug": [
+                "../../src"
+            ],
+            "@isarmstrong/jitterbug/*": [
+                "../../src/*"
+            ]
+        }
+    },
+    "references": [
+        {
+            "path": "../../src"
+        }
+    ],
+    "include": [
+        "src/**/*"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "**/*.test.ts",
+        "**/*.spec.ts"
+    ]
+}

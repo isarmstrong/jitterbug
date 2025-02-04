@@ -1,5 +1,14 @@
+import type { ValidationResult } from '@isarmstrong/jitterbug';
+import type { LogType, SSETransportConfig } from '../../types';
 import { BaseSSETransport } from './base';
-import type { SSETransportConfig, LogType } from '../../types';
+
+interface SSEMessage {
+    type: 'log' | 'heartbeat' | 'info';
+    message?: string;
+    level?: string;
+    timestamp: string;
+    context?: Record<string, unknown>;
+}
 
 export class Next15SSETransport extends BaseSSETransport {
     private encoder = new TextEncoder();
@@ -11,8 +20,9 @@ export class Next15SSETransport extends BaseSSETransport {
     }
 
     public async handleRequest(req: Request): Promise<Response> {
-        if (!this.validateRequest(req)) {
-            return this.createErrorResponse(415, 'Unsupported Media Type');
+        const validation = this.validateRequest(req);
+        if (!validation.isValid) {
+            return this.createErrorResponse(415, validation.errors?.[0] || 'Unsupported Media Type');
         }
 
         const clientId = this.getClientId(req);
@@ -36,7 +46,8 @@ export class Next15SSETransport extends BaseSSETransport {
                     this.isConnected = true;
 
                     // Send initial connection message
-                    await this.write({
+                    const initialMessage: SSEMessage = {
+                        type: 'info',
                         message: 'Connected to SSE stream',
                         level: 'info',
                         timestamp: new Date().toISOString(),
@@ -44,7 +55,9 @@ export class Next15SSETransport extends BaseSSETransport {
                             clientId,
                             transport: 'Next15SSE'
                         }
-                    });
+                    };
+
+                    await this.write(initialMessage);
 
                     // Setup heartbeat
                     const heartbeatInterval = setInterval(() => {
@@ -53,21 +66,24 @@ export class Next15SSETransport extends BaseSSETransport {
                             return;
                         }
 
-                        this.enqueueMessage(controller, {
+                        const heartbeat: SSEMessage = {
                             type: 'heartbeat',
                             timestamp: new Date().toISOString()
-                        });
+                        };
+
+                        this.enqueueMessage(controller, heartbeat);
                     }, this.config.heartbeatInterval);
 
                     // Setup max duration timeout
                     if (this.config.maxDuration) {
                         setTimeout(() => {
                             if (this.config.autoReconnect) {
-                                this.enqueueMessage(controller, {
+                                const reconnectMessage: SSEMessage = {
                                     type: 'info',
                                     message: 'Stream duration limit reached, reconnecting...',
                                     timestamp: new Date().toISOString()
-                                });
+                                };
+                                this.enqueueMessage(controller, reconnectMessage);
                             }
                             controller.close();
                         }, this.config.maxDuration);
@@ -90,7 +106,7 @@ export class Next15SSETransport extends BaseSSETransport {
         });
     }
 
-    private enqueueMessage(controller: ReadableStreamDefaultController, data: any) {
+    private enqueueMessage(controller: ReadableStreamDefaultController, data: SSEMessage): void {
         try {
             const message = `id: ${this.sequence++}\ndata: ${JSON.stringify(data)}\n\n`;
             controller.enqueue(this.encoder.encode(message));
@@ -100,17 +116,22 @@ export class Next15SSETransport extends BaseSSETransport {
         }
     }
 
-    public async write(log: LogType): Promise<void> {
+    public async write(log: LogType | SSEMessage): Promise<void> {
         this.activeStreams.forEach((controller) => {
-            this.enqueueMessage(controller, log);
+            this.enqueueMessage(controller, {
+                type: 'log',
+                ...log,
+                timestamp: log.timestamp || new Date().toISOString()
+            });
         });
     }
 
-    public async connect(): Promise<void> {
+    public async connect(): Promise<ValidationResult> {
         this.isConnected = true;
+        return { isValid: true };
     }
 
-    public async disconnect(): Promise<void> {
+    public async disconnect(): Promise<ValidationResult> {
         this.isConnected = false;
         this.activeStreams.forEach((controller) => {
             try {
@@ -120,5 +141,6 @@ export class Next15SSETransport extends BaseSSETransport {
             }
         });
         this.activeStreams.clear();
+        return { isValid: true };
     }
 } 

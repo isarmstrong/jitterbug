@@ -5,86 +5,143 @@
  * The implementations are minimal placeholders, aligning with the simplicity priorities in the README.
  */
 
-// Initializes and returns a new WeakMap cache
-export function initWeakMapCache(): WeakMap<object, any> {
-    return new WeakMap();
+// Memory threshold in MB for Edge runtime
+const EDGE_MEMORY_THRESHOLD = 128;
+
+// Define memory units for clarity
+export const enum MemoryUnit {
+    Bytes = 1,
+    KB = 1024,
+    MB = 1024 * 1024,
+    GB = 1024 * 1024 * 1024
 }
 
-// Monitors memory usage (stub implementation)
+// Define memory metric keys for type safety
+export const enum MemoryMetricKey {
+    HeapUsed = 'heapUsed',
+    HeapTotal = 'heapTotal',
+    External = 'external',
+    ArrayBuffers = 'arrayBuffers',
+    Threshold = 'memoryThreshold'
+}
+
+// Added type alias for clarity in memory measurements
+export type MemoryMB = number;
+
+export interface MemoryMetrics {
+    /**
+     * Resident Set Size in MB.
+     */
+    rss: MemoryMB;
+    /**
+     * Heap memory used in MB.
+     */
+    [MemoryMetricKey.HeapUsed]: MemoryMB;
+    /**
+     * Total heap memory allocated in MB.
+     */
+    [MemoryMetricKey.HeapTotal]: MemoryMB;
+    /**
+     * External memory used in MB (if available).
+     */
+    [MemoryMetricKey.External]?: MemoryMB;
+    /**
+     * Array buffers memory used in MB (if available).
+     */
+    [MemoryMetricKey.ArrayBuffers]?: MemoryMB;
+    /**
+     * Configured memory threshold in MB.
+     */
+    [MemoryMetricKey.Threshold]: MemoryMB;
+}
+
+export interface MemoryLayer {
+    getMemoryMetrics(): Promise<MemoryMetrics>;
+}
+
+// Type-safe WeakMap cache initialization
+export function initWeakMapCache<K extends object, V>(): WeakMap<K, V> {
+    return new WeakMap<K, V>();
+}
+
+// Type-safe memory monitoring
 export function monitorMemoryUsage(): void {
     // In a real application, integrate Node.js memory hooks or performance APIs
     console.log('Monitoring memory usage...');
 }
 
-// Performs memory cleanup (stub implementation)
+// Type-safe memory cleanup
 export function cleanupMemory(): void {
     // In a real application, implement cleanup strategies as needed
+    if (typeof global.gc === 'function') {
+        global.gc();
+    }
     console.log('Performing memory cleanup...');
 }
 
-// Sets up memory metrics (stub implementation)
+// Type-safe memory metrics setup
 export function setupMemoryMetrics(): void {
     // In a real application, integrate with monitoring tools to track memory usage
     console.log('Setting up memory metrics...');
 }
 
 /**
- * Memory Management for Edge Boundary Layer
- * Handles memory thresholds, cleanup, and metrics in Edge runtime
+ * MemoryManager provides methods to retrieve current memory usage metrics.
  */
-
-// Memory threshold in MB for Edge runtime
-const EDGE_MEMORY_THRESHOLD = 128;
-
-export interface MemoryMetrics {
-    heapUsed: number;
-    heapTotal: number;
-    rss: number;
-    memoryThreshold: number;
-}
-
 export class MemoryManager {
-    private _metrics: MemoryMetrics;
-
-    constructor() {
-        this._metrics = this.getCurrentMetrics();
-    }
+    private _memoryThreshold: number = EDGE_MEMORY_THRESHOLD;
 
     /**
-     * Get current memory metrics from Node.js process
+     * Retrieves current memory usage metrics.
      */
-    private getCurrentMetrics(): MemoryMetrics {
-        const memory = process.memoryUsage();
+    public getMetrics(): MemoryMetrics {
+        const usage: NodeJS.MemoryUsage = process.memoryUsage();
         return {
-            heapUsed: memory.heapUsed / 1024 / 1024,
-            heapTotal: memory.heapTotal / 1024 / 1024,
-            rss: memory.rss / 1024 / 1024,
-            memoryThreshold: EDGE_MEMORY_THRESHOLD
+            rss: usage.rss / MemoryUnit.MB,
+            [MemoryMetricKey.HeapUsed]: usage.heapUsed / MemoryUnit.MB,
+            [MemoryMetricKey.HeapTotal]: usage.heapTotal / MemoryUnit.MB,
+            [MemoryMetricKey.External]: usage.external ? usage.external / MemoryUnit.MB : undefined,
+            [MemoryMetricKey.ArrayBuffers]: usage.arrayBuffers ? usage.arrayBuffers / MemoryUnit.MB : undefined,
+            [MemoryMetricKey.Threshold]: this._memoryThreshold
         };
     }
 
     /**
-     * Check if memory usage exceeds threshold
+     * Checks if memory usage has exceeded the configured threshold.
      */
-    isMemoryExceeded(): boolean {
-        this._metrics = this.getCurrentMetrics();
-        return this._metrics.heapUsed > EDGE_MEMORY_THRESHOLD;
+    public isMemoryExceeded(): boolean {
+        const metrics = this.getMetrics();
+        return metrics[MemoryMetricKey.HeapUsed] > metrics[MemoryMetricKey.Threshold];
     }
 
     /**
-     * Get current memory metrics
+     * Sets a new memory threshold in MB.
      */
-    getMetrics(): MemoryMetrics {
-        return this._metrics;
+    public setMemoryThreshold(newThreshold: number): void {
+        this._memoryThreshold = newThreshold;
     }
 
     /**
-     * Perform memory cleanup when threshold is exceeded
+     * Gets the current memory threshold in MB.
      */
-    cleanup(): void {
+    public getMemoryThreshold(): number {
+        return this._memoryThreshold;
+    }
+
+    /**
+     * Performs memory cleanup by forcing garbage collection and clearing module caches.
+     */
+    public cleanup(): void {
+        // Force garbage collection if available
         if (global.gc) {
             global.gc();
         }
-        this._metrics = this.getCurrentMetrics();
+
+        // Clear module caches
+        Object.keys(require.cache).forEach(key => {
+            delete require.cache[key];
+        });
+
+        console.log('Performing memory cleanup...');
     }
 } 

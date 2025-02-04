@@ -3,7 +3,7 @@ const nextConfig = {
     experimental: {
         externalDir: true,
     },
-    transpilePackages: ['@isarmstrong/jitterbug', '@isarmstrong/jitterbug-next'],
+    transpilePackages: ['@jitterbug', '@jitterbug-next'],
     webpack: (config, { isServer }) => {
         // Add support for importing from parent directories
         config.resolve.symlinks = true;

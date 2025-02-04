@@ -1,6 +1,6 @@
 'use client';
 
-import type { LogType } from '@isarmstrong/jitterbug-next';
+import type { LogType } from '@jitterbug-next';
 
 const DEBUG_NAMESPACE = 'jitterbug:test';
 

@@ -1,6 +1,6 @@
-import type { LogEntry } from '@isarmstrong/jitterbug';
+import type { ValidationResult } from '@isarmstrong/jitterbug';
+import type { LogType, SSETransportConfig } from '../../types';
 import { BaseSSETransport } from './base';
-import type { SSETransportConfig, LogType } from '../../types';
 
 export class Next13SSETransport extends BaseSSETransport {
     private encoder = new TextEncoder();
@@ -140,11 +140,12 @@ export class Next13SSETransport extends BaseSSETransport {
         });
     }
 
-    public async connect(): Promise<void> {
+    public async connect(): Promise<ValidationResult> {
         this.isConnected = true;
+        return { isValid: true };
     }
 
-    public async disconnect(): Promise<void> {
+    public async disconnect(): Promise<ValidationResult> {
         // Cleanup all clients
         const clientIds = Array.from(this.activeClients);
         await Promise.all(clientIds.map(clientId => this.removeClient(clientId)));
@@ -152,5 +153,6 @@ export class Next13SSETransport extends BaseSSETransport {
         this.messageBuffer.clear();
         this.cleanupTimers.clear();
         this.isConnected = false;
+        return { isValid: true };
     }
 } 

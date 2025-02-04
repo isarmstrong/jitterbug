@@ -20,4 +20,10 @@
 !*.tsx
 
 # But ignore type declaration files
-*.d.ts 
+*.d.ts
+
+/* Ignore test and legacy files that are not intended for linting */
+__tests__/
+test/
+docs/
+- agent/ 

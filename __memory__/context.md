@@ -96,8 +96,8 @@ const corsHeaders = {
 - NOT a Next.js app, but rather a development debugger that works with Next.js Edge Runtime
 - Core features: Type safety, Edge Runtime First, Smart Processing
 - Packages:
-  - @isarmstrong/jitterbug (core logging)
-  - @isarmstrong/jitterbug-next (Next.js integration)
+  - @jitterbug (core logging)
+  - @jitterbug-next (Next.js integration)
 
 ### Current Debugging Session
 1. SSE Transport Implementation:

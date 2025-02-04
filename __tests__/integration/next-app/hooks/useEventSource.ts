@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { LogType } from '@isarmstrong/jitterbug-next';
+import type { LogType } from '@jitterbug-next';
 import { getClientId, logger } from '../lib/logger';
 
 export type EventSourceStatus = 'CONNECTING' | 'OPEN' | 'CLOSED' | 'ERROR';

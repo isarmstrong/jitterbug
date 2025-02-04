@@ -1,29 +1,23 @@
 {
-  "name": "next-app",
-  "version": "0.1.6",
+  "name": "jitterbug-next-test-app",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 54321",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
-    "@isarmstrong/jitterbug": "link:../../..",
-    "@isarmstrong/jitterbug-next": "link:../../../packages/jitterbug-next",
-    "next": "^15.1.6",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "@jitterbug-next": "file:../../../",
+    "next": "14.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "15.1.6",
-    "postcss": "^8",
-    "tailwindcss": "^3.4.1",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
     "typescript": "^5"
   }
 }

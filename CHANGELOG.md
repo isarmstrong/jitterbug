@@ -91,7 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added state management type safety
 - Improved error handling patterns in core components
 - Reduced dependency footprint
-- Renamed package from @pocma/jitterbug to @isarmstrong/jitterbug
+- Renamed package from @pocma/jitterbug to @jitterbug
 - Enhanced SanitizeProcessor key matching
   - Now supports both string and RegExp patterns
   - Improved exact match comparison for string patterns

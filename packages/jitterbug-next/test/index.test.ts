@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createJitterbugLogger } from '../src';
 
 // Mock the jitterbug factory
-vi.mock('@isarmstrong/jitterbug', () => ({
+vi.mock('@jitterbug', () => ({
     factory: {
         create: vi.fn().mockImplementation((config) => ({
             ...config,

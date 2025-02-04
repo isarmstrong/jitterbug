@@ -3,30 +3,38 @@
  * ====================================================================
 */
 
-// TelemetryHandler: a function to capture validation events
-export type TelemetryHandler = (event: string, data?: Record<string, unknown>) => void;
+// Add TelemetryHandler type alias
+// Define TelemetryHandler to handle telemetry events with an event name and associated data
+export type TelemetryHandler = (event: string, data: unknown) => void;
+
+// Define validation result type
+export type ValidationResult = {
+    isValid: boolean;
+    errors?: string[];
+    metadata?: Record<string, unknown>;
+};
 
 // EdgeBoundaryLayer: Interface for the core validation layer.
 export interface EdgeBoundaryLayer {
     /**
-     * Validates the input data.
-     * @param input The data to validate.
-     * @returns True if valid, false otherwise.
+     * Validates the provided input using the core validation logic.
+     * @param input The input to validate, of generic type T. Defaults to unknown if not specified.
+     * @returns A ValidationResult object containing validation status and any errors
      */
-    validate<T>(input: T): boolean;
+    validate<T = unknown>(input: T): ValidationResult;
 
     /**
-     * Processes the input and returns validated output or throws an error if invalid.
-     * @param input The data to process.
-     * @returns Processed result meeting validation requirements.
+     * Processes the input and returns the processed value.
+     * @param input The input of generic type T. Defaults to unknown if not specified.
+     * @returns The processed value of type T
      */
-    process<T>(input: T): T;
+    process<T = unknown>(input: T): T;
 
     /**
-     * Sets a telemetry handler to capture validation events.
-     * @param handler A function to handle telemetry events.
+     * Sets the telemetry handler. Accepts a TelemetryHandler or undefined to clear the handler.
+     * @param handler The telemetry handler to set.
      */
-    setTelemetryHandler(handler: TelemetryHandler): void;
+    setTelemetryHandler(handler: TelemetryHandler | undefined): void;
 
     /**
      * Optionally clears any cached validation results.
@@ -37,27 +45,41 @@ export interface EdgeBoundaryLayer {
 // Implementation of the EdgeBoundaryLayer interface
 export class CoreValidationLayer implements EdgeBoundaryLayer {
     protected telemetryHandler?: TelemetryHandler;
-    private _results = new Map<any, boolean>();
+    private _results: Map<object, ValidationResult> = new Map();
 
-    validate<T>(input: T): boolean {
-        if (typeof input === 'object' && input !== null) {
+    validate<T>(input: T): ValidationResult {
+        // Handle null or undefined input
+        if (input == null) {
+            return { isValid: false, errors: ['Input cannot be null or undefined'] };
+        }
+
+        // Check cache for object inputs
+        if (typeof input === 'object') {
             const cached = this._results.get(input);
             if (cached !== undefined) {
                 return cached;
             }
         }
-        const result = true;  // Placeholder validation
-        if (typeof input === 'object' && input !== null) {
+
+        // Placeholder validation - replace with actual validation logic
+        const result: ValidationResult = { isValid: true };
+
+        // Cache result for object inputs
+        if (typeof input === 'object') {
             this._results.set(input, result);
         }
+
         return result;
     }
 
     process<T>(input: T): T {
+        if (!this.validate(input).isValid) {
+            throw new Error('Cannot process invalid input');
+        }
         return input;
     }
 
-    setTelemetryHandler(handler: TelemetryHandler): void {
+    setTelemetryHandler(handler: TelemetryHandler | undefined): void {
         this.telemetryHandler = handler;
     }
 
@@ -67,13 +89,12 @@ export class CoreValidationLayer implements EdgeBoundaryLayer {
 
     reportError(error: Error): void {
         if (this.telemetryHandler) {
-            this.telemetryHandler('error', { error });
+            this.telemetryHandler('error', { message: error.message });
         }
     }
 
     // --- Telemetry Hooks ---
-    // Minimal telemetry hook: if a telemetry handler is set, send the event and payload
-    protected hookTelemetry(event: string, payload?: any): void {
+    protected hookTelemetry(event: string, payload?: Record<string, unknown>): void {
         if (this.telemetryHandler) {
             this.telemetryHandler(event, payload);
         }
@@ -81,9 +102,13 @@ export class CoreValidationLayer implements EdgeBoundaryLayer {
 
     reportToSentry?(error: Error): void {
         // Implement when Sentry integration is added
+        this.hookTelemetry('sentry_error', {
+            message: error.message,
+            stack: error.stack
+        });
     }
 
-    private reportTelemetry(event: string, data?: any): void {
+    private reportTelemetry(event: string, data?: Record<string, unknown>): void {
         if (this.telemetryHandler) {
             this.telemetryHandler(event, data);
         } else {

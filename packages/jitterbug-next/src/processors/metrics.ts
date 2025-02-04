@@ -1,101 +1,80 @@
-import { Environment, Runtime, LogLevels } from '@isarmstrong/jitterbug';
 import type {
+    EnvironmentType,
     LogEntry,
     LogProcessor,
-    ProcessedLogEntry,
-    BaseLogContext,
-    RuntimeType,
-    EnvironmentType,
-    LogLevel
-} from '@isarmstrong/jitterbug';
+    RuntimeType
+} from '@isarmstrong/jitterbug/types/core';
 
-interface MetricsContext extends BaseLogContext {
-    metrics: {
+interface MetricsData {
+    samples: number;
+    eventLoop?: {
+        lag: number;
         samples: number;
-        eventLoop?: {
-            lag: number;
-            samples: number;
-        };
-        memoryUsage?: {
-            heapUsed: number;
-            heapTotal: number;
-            external: number;
-        };
+    };
+    memoryUsage?: {
+        heapUsed: number;
+        heapTotal: number;
+        external: number;
     };
 }
 
-export class MetricsProcessor implements LogProcessor {
-    private samples = 0;
-    private lastEventLoopCheck = process.hrtime.bigint();
+export const createMetricsProcessor = (): LogProcessor => {
+    let lastCheck = Date.now();
+    let eventLoopLag = 0;
 
-    public supports(runtime: RuntimeType): boolean {
-        return runtime === Runtime.EDGE || runtime === Runtime.NODE;
-    }
+    const checkEventLoop = () => {
+        const now = Date.now();
+        eventLoopLag = Math.max(0, now - lastCheck - 1000);
+        lastCheck = now;
+        setTimeout(checkEventLoop, 1000);
+    };
 
-    public allowedIn(environment: EnvironmentType): boolean {
-        return environment === Environment.DEVELOPMENT || environment === Environment.PRODUCTION;
-    }
+    checkEventLoop();
 
-    private getEventLoopLag(): number {
-        const now = process.hrtime.bigint();
-        const lag = Number((now - this.lastEventLoopCheck) / BigInt(1000000)); // Convert to ms
-        this.lastEventLoopCheck = now;
-        return lag;
-    }
-
-    private getMemoryUsage(): MetricsContext['metrics']['memoryUsage'] | undefined {
-        try {
-            const usage = process.memoryUsage();
-            return {
-                heapUsed: usage.heapUsed,
-                heapTotal: usage.heapTotal,
-                external: usage.external
+    return {
+        process: async <T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>> => {
+            const { memoryUsage } = process;
+            const memory = memoryUsage();
+            const context = entry.context;
+            const currentMetrics = (context as any).metrics || {
+                samples: 0,
+                eventLoop: {
+                    lag: 0,
+                    samples: 0
+                },
+                memoryUsage: {
+                    heapUsed: 0,
+                    heapTotal: 0,
+                    external: 0
+                }
             };
-        } catch {
-            // Memory usage not available (e.g., in Edge Runtime)
-            return undefined;
-        }
-    }
 
-    private normalizeLogLevel(level: string): LogLevel {
-        const upperLevel = level.toUpperCase() as keyof typeof LogLevels;
-        if (upperLevel in LogLevels) {
-            return LogLevels[upperLevel];
-        }
-        return LogLevels.INFO; // Default to INFO if invalid
-    }
+            const metrics: MetricsData = { ...currentMetrics };
+            metrics.samples++;
+            metrics.eventLoop = {
+                lag: (metrics.eventLoop?.lag || 0) + eventLoopLag,
+                samples: (metrics.eventLoop?.samples || 0) + 1
+            };
 
-    public async process<T extends Record<string, unknown>>(
-        entry: LogEntry<T & BaseLogContext>
-    ): Promise<ProcessedLogEntry<T & MetricsContext>> {
-        this.samples++;
-
-        const metrics: MetricsContext['metrics'] = {
-            samples: this.samples,
-            eventLoop: {
-                lag: this.getEventLoopLag(),
-                samples: this.samples
+            if (memory) {
+                metrics.memoryUsage = {
+                    heapUsed: memory.heapUsed,
+                    heapTotal: memory.heapTotal,
+                    external: memory.external
+                };
             }
-        };
 
-        const memoryUsage = this.getMemoryUsage();
-        if (memoryUsage) {
-            metrics.memoryUsage = memoryUsage;
-        }
+            const newContext = {
+                ...context,
+                metrics
+            };
 
-        const baseContext = entry.context || {} as T & BaseLogContext;
-        const updatedContext = {
-            ...baseContext,
-            metrics
-        };
-
-        const processedEntry: ProcessedLogEntry<T & MetricsContext> = {
-            message: entry.message,
-            level: this.normalizeLogLevel(entry.level),
-            context: updatedContext as T & MetricsContext,
-            processed: true
-        };
-
-        return processedEntry;
-    }
-} 
+            return {
+                ...entry,
+                context: newContext
+            } as LogEntry<T>;
+        },
+        supports: (runtime: RuntimeType) => runtime === 'NODE',
+        allowedIn: (environment: EnvironmentType) => true
+    };
+}; 
