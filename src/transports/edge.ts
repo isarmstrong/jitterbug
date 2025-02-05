@@ -2,57 +2,20 @@
 
 import pThrottle from "p-throttle";
 import { EDGE_DEFAULTS } from '../config/defaults';
-import { LogEntry, LogLevel, LogLevels, LogTransport } from "../types";
+import { LogEntry, LogLevels, LogTransport } from "../types/core";
 import { MemoryMetrics, MemoryUnit } from '../types/ebl/memory';
+import {
+  BaseTransport,
+  BatchMetrics,
+  EdgeEvent,
+  EdgeTransportConfig,
+  RetryStrategy,
+  EdgeMetrics as StreamMetrics,
+  TransportErrorCode
+} from '../types/transports';
 import { Storage } from '../utils/storage';
-import { BaseTransport, TransportConfig } from './types';
 
-export interface EdgeTransportConfig extends TransportConfig {
-  endpoint: string;
-  bufferSize?: number;
-  maxEntries?: number;
-  retryInterval?: number;
-  maxRetries?: number;
-  maxConnectionDuration?: number;
-  maxPayloadSize?: number;
-  autoReconnect?: boolean;
-  maxConcurrent?: number;
-  requestsPerSecond?: number;
-  batchSize?: number;
-  flushInterval?: number;
-  persistQueue?: boolean;
-  testMode?: boolean;
-  memoryThreshold?: number;
-  level?: LogLevel;
-}
-
-interface StreamMetrics {
-  messageCount: number;
-  avgProcessingTime: number;
-  backpressureEvents: number;
-  lastBackpressureTime: number;
-  errorCount: number;
-  lastErrorTime: number;
-  bufferSize: number;
-  bufferUsage: number;
-  droppedMessages: number;
-  lastDropTime: number;
-  memoryUsage: MemoryMetrics;
-  debugMetrics: {
-    droppedEntries: number;
-    highWaterMark: number;
-    lowWaterMark: number;
-    lastPressureLevel: number;
-  };
-}
-
-interface BatchMetrics {
-  size: number;
-  entryCount: number;
-  processingTime: number;
-  retryCount: number;
-  success: boolean;
-}
+export type { EdgeTransportConfig };
 
 export class EdgeTransport extends BaseTransport implements LogTransport {
   protected override config!: Required<EdgeTransportConfig>;
@@ -117,6 +80,13 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
 
   constructor(config: EdgeTransportConfig) {
     super(config);
+    const defaultRetryStrategy: RetryStrategy = {
+      maxRetries: 3,
+      baseDelay: 1000,
+      maxDelay: 30000,
+      backoffFactor: 2
+    };
+
     this.config = {
       ...EDGE_DEFAULTS,
       enabled: true,
@@ -137,7 +107,10 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
       persistQueue: config.persistQueue ?? false,
       testMode: config.testMode ?? EDGE_DEFAULTS.testMode,
       memoryThreshold: config.memoryThreshold ?? 128,
-    };
+      errorHandler: config.errorHandler ?? ((error) => console.error('Transport Error:', error)),
+      retryStrategy: config.retryStrategy ?? defaultRetryStrategy
+    } as Required<EdgeTransportConfig>;
+
     this._memoryThreshold = this.config.memoryThreshold;
     this.storage = new Storage();
     this.maxPendingRequests = this.config.maxConcurrent;
@@ -153,7 +126,7 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
     }
 
     if (this.config.autoReconnect) {
-      void this.connect().catch(console.error);
+      void this.connect().catch(error => this.handleError(error, TransportErrorCode.CONNECTION_FAILED));
     }
 
     this.setupFlushInterval();
@@ -209,74 +182,70 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
     });
   }
 
+  private async validateAndQueue(entry: LogEntry): Promise<void> {
+    if (this.queue.length >= this.config.bufferSize) {
+      this.queue.shift(); // Remove oldest entry if buffer is full
+    }
+    this.queue.push(entry);
+    await this.persistQueue();
+  }
+
   private async processBatch(batch: LogEntry[]): Promise<void> {
-    // Implementation
+    await Promise.all(batch.map(entry => this.processEntry(entry)));
+  }
+
+  private async processEntry(entry: LogEntry): Promise<void> {
+    await this.validateAndQueue(entry);
   }
 
   private async sendPayload(payload: string, batchId: string): Promise<void> {
     if (!this._isConnected || this.pendingRequests >= this.maxPendingRequests) {
-      return;
+      throw new Error('Transport not connected or too many pending requests');
     }
 
     this.pendingRequests++;
     const batchMetrics = this.batchMetrics.get(batchId);
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      await this.withRetry(async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const response = await fetch(this.config.endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Runtime": "edge",
-          "X-Environment": "production",
-          "X-Batch-ID": batchId,
-          "X-Retry-Count": batchMetrics ? String(batchMetrics.retryCount) : "0"
-        },
-        body: payload,
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`Failed to send payload: ${response.status}`);
-      }
-
-      if (batchMetrics) {
-        batchMetrics.success = true;
-      }
-    } catch (error) {
-      if (!(error instanceof Error && error.name === 'AbortError')) {
         try {
-          const entries = JSON.parse(payload) as Array<LogEntry>;
-          const existingIds = new Set(
-            this.queue
-              .map(e => e._metadata?.sequence)
-              .filter((seq): seq is number => seq !== undefined)
-          );
-
-          const newEntries = entries.filter(entry => {
-            const sequence = entry._metadata?.sequence;
-            return sequence === undefined || !existingIds.has(sequence);
+          const response = await fetch(this.config.endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Runtime": "edge",
+              "X-Environment": "production",
+              "X-Batch-ID": batchId,
+              "X-Retry-Count": batchMetrics ? String(batchMetrics.retryCount) : "0"
+            },
+            body: payload,
+            signal: controller.signal
           });
 
-          this.queue = [...newEntries, ...this.queue]
-            .slice(0, this.config.bufferSize);
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            throw new Error(`Failed to send payload: ${response.status}`);
+          }
 
           if (batchMetrics) {
-            batchMetrics.retryCount++;
-            batchMetrics.success = false;
+            batchMetrics.success = true;
           }
-        } catch (parseError) {
-          console.error('Failed to parse failed payload:', parseError);
+        } finally {
+          clearTimeout(timeoutId);
         }
+      }, TransportErrorCode.CONNECTION_FAILED);
+    } catch (error) {
+      if (batchMetrics) {
+        batchMetrics.success = false;
+        batchMetrics.retryCount++;
       }
       throw error;
     } finally {
       this.pendingRequests--;
-      this.batchMetrics.delete(batchId);
     }
   }
 
@@ -357,52 +326,68 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
   public async write<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void> {
     const startTime = performance.now();
 
-    if (!this._isConnected && this.config.autoReconnect) {
-      await Promise.race([
-        this.connect(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Connection timeout')), 5000)
-        )
-      ]).catch(() => { });
-    }
-
-    const entrySize = JSON.stringify(entry).length;
-    if (entrySize > this.config.maxPayloadSize) {
-      throw new Error('Entry exceeds maximum payload size');
-    }
-
-    const immutableEntry = Object.freeze({
-      ...entry,
-      _metadata: {
-        queueTime: Date.now(),
-        sequence: this.metrics.messageCount++,
-        _size: entrySize
+    try {
+      if (!this._isConnected && this.config.autoReconnect) {
+        await this.withRetry(
+          () => this.connect(),
+          TransportErrorCode.CONNECTION_FAILED
+        );
       }
-    });
 
-    this.queue.push(immutableEntry);
-    this.metrics.bufferUsage = this.queue.length / this.config.bufferSize;
+      const entrySize = JSON.stringify(entry).length;
+      if (entrySize > this.config.maxPayloadSize) {
+        throw new Error('Entry exceeds maximum payload size');
+      }
 
-    // Enforce buffer limits with circular buffer behavior
-    if (this.queue.length > this.config.bufferSize) {
-      this.queue = this.queue.slice(-this.config.bufferSize);
-      this.metrics.backpressureEvents++;
-      this.metrics.lastBackpressureTime = Date.now();
+      const immutableEntry = Object.freeze({
+        ...entry,
+        _metadata: {
+          queueTime: Date.now(),
+          sequence: this.metrics.messageCount++,
+          _size: entrySize
+        }
+      });
+
+      this.queue.push(immutableEntry);
+      this.metrics.bufferUsage = this.queue.length / this.config.bufferSize;
+
+      // Enforce buffer limits with circular buffer behavior
+      if (this.queue.length > this.config.bufferSize) {
+        this.queue = this.queue.slice(-this.config.bufferSize);
+        this.metrics.backpressureEvents++;
+        this.metrics.lastBackpressureTime = Date.now();
+        this.notifyEvent({
+          type: 'backpressure',
+          timestamp: Date.now(),
+          data: {
+            queueSize: this.queue.length,
+            bufferSize: this.config.bufferSize
+          }
+        });
+      }
+
+      // Immediate flush if batch size reached
+      if (this.queue.length >= this.config.batchSize) {
+        await this.withRetry(
+          () => this.flush(),
+          TransportErrorCode.SERIALIZATION_FAILED
+        );
+      }
+
+      // Update performance metrics
+      const processingTime = performance.now() - startTime;
+      this.processingTimes.push(processingTime);
+      if (this.processingTimes.length > 100) this.processingTimes.shift();
+      this.metrics.avgProcessingTime =
+        this.processingTimes.reduce((a, b) => a + b, 0) / this.processingTimes.length;
+
+    } catch (error) {
+      this.handleError(
+        error instanceof Error ? error : new Error(String(error)),
+        TransportErrorCode.SERIALIZATION_FAILED
+      );
+      throw error;
     }
-
-    // Immediate flush if batch size reached
-    if (this.queue.length >= this.config.batchSize) {
-      await this.flush().catch(() => { });
-    }
-
-    // Update performance metrics
-    const processingTime = performance.now() - startTime;
-    this.processingTimes.push(processingTime);
-    if (this.processingTimes.length > 100) this.processingTimes.shift();
-    this.metrics.avgProcessingTime =
-      this.processingTimes.reduce((a, b) => a + b, 0) / this.processingTimes.length;
-
-    this.notifyUpdate();
   }
 
   public getEntries(): ReadonlyArray<LogEntry<Record<string, unknown>>> {
@@ -473,6 +458,16 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
     this.updateCallbacks.clear();
   }
 
+  private startMemoryMonitoring(): void {
+    setInterval(() => {
+      const now = Date.now();
+      if (now - this.lastMemoryCheck >= this.MEMORY_CHECK_INTERVAL) {
+        this.updateMetrics();
+        this.lastMemoryCheck = now;
+      }
+    }, this.MEMORY_CHECK_INTERVAL);
+  }
+
   private updateMetrics(): void {
     try {
       const memoryInfo = process.memoryUsage();
@@ -497,8 +492,18 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
   }
 
   private onMemoryPressure(): void {
-    // Implement memory pressure handling
-    this.flush();
+    this.notifyEvent({
+      type: 'error',
+      timestamp: Date.now(),
+      data: {
+        type: TransportErrorCode.MEMORY_PRESSURE,
+        heapUsed: this.metrics.memoryUsage.heapUsed,
+        threshold: this._memoryThreshold
+      }
+    });
+    this.flush().catch(error => {
+      this.handleError(error, TransportErrorCode.MEMORY_PRESSURE);
+    });
     this.clearBuffer();
   }
 
@@ -507,7 +512,17 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
     this.metrics.bufferUsage = 0;
   }
 
-  private startMemoryMonitoring(): void {
-    // Implementation
+  private notifyEvent(event: EdgeEvent): void {
+    // Notify subscribers about transport events
+    this.updateCallbacks.forEach(callback => {
+      try {
+        callback();
+      } catch (error) {
+        this.handleError(
+          error instanceof Error ? error : new Error(String(error)),
+          TransportErrorCode.INVALID_STATE
+        );
+      }
+    });
   }
 }

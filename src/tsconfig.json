@@ -1,42 +1,87 @@
 {
-    "extends": "../tsconfig.base.json",
+    "extends": "../tsconfig.json",
     "compilerOptions": {
-        "composite": true,
-        "declaration": true,
         "outDir": "../dist/src",
         "rootDir": ".",
+        "composite": true,
+        "declaration": true,
+        "jsx": "preserve",
         "baseUrl": ".",
         "paths": {
-            "types/*": [
-                "types/*"
+            "@/*": [
+                "./*"
             ],
-            "utils/*": [
-                "utils/*"
+            "@core/*": [
+                "./types/*"
             ],
-            "transports/*": [
-                "transports/*"
+            "@utils/*": [
+                "./utils/*"
             ],
-            "ebl/*": [
-                "types/ebl/*"
+            "@transports/*": [
+                "./transports/*"
+            ],
+            "@ebl/*": [
+                "./types/ebl/*"
+            ],
+            "@isarmstrong/jitterbug-core-types": [
+                "../packages/core-types/src"
+            ],
+            "@isarmstrong/jitterbug-core-types/*": [
+                "../packages/core-types/src/*"
+            ],
+            "@isarmstrong/jitterbug-next": [
+                "../packages/jitterbug-next/src"
+            ],
+            "@isarmstrong/jitterbug-next/*": [
+                "../packages/jitterbug-next/src/*"
+            ],
+            "@isarmstrong/jitterbug-types": [
+                "../packages/jitterbug-types/src"
+            ],
+            "@isarmstrong/jitterbug-types/*": [
+                "../packages/jitterbug-types/src/*"
             ]
         }
     },
     "include": [
-        "**/*.ts",
-        "**/*.tsx"
+        "./**/*.ts",
+        "./**/*.tsx",
+        "./types/**/*.ts",
+        "./types/**/*.tsx",
+        "./types/ebl/**/*.ts",
+        "./utils/**/*.ts",
+        "./utils/**/*.tsx",
+        "./transports/**/*.ts",
+        "./transports/**/*.tsx",
+        "./processors/**/*.ts",
+        "./processors/**/*.tsx",
+        "./next/**/*.ts",
+        "./next/**/*.tsx",
+        "./next/components/**/*.ts",
+        "./next/components/**/*.tsx",
+        "./next/lib/**/*.ts",
+        "./next/lib/**/*.tsx",
+        "./next/hooks/**/*.ts",
+        "./next/hooks/**/*.tsx",
+        "./next/api/**/*.ts",
+        "./next/api/**/*.tsx",
+        "./next/app/**/*.ts",
+        "./next/app/**/*.tsx"
     ],
     "exclude": [
-        "node_modules",
-        "dist",
         "**/*.test.ts",
-        "**/*.test.tsx"
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/__tests__/**",
+        "../**/node_modules",
+        "../dist"
     ],
     "references": [
         {
-            "path": "../packages/core-types"
+            "path": "../packages/jitterbug-types"
         },
         {
-            "path": "../packages/jitterbug-types"
+            "path": "../packages/jitterbug-next"
         }
     ]
 }

@@ -37,9 +37,9 @@ export function useEventSource(): UseEventSourceResult {
     const [status, setStatus] = useState<EConnectionState>(EConnectionState.DISCONNECTED);
     const [messages, setMessages] = useState<LogType[]>([]);
     const [error, setError] = useState<Error | null>(null);
-    const [eventSource, setEventSource] = useState<EventSource | null>(null);
+    const [_eventSource, setEventSource] = useState<EventSource | null>(null);
 
-    useEffect(() => {
+    useEffect((): (() => void) => {
         const clientId = getClientId();
         const url = `/api/debug/logs/${clientId}`;
 
@@ -47,18 +47,18 @@ export function useEventSource(): UseEventSourceResult {
         setEventSource(es);
         setStatus(EConnectionState.CONNECTING);
 
-        es.onopen = () => {
+        es.onopen = (): void => {
             setStatus(EConnectionState.CONNECTED);
             setError(null);
         };
 
-        es.onerror = (e) => {
+        es.onerror = (_e: Event): void => {
             setStatus(EConnectionState.FAILED);
             setError(new Error('EventSource failed to connect'));
             es.close();
         };
 
-        es.onmessage = (event) => {
+        es.onmessage = (event: MessageEvent): void => {
             try {
                 const data = JSON.parse(event.data) as SerializedLogType;
                 const logEntry: LogType = isSerializedErrorLog(data)
@@ -75,7 +75,7 @@ export function useEventSource(): UseEventSourceResult {
             }
         };
 
-        return () => {
+        return (): void => {
             es.close();
             setStatus(EConnectionState.DISCONNECTED);
         };

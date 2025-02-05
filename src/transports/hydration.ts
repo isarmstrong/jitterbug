@@ -1,54 +1,29 @@
-import { LogEntry, LogTransport, Runtime } from "../types";
-import { BaseTransport, TransportConfig } from "./types";
+import { LogEntry, LogTransport, Runtime } from "../types/core";
+import {
+    BaseTransport,
+    HydrationConfig,
+    HydrationEvent,
+    HydrationMetrics
+} from "../types/transports";
 
-export interface HydrationMetrics {
-    // Hydration Events
-    hydrationAttempts: number;
-    hydrationErrors: number;
-    suspenseBoundaryUpdates: number;
-    serverComponentRenders: number;
-    streamingUpdates: number;
-
-    // Timing
-    avgHydrationTime: number;
-    avgServerRenderTime: number;
-    avgStreamingDelay: number;
-
-    // Mismatches
-    contentMismatches: number;
-    attributeMismatches: number;
-    suspenseMismatches: number;
-    lastMismatchTime: number | null;
-
-    // Component Stats
-    componentHydrationMap: Map<string, {
-        attempts: number;
-        errors: number;
-        avgTime: number;
-    }>;
-}
-
-export interface HydrationConfig extends TransportConfig {
-    trackComponents?: boolean;
-    maxComponentHistory?: number;
-}
-
-interface HydrationEvent {
-    type: 'hydration' | 'server' | 'streaming' | 'suspense' | 'mismatch';
-    component?: string;
-    duration: number;
-    timestamp: number;
-    error?: Error;
-    mismatchType?: 'content' | 'attribute' | 'suspense';
-    details?: Record<string, unknown>;
-}
-
-interface HydrationData {
-    data: unknown;
-}
+export type { HydrationConfig };
 
 export class HydrationTransport extends BaseTransport implements LogTransport {
     private metrics: HydrationMetrics = {
+        messageCount: 0,
+        avgProcessingTime: 0,
+        errorCount: 0,
+        lastErrorTime: 0,
+        bufferSize: 0,
+        bufferUsage: 0,
+        memoryUsage: {
+            heapUsed: 0,
+            heapTotal: 0,
+            external: 0,
+            arrayBuffers: 0,
+            threshold: 0,
+            rss: 0
+        },
         hydrationAttempts: 0,
         hydrationErrors: 0,
         suspenseBoundaryUpdates: 0,
@@ -71,7 +46,7 @@ export class HydrationTransport extends BaseTransport implements LogTransport {
     private readonly maxComponentHistory: number;
 
     constructor(config?: HydrationConfig) {
-        super(config);
+        super(config ?? {});
         this.trackComponents = config?.trackComponents ?? true;
         this.maxComponentHistory = config?.maxComponentHistory ?? 1000;
     }
@@ -123,7 +98,8 @@ export class HydrationTransport extends BaseTransport implements LogTransport {
             timestamp: new Date(Number(entry.context?.timestamp ?? 0)).getTime(),
             error: data.error as Error | undefined,
             mismatchType: data.mismatchType as HydrationEvent['mismatchType'],
-            details: data.details as Record<string, unknown> | undefined
+            details: data.details as Record<string, unknown> | undefined,
+            data: data
         };
     }
 
@@ -224,26 +200,6 @@ export class HydrationTransport extends BaseTransport implements LogTransport {
             const oldestComponent = Array.from(this.metrics.componentHydrationMap.keys())[0];
             this.metrics.componentHydrationMap.delete(oldestComponent);
         }
-    }
-
-    private async handleData(data: HydrationData): Promise<void> {
-        if (!this.isValidData(data)) return;
-        // Process the data
-        await this.processData(data);
-    }
-
-    private async processData(data: HydrationData): Promise<void> {
-        if (!this.isValidData(data)) return;
-        // Process the data
-        await this.processValidData(data.data);
-    }
-
-    private isValidData(data: unknown): data is HydrationData {
-        return typeof data === 'object' && data != null && 'data' in data;
-    }
-
-    private async processValidData(data: unknown): Promise<void> {
-        // Implementation
     }
 
     protected onError(_event: Event): void {

@@ -1,59 +1,55 @@
 {
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
-        "outDir": "../../dist/next-app",
-        "rootDir": "../../",
         "composite": true,
-        "tsBuildInfoFile": "../../dist/next-app/.tsbuildinfo",
-        "jsx": "react-jsx",
+        "declaration": true,
+        "outDir": "../../dist/next",
+        "rootDir": ".",
         "baseUrl": ".",
+        "jsx": "preserve",
         "paths": {
             "@/*": [
-                "./*"
+                "../*"
             ],
-            "@isarmstrong/jitterbug": [
-                "../../src"
+            "@isarmstrong/jitterbug-core-types": [
+                "../../packages/core-types/src"
             ],
-            "@isarmstrong/jitterbug/*": [
-                "../../src/*"
+            "@isarmstrong/jitterbug-core-types/*": [
+                "../../packages/core-types/src/*"
+            ],
+            "@isarmstrong/jitterbug-next": [
+                "../../packages/jitterbug-next/src"
+            ],
+            "@isarmstrong/jitterbug-next/*": [
+                "../../packages/jitterbug-next/src/*"
             ],
             "@isarmstrong/jitterbug-types": [
                 "../../packages/jitterbug-types/src"
             ],
             "@isarmstrong/jitterbug-types/*": [
                 "../../packages/jitterbug-types/src/*"
-            ],
-            "@jitterbug-next/*": [
-                "../../packages/jitterbug-next/src/*"
-            ],
-            "@jitterbug-next/api": [
-                "../../packages/jitterbug-next/src/api/index"
-            ],
-            "@jitterbug-next/api/*": [
-                "../../packages/jitterbug-next/src/api/*"
-            ],
-            "@isarmstrong/jitterbug-next/api": [
-                "../../packages/jitterbug-next/src/api/index"
-            ],
-            "@isarmstrong/jitterbug-next/api/*": [
-                "../../packages/jitterbug-next/src/api/*"
             ]
         }
     },
+    "include": [
+        "./**/*.ts",
+        "./**/*.tsx"
+    ],
+    "exclude": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/__tests__/**"
+    ],
     "references": [
+        {
+            "path": "../../packages/core-types"
+        },
         {
             "path": "../../packages/jitterbug-types"
         },
         {
             "path": "../../packages/jitterbug-next"
         }
-    ],
-    "include": [
-        "./**/*",
-        "../../packages/jitterbug-next/src/api/**/*"
-    ],
-    "exclude": [
-        "node_modules",
-        "dist"
     ]
 }

@@ -21,60 +21,64 @@
     "incremental": true,
     "preserveConstEnums": true,
     "outDir": "./dist",
+    "rootDir": ".",
     "baseUrl": ".",
     "composite": true,
     "declaration": true,
     "paths": {
+      "@/*": [
+        "./src/*"
+      ],
       "@isarmstrong/jitterbug-core-types": [
-        "packages/core-types/src"
+        "./packages/core-types/src"
       ],
       "@isarmstrong/jitterbug-core-types/*": [
-        "packages/core-types/src/*"
+        "./packages/core-types/src/*"
+      ],
+      "@isarmstrong/jitterbug-next": [
+        "./packages/jitterbug-next/src"
+      ],
+      "@isarmstrong/jitterbug-next/*": [
+        "./packages/jitterbug-next/src/*"
       ],
       "@isarmstrong/jitterbug-types": [
-        "packages/jitterbug-types/src"
+        "./packages/jitterbug-types/src"
       ],
       "@isarmstrong/jitterbug-types/*": [
-        "packages/jitterbug-types/src/*"
-      ],
-      "@isarmstrong/jitterbug": [
-        "src"
-      ],
-      "@isarmstrong/jitterbug/*": [
-        "src/*"
-      ],
-      "@isarmstrong/jitterbug-next/api": [
-        "packages/jitterbug-next/src/api/index"
-      ],
-      "@isarmstrong/jitterbug-next/api/*": [
-        "packages/jitterbug-next/src/api/*"
+        "./packages/jitterbug-types/src/*"
       ]
     }
   },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "packages/*/src/**/*.ts",
+    "packages/*/src/**/*.tsx",
+    "packages/*/*.ts",
+    "packages/*/*.tsx",
+    "test/**/*.ts",
+    "test/**/*.tsx",
+    "*.ts",
+    "*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage",
+    ".next",
+    "**/*.js",
+    "**/*.cjs",
+    "**/*.mjs"
+  ],
   "references": [
     {
-      "path": "./packages/core-types"
+      "path": "./src"
     },
     {
       "path": "./packages/jitterbug-types"
     },
     {
       "path": "./packages/jitterbug-next"
-    },
-    {
-      "path": "./src"
     }
-  ],
-  "include": [
-    "src/**/*",
-    "packages/**/*",
-    "global.d.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "**/*.test.ts",
-    "**/*.spec.ts",
-    "**/__tests__/**"
   ]
 }

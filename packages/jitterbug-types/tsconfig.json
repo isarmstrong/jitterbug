@@ -9,6 +9,12 @@
         "paths": {
             "@/*": [
                 "./src/*"
+            ],
+            "@isarmstrong/jitterbug-core-types": [
+                "../core-types/src"
+            ],
+            "@isarmstrong/jitterbug-core-types/*": [
+                "../core-types/src/*"
             ]
         }
     },
