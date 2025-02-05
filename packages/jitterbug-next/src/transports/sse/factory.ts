@@ -1,4 +1,4 @@
-import type { ValidationResult } from '@isarmstrong/jitterbug';
+import type { ValidationResult } from '@isarmstrong/jitterbug-core-types';
 import type { SSETransportConfig } from '../../types';
 import { Next13SSETransport } from './next13';
 import { Next14SSETransport } from './next14';

@@ -17,17 +17,17 @@
         "composite": true,
         "baseUrl": ".",
         "paths": {
-            "@isarmstrong/jitterbug": [
-                "./src"
+            "@core/*": [
+                "src/types/*"
             ],
-            "@isarmstrong/jitterbug/*": [
-                "./src/*"
+            "@utils/*": [
+                "src/utils/*"
             ],
-            "@isarmstrong/jitterbug-types": [
-                "./packages/jitterbug-types/src"
+            "@transports/*": [
+                "src/transports/*"
             ],
-            "@isarmstrong/jitterbug-types/*": [
-                "./packages/jitterbug-types/src/*"
+            "@ebl/*": [
+                "src/types/ebl/*"
             ]
         },
         "typeRoots": [

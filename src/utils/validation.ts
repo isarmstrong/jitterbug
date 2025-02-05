@@ -10,13 +10,6 @@ export function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Type predicate to check if a value is a string
- */
-export function isString(value: unknown): value is string {
-    return typeof value === 'string';
-}
-
-/**
  * Type predicate to check if a value is a number
  */
 export function isNumber(value: unknown): value is number {

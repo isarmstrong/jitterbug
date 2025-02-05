@@ -1,8 +1,12 @@
-import { LogTransport, createJitterbug, Environment, Runtime } from '@isarmstrong/jitterbug';
+import type { LogTransport as CoreLogTransport } from '@isarmstrong/jitterbug-core-types';
+import { Environment, Runtime } from '@isarmstrong/jitterbug-core-types';
+import legacy from '@isarmstrong/jitterbug/legacy.facade';
 import { ConsoleTransport } from '@isarmstrong/jitterbug/transports/console';
-import { EdgeTransport, type EdgeTransportConfig } from '@isarmstrong/jitterbug/transports/edge';
+import type { EdgeTransportConfig } from '@isarmstrong/jitterbug/transports/edge';
 import type { NextLoggerConfig } from './types';
 import { detectNextEnvironment, detectNextRuntime } from './utils';
+const { createJitterbug, EdgeTransport } = legacy;
+const LogTransport = EdgeTransport;
 
 // Re-export types
 export * from './types';
@@ -20,7 +24,7 @@ export function createJitterbugLogger(namespace: string, config: NextLoggerConfi
     const isDev = environment === Environment.DEVELOPMENT;
 
     // Configure transports based on environment
-    const transports: LogTransport[] = [];
+    const transports: CoreLogTransport[] = [];
 
     // Add console transport in development or browser
     if (isDev || runtime === Runtime.BROWSER) {
@@ -54,5 +58,10 @@ export function createJitterbugLogger(namespace: string, config: NextLoggerConfi
 }
 
 export * from './logger';
+export * from './transports/edge';
 export * from './transports/sse/factory';
-export * from './transports/edge'; 
+export { createJitterbug, Environment, LogTransport, Runtime };
+
+/* Declare a local type alias and then export it */
+export type LogTransportType = typeof EdgeTransport;
+

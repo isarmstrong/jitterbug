@@ -4,7 +4,8 @@
  */
 
 import type { ValidationResult } from '../types/ebl/core';
-import { isBoolean, isNumber, isObject, isString } from '../utils/validation';
+import { isString } from '../utils/type-guards';
+import { isBoolean, isNumber, isObject } from '../utils/validation';
 
 export enum ProtocolVersion {
     V1 = '1.0',
@@ -203,11 +204,11 @@ export class ProtocolValidator implements ProtocolValidation {
                     errors.push('stream.maxChunkSize must be a positive number');
                 }
 
-                if (!['json', 'msgpack'].includes(encoding)) {
+                if (typeof encoding !== 'string' || !['json', 'msgpack'].includes(encoding)) {
                     errors.push('stream.encoding must be either "json" or "msgpack"');
                 }
 
-                if (compression !== undefined && !['gzip', 'br', 'deflate'].includes(compression)) {
+                if (typeof compression === 'string' && !['gzip', 'br', 'deflate'].includes(compression)) {
                     errors.push('stream.compression must be one of: gzip, br, deflate');
                 }
             }
@@ -227,7 +228,7 @@ export class ProtocolValidator implements ProtocolValidation {
                     errors.push('retry.baseDelay must be a non-negative number');
                 }
 
-                if (!isNumber(retry.maxDelay) || retry.maxDelay < retry.baseDelay) {
+                if (!isNumber(retry.maxDelay) || !isNumber(retry.baseDelay) || retry.maxDelay < retry.baseDelay) {
                     errors.push('retry.maxDelay must be a number greater than or equal to baseDelay');
                 }
             }

@@ -1,9 +1,22 @@
 'use client';
 
-import type { LogType, SerializedLogType } from '@/types/index';
-import { isSerializedErrorLog } from '@/types/index';
+import type { LogType } from '@isarmstrong/jitterbug-types';
 import { useEffect, useState } from 'react';
 import { getClientId } from '../lib/client';
+
+// Add missing type and type guard for SerializedLogType
+interface SerializedLogType {
+    message: string;
+    level: "DEBUG" | "INFO" | "WARN" | "ERROR" | "FATAL";
+    timestamp: number;
+    errorMessage?: string;
+    errorStack?: string;
+    [key: string]: unknown;
+}
+
+function isSerializedErrorLog(log: SerializedLogType): log is SerializedLogType & { errorMessage: string; errorStack: string } {
+    return typeof log.errorMessage === 'string' && typeof log.errorStack === 'string';
+}
 
 export enum EConnectionState {
     CONNECTING = 'CONNECTING',
@@ -52,9 +65,10 @@ export function useEventSource(): UseEventSourceResult {
                     ? {
                         ...data,
                         error: new Error(data.errorMessage),
-                        stack: data.errorStack
+                        stack: data.errorStack,
+                        timestamp: data.timestamp.toString()
                     }
-                    : data;
+                    : { ...data, timestamp: data.timestamp.toString() };
                 setMessages(prev => [...prev, logEntry]);
             } catch (e) {
                 console.error('Failed to parse message:', e);

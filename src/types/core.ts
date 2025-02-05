@@ -1,33 +1,101 @@
 /**
- * Core constants and types for Jitterbug
+ * Core type definitions for Jitterbug
+ * Edge-first logging with progressive enhancement
  */
 
-// Pool A: Core Constants
+/* Constants */
 export const LogLevels = Object.freeze({
-    DEBUG: "DEBUG",
-    INFO: "INFO",
-    WARN: "WARN",
-    ERROR: "ERROR",
-    FATAL: "FATAL",
+    DEBUG: 'DEBUG',
+    INFO: 'INFO',
+    WARN: 'WARN',
+    ERROR: 'ERROR',
+    FATAL: 'FATAL'
 } as const);
 
 export const Runtime = Object.freeze({
-    EDGE: "EDGE",
-    NODE: "NODE",
-    BROWSER: "BROWSER",
+    EDGE: 'EDGE',
+    NODE: 'NODE',
+    BROWSER: 'BROWSER'
 } as const);
 
 export const Environment = Object.freeze({
-    DEVELOPMENT: "DEVELOPMENT",
-    STAGING: "STAGING",
-    PRODUCTION: "PRODUCTION",
-    TEST: "TEST",
+    DEVELOPMENT: 'DEVELOPMENT',
+    STAGING: 'STAGING',
+    PRODUCTION: 'PRODUCTION',
+    TEST: 'TEST'
 } as const);
 
-// Pool B: Core Types
-export type LogLevel = keyof typeof LogLevels | Lowercase<keyof typeof LogLevels>;
+/* Base Types */
+export type LogLevel = keyof typeof LogLevels;
 export type RuntimeType = keyof typeof Runtime;
 export type EnvironmentType = keyof typeof Environment;
+
+/* Core Interfaces */
+export interface BaseContext extends Record<string, unknown> {
+    timestamp: string;
+    runtime: RuntimeType;
+    environment: EnvironmentType;
+    namespace: string;
+}
+
+export interface BaseEntry<T = Record<string, unknown>> {
+    level: LogLevel;
+    message: string;
+    data?: T;
+    error?: Error;
+    context: BaseContext;
+    warnings?: string[];
+}
+
+export interface Transport {
+    write<T extends Record<string, unknown>>(entry: BaseEntry<T>): Promise<void>;
+}
+
+export interface Processor {
+    process<T extends Record<string, unknown>>(entry: BaseEntry<T>): Promise<BaseEntry<T>>;
+    supports(runtime: RuntimeType): boolean;
+    allowedIn(environment: EnvironmentType): boolean;
+}
+
+export interface Config {
+    namespace: string;
+    enabled?: boolean;
+    level?: LogLevel;
+    minLevel?: LogLevel;
+    runtime?: RuntimeType;
+    environment?: EnvironmentType;
+    processors?: Processor[];
+    transports?: Transport[];
+}
+
+export interface Instance {
+    debug<T extends Record<string, unknown>>(message: string, data?: T): void;
+    info<T extends Record<string, unknown>>(message: string, data?: T): void;
+    warn<T extends Record<string, unknown>>(message: string, data?: T): void;
+    error(message: string, error: Error, data?: Record<string, unknown>): void;
+    fatal(message: string, error: Error, data?: Record<string, unknown>): void;
+    setContext(context: Partial<BaseContext>): void;
+    getContext(): BaseContext;
+    enable(): void;
+    disable(): void;
+    isEnabled(): boolean;
+    configure(config: Partial<Config>): void;
+}
+
+export interface Factory {
+    create: (config: Config) => Instance;
+    createDebug: (namespace: string, config?: Partial<Config>) => Instance;
+    getRuntime: () => RuntimeType;
+    getEnvironment: () => EnvironmentType;
+}
+
+/* Utility Types */
+export type ReadonlyEntry = Readonly<BaseEntry>;
+export type ReadonlyConfig = Readonly<Config>;
+export type RuntimeConfig = Partial<Config>;
+
+// Type aliases for external use
+export type { Config as JitterbugConfig, Factory as JitterbugFactory, Instance as JitterbugInstance, BaseEntry as LogEntry, Transport as LogTransport };
 
 // Pool B: Core Interfaces
 export interface RequestContext {
@@ -49,77 +117,4 @@ export interface CacheContext {
     size?: number;
     hit?: boolean;
     duration?: number;
-}
-
-export interface LogContext {
-    timestamp: string;
-    runtime: RuntimeType;
-    environment: EnvironmentType;
-    namespace: string;
-    request?: RequestContext;
-    cache?: CacheContext;
-    [key: string]: unknown;
-}
-
-export interface LogEntry<T = Record<string, unknown>> {
-    level: LogLevel;
-    message: string;
-    data?: T;
-    error?: Error;
-    context: LogContext;
-    warnings?: string[];
-}
-
-// Temporary fix: Define ProcessedLogEntry as a generic alias for LogEntry
-export type ProcessedLogEntry<T = Record<string, unknown>> = LogEntry<T>;
-
-// Pool C: Implementation Interfaces
-export interface LogProcessor {
-    process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>>;
-    supports(runtime: RuntimeType): boolean;
-    allowedIn(environment: EnvironmentType): boolean;
-}
-
-export interface LogTransport {
-    write<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void>;
-}
-
-// Pool D: Configuration Types
-export interface JitterbugConfig {
-    namespace: string;
-    enabled?: boolean;
-    level?: LogLevel;
-    minLevel?: LogLevel;
-    runtime?: RuntimeType;
-    environment?: EnvironmentType;
-    processors?: LogProcessor[];
-    transports?: LogTransport[];
-}
-
-export interface JitterbugInstance {
-    debug<T extends Record<string, unknown>>(message: string, data?: T): void;
-    info<T extends Record<string, unknown>>(message: string, data?: T): void;
-    warn<T extends Record<string, unknown>>(message: string, data?: T): void;
-    error(message: string, error: Error, data?: Record<string, unknown>): void;
-    fatal(message: string, error: Error, data?: Record<string, unknown>): void;
-    render<T extends Record<string, unknown>>(message: string, data?: T): void;
-    setContext(context: Partial<LogContext>): void;
-    getContext(): LogContext;
-    enable(): void;
-    disable(): void;
-    isEnabled(): boolean;
-    configure(config: Partial<JitterbugConfig>): void;
-}
-
-export interface JitterbugFactory {
-    create: (config: JitterbugConfig) => JitterbugInstance;
-    createDebug: (namespace: string, config?: Partial<JitterbugConfig>) => JitterbugInstance;
-    getRuntime: () => RuntimeType;
-    getEnvironment: () => EnvironmentType;
-}
-
-// Type Boundaries
-export type CoreLogEntry = Readonly<LogEntry>;
-export type TransportLogEntry = LogEntry & { warnings?: string[] };
-export type SafeConfig = Readonly<JitterbugConfig>;
-export type RuntimeConfig = Partial<JitterbugConfig>; 
+} 

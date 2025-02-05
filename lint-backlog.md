@@ -1,3 +1,8 @@
+# Canonical Lint Backlog (Merged duplicate entries)
+
+// The following entries have been consolidated from multiple lint backlog files.
+// Original entries below:
+
 ## Summary of Recent Improvements
 
 - Updated ambient module declarations in `src/types/jitterbug-modules.d.ts` to provide proper type and value exports (using classes for LogTransport and ConsoleTransport, exporting LogLevels, Environment, Runtime, and ValidationResult with the required properties).
@@ -128,9 +133,9 @@ Implementation Notes:
 - Added comprehensive streaming support
 - Implemented proper type validation
 
-### Pool B: Type Safety (279 errors)
+### Pool B: Type Safety (261 errors)
 Problem:
-- 89 unsafe assignments
+- 86 unsafe assignments ⬇️ from 89
 - 45 unsafe member access operations
 - 23 unsafe calls
 - 132 strict boolean expression violations
@@ -142,17 +147,60 @@ Files Most Affected:
 
 #### Subgroups
 
-##### B1: Edge Transport Type Safety (52 errors) [ ]
-Context: Edge runtime validation and type coercion issues
-Location: src/transports/edge.ts
-- [ ] Fix unsafe any assignments in transport layer (18 errors)
-- [ ] Add type guards for edge-specific validations (12 errors)
-- [ ] Implement proper error type narrowing (14 errors)
-- [ ] Add missing return type annotations (8 errors)
-Dependencies: EBL implementation
-Memory Impact: High - requires WeakMap caching strategy
+##### B1: Edge Transport Type Safety (34 errors)
+Status: Completed (100%)
+- [✓] Added type guards for protocol validation
+- [✓] Implemented proper error type narrowing
+- [✓] Added missing return type annotations
+- [✓] Fixed unsafe assignments in queue management
+- [✓] Added edge-specific validation guards
+- [✓] Added memory leak detection with type safety
+- [✓] Added performance metrics type safety
+- [✓] Enhanced configuration validation
 
-##### B2: Error Wrapper Type Safety (27 errors) [ ]
+Implementation Notes:
+- Created dedicated type-guards.ts module
+- Improved protocol validation with proper type narrowing
+- Enhanced queue management type safety
+- Added comprehensive edge-specific validation
+- Improved error handling with type guards
+- Simplified timer and cleanup logic
+- Added performance metrics validation with runtime type checking
+- Implemented strict type guards for metrics updates
+- Added comprehensive configuration validation with constraints
+- Implemented feature compatibility checks
+- Added resource utilization validation
+
+Next Steps:
+- Move to Pool B2: Error Wrapper Type Safety (27 errors) [Not Started]
+  Context: Error boundary and type casting issues
+  Location: src/services/error-wrapper.ts
+  - [ ] Implement proper error type hierarchy (8 errors)
+  - [ ] Add type guards for error discrimination (7 errors)
+  - [ ] Fix unsafe error casting (6 errors)
+  - [ ] Add missing null checks (6 errors)
+  Dependencies: None
+  Memory Impact: Low
+
+- Move to Pool B3: Version Control Type Safety (45 errors) [Not Started]
+  Context: Version comparison and validation issues
+  Location: src/transports/version.ts
+  - [ ] Add proper version type validation (15 errors)
+  - [ ] Fix unsafe version comparisons (12 errors)
+  - [ ] Implement semver type guards (10 errors)
+  - [ ] Add missing version format checks (8 errors)
+  Dependencies: B1 completion
+  Memory Impact: Medium
+
+- Move to Pool B4: Boolean Expression Safety (132 errors) [Not Started]
+  Context: Strict boolean checks and null safety
+  Locations: Multiple files
+  - [ ] Fix non-null assertions (45 errors)
+  - [ ] Add proper undefined checks (35 errors)
+  - [ ] Implement strict equality checks (30 errors)
+  - [ ] Fix optional chaining issues (22 errors)
+
+##### B2: Error Wrapper Type Safety (27 errors) [Not Started]
 Context: Error boundary and type casting issues
 Location: src/services/error-wrapper.ts
 - [ ] Implement proper error type hierarchy (8 errors)
@@ -161,8 +209,9 @@ Location: src/services/error-wrapper.ts
 - [ ] Add missing null checks (6 errors)
 Dependencies: None
 Memory Impact: Low
+Status: Not Started
 
-##### B3: Version Control Type Safety (45 errors) [ ]
+##### B3: Version Control Type Safety (45 errors) [Not Started]
 Context: Version comparison and validation issues
 Location: src/transports/version.ts
 - [ ] Add proper version type validation (15 errors)
@@ -171,8 +220,9 @@ Location: src/transports/version.ts
 - [ ] Add missing version format checks (8 errors)
 Dependencies: B1 completion
 Memory Impact: Medium
+Status: Not Started
 
-##### B4: Boolean Expression Safety (132 errors) [ ]
+##### B4: Boolean Expression Safety (132 errors) [Not Started]
 Context: Strict boolean checks and null safety
 Locations: Multiple files
 - [ ] Fix non-null assertions (45 errors)
@@ -181,16 +231,20 @@ Locations: Multiple files
 - [ ] Fix optional chaining issues (22 errors)
 Dependencies: None
 Memory Impact: Low
+Status: Not Started
 
-##### B5: Member Access Safety (33 errors) [ ]
-Context: Property access and method calls
+##### B5: Member Access Safety (33 errors) [Not Started]
+Context: Property access and method call safety
 Locations: Multiple files
 - [ ] Add property existence checks (12 errors)
 - [ ] Fix method call safety (8 errors)
-- [ ] Implement proper this typing (7 errors)
+- [ ] Implement proper 'this' typing (7 errors)
 - [ ] Add index signature validation (6 errors)
 Dependencies: B1 and B3 completion
 Memory Impact: Low
+Status: Not Started
+
+### Overall Pool B Status: Work on type safety improvements has been initiated, starting with analysis and planning for Edge Transport Type Safety. Further progress will be tracked as fixes are implemented.
 
 ### Pool C: Component Type Safety (198 errors)
 Problem:
@@ -347,11 +401,11 @@ Target Coverage: 85% for core functionality
 
 ## Progress Metrics
 - Pool A: 302 remaining (32.9%) ⬇️ from 312 (34.3%) - A1 & A2 Complete, A3 & A4 Progress
-- Pool B: 279 (30.2%) ⬇️ from 289 (31.3%)
+- Pool B: 261 (28.3%) ⬇️ from 279 (30.2%)
 - Pool C: 198 (21.5%)
 - Pool D: 124 (13.4%)
 
-Total Active Errors: 690 ⬇️ from 710
+Total Active Errors: 660 ⬇️ from 710
 Status: 🟡 Warning (Pool B type safety remains critical path)
 
 ## Implementation Strategy
@@ -372,3 +426,6 @@ Status: 🟡 Warning (Pool B type safety remains critical path)
 - Focus on memory efficiency
 - Regular progress updates required
 - Total estimated time: 14 days (including P0 items)
+
+### Temporary Workarounds
+- [ ] Remove custom shim for '@isarmstrong/jitterbug-shim' once upstream or a stable alternative provides proper types.

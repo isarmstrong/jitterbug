@@ -60,4 +60,7 @@
 - Keep Edge runtime constraints in mind
 - Maintain type safety across boundaries
 - Document memory management decisions
-- Test in actual Edge environment 
+- Test in actual Edge environment
+
+### Temporary Workarounds
+- [ ] Remove custom shim for '@isarmstrong/jitterbug-shim' once upstream or a stable alternative provides proper types. 

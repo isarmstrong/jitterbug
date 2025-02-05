@@ -19,3 +19,15 @@ global.performance = {
   clearMarks: vi.fn(),
   clearMeasures: vi.fn(),
 };
+
+// Export test utilities
+export const resetMocks = () => {
+  Object.values(mockPerformance).forEach(mock => {
+    if (typeof mock === 'function') {
+      mock.mockClear();
+    }
+  });
+};
+
+// Set global EdgeRuntime to simulate Edge environment
+globalThis.EdgeRuntime = "edge";

@@ -1,12 +1,12 @@
-import { createLogHandler } from "@jitterbug-next/api";
 import { NextRequest } from "next/server";
+import { createLogHandler } from "../../../../../../packages/jitterbug-next/src/api/index";
 
 // Set runtime to edge
 export const runtime = "edge";
 
 // Create a log handler using the re-exported function
 const apiHandler = createLogHandler({
-    processLogs: async (logs) => {
+    processLogs: async (logs: unknown[]) => {
         console.log('Processing logs:', logs);
     }
 }) as unknown as ((req: NextRequest) => Promise<Response>) & { processLogs?: (logs: unknown[]) => Promise<void> | void };

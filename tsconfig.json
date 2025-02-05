@@ -1,27 +1,41 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
+    "target": "es2020",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
     "noEmit": false,
-    "outDir": "dist/core",
-    "jsx": "react-jsx",
+    "esModuleInterop": true,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "preserveConstEnums": true,
+    "outDir": "./dist",
     "baseUrl": ".",
     "composite": true,
     "declaration": true,
     "paths": {
-      "@/*": [
-        "src/*"
+      "@isarmstrong/jitterbug-core-types": [
+        "packages/core-types/src"
       ],
-      "@types/*": [
-        "src/types/*"
+      "@isarmstrong/jitterbug-core-types/*": [
+        "packages/core-types/src/*"
       ],
-      "@utils/*": [
-        "src/utils/*"
+      "@isarmstrong/jitterbug-types": [
+        "packages/jitterbug-types/src"
       ],
-      "@transports/*": [
-        "src/transports/*"
-      ],
-      "@ebl/*": [
-        "src/types/ebl/*"
+      "@isarmstrong/jitterbug-types/*": [
+        "packages/jitterbug-types/src/*"
       ],
       "@isarmstrong/jitterbug": [
         "src"
@@ -29,25 +43,38 @@
       "@isarmstrong/jitterbug/*": [
         "src/*"
       ],
-      "@isarmstrong/jitterbug-types": [
-        "packages/jitterbug-types/src"
+      "@isarmstrong/jitterbug-next/api": [
+        "packages/jitterbug-next/src/api/index"
       ],
-      "@isarmstrong/jitterbug-types/*": [
-        "packages/jitterbug-types/src/*"
+      "@isarmstrong/jitterbug-next/api/*": [
+        "packages/jitterbug-next/src/api/*"
       ]
     }
   },
   "references": [
     {
-      "path": "./src"
+      "path": "./packages/core-types"
     },
     {
       "path": "./packages/jitterbug-types"
     },
     {
       "path": "./packages/jitterbug-next"
+    },
+    {
+      "path": "./src"
     }
   ],
-  "files": [],
-  "include": []
+  "include": [
+    "src/**/*",
+    "packages/**/*",
+    "global.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/__tests__/**"
+  ]
 }

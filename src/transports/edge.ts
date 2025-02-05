@@ -2,14 +2,15 @@
 
 import pThrottle from "p-throttle";
 import { EDGE_DEFAULTS } from '../config/defaults';
-import { LogEntry, LogTransport } from "../types";
-import { ValidationResult } from '../types/ebl/core';
-import { MemoryMetricKey, MemoryMetrics, MemoryUnit } from '../types/ebl/memory';
+import { LogEntry, LogLevel, LogLevels, LogTransport } from "../types";
+import { MemoryMetrics, MemoryUnit } from '../types/ebl/memory';
+import { Storage } from '../utils/storage';
+import { BaseTransport, TransportConfig } from './types';
 
-export interface EdgeTransportConfig {
+export interface EdgeTransportConfig extends TransportConfig {
   endpoint: string;
-  maxEntries?: number;
   bufferSize?: number;
+  maxEntries?: number;
   retryInterval?: number;
   maxRetries?: number;
   maxConnectionDuration?: number;
@@ -21,24 +22,27 @@ export interface EdgeTransportConfig {
   flushInterval?: number;
   persistQueue?: boolean;
   testMode?: boolean;
+  memoryThreshold?: number;
+  level?: LogLevel;
 }
 
 interface StreamMetrics {
   messageCount: number;
   avgProcessingTime: number;
   backpressureEvents: number;
-  lastBackpressureTime: number | null;
-  interruptions: number;
-  lastInterruptionTime: number | null;
-  bufferUtilization: number;
-  lastFlushTime: number | null;
-  memoryUsage: MemoryMetrics | null;
-  batchSuccessRate: number;
-  avgBatchSize: number;
+  lastBackpressureTime: number;
+  errorCount: number;
+  lastErrorTime: number;
+  bufferSize: number;
+  bufferUsage: number;
   droppedMessages: number;
+  lastDropTime: number;
+  memoryUsage: MemoryMetrics;
   debugMetrics: {
     droppedEntries: number;
     highWaterMark: number;
+    lowWaterMark: number;
+    lastPressureLevel: number;
   };
 }
 
@@ -50,13 +54,13 @@ interface BatchMetrics {
   success: boolean;
 }
 
-export class EdgeTransport implements LogTransport {
+export class EdgeTransport extends BaseTransport implements LogTransport {
+  protected override config!: Required<EdgeTransportConfig>;
   private queue: LogEntry[] = [];
   private flushTimeout: ReturnType<typeof setTimeout> | null = null;
   private _isConnected = false;
   private retryCount = 0;
   private updateCallbacks: Set<() => void> = new Set();
-  private readonly config: Required<EdgeTransportConfig>;
   private throttledSendPayload: (payload: string, batchId: string) => Promise<void>;
   private pendingRequests = 0;
   private readonly maxPendingRequests: number;
@@ -65,18 +69,26 @@ export class EdgeTransport implements LogTransport {
     messageCount: 0,
     avgProcessingTime: 0,
     backpressureEvents: 0,
-    lastBackpressureTime: null,
-    interruptions: 0,
-    lastInterruptionTime: null,
-    bufferUtilization: 0,
-    lastFlushTime: null,
-    memoryUsage: null,
-    batchSuccessRate: 1,
-    avgBatchSize: 0,
+    lastBackpressureTime: 0,
+    errorCount: 0,
+    lastErrorTime: 0,
+    bufferSize: 0,
+    bufferUsage: 0,
     droppedMessages: 0,
+    lastDropTime: 0,
+    memoryUsage: {
+      heapUsed: 0,
+      heapTotal: 0,
+      external: 0,
+      arrayBuffers: 0,
+      threshold: 0,
+      rss: 0
+    },
     debugMetrics: {
       droppedEntries: 0,
-      highWaterMark: 0
+      highWaterMark: 90,
+      lowWaterMark: 70,
+      lastPressureLevel: 0
     }
   };
   private processingTimes: number[] = [];
@@ -85,6 +97,9 @@ export class EdgeTransport implements LogTransport {
   private batchMetrics: Map<string, BatchMetrics> = new Map();
   private lastMemoryCheck = 0;
   private readonly MEMORY_CHECK_INTERVAL = 30000; // 30 seconds
+  private flushLock = false;
+  private _memoryThreshold: number;
+  private storage: Storage;
 
   /**
    * Get the current connection state
@@ -101,17 +116,30 @@ export class EdgeTransport implements LogTransport {
   }
 
   constructor(config: EdgeTransportConfig) {
-    const defaultConfig: Required<EdgeTransportConfig> = {
-      ...EDGE_DEFAULTS,
-      endpoint: '',
-      persistQueue: true
-    };
-
+    super(config);
     this.config = {
-      ...defaultConfig,
-      ...config
+      ...EDGE_DEFAULTS,
+      enabled: true,
+      level: config.level ?? LogLevels.INFO,
+      format: config.format ?? "json",
+      endpoint: config.endpoint,
+      bufferSize: config.bufferSize ?? EDGE_DEFAULTS.bufferSize,
+      maxEntries: config.maxEntries ?? EDGE_DEFAULTS.maxEntries,
+      retryInterval: config.retryInterval ?? EDGE_DEFAULTS.retryInterval,
+      maxRetries: config.maxRetries ?? EDGE_DEFAULTS.maxRetries,
+      maxConnectionDuration: config.maxConnectionDuration ?? EDGE_DEFAULTS.maxConnectionDuration,
+      maxPayloadSize: config.maxPayloadSize ?? EDGE_DEFAULTS.maxPayloadSize,
+      autoReconnect: config.autoReconnect ?? EDGE_DEFAULTS.autoReconnect,
+      maxConcurrent: config.maxConcurrent ?? EDGE_DEFAULTS.maxConcurrent,
+      requestsPerSecond: config.requestsPerSecond ?? EDGE_DEFAULTS.requestsPerSecond,
+      batchSize: config.batchSize ?? EDGE_DEFAULTS.batchSize,
+      flushInterval: config.flushInterval ?? EDGE_DEFAULTS.flushInterval,
+      persistQueue: config.persistQueue ?? false,
+      testMode: config.testMode ?? EDGE_DEFAULTS.testMode,
+      memoryThreshold: config.memoryThreshold ?? 128,
     };
-
+    this._memoryThreshold = this.config.memoryThreshold;
+    this.storage = new Storage();
     this.maxPendingRequests = this.config.maxConcurrent;
 
     // Use config to determine if we're in test mode
@@ -132,177 +160,57 @@ export class EdgeTransport implements LogTransport {
     this.startMemoryMonitoring();
   }
 
-  private async acquireFlushLock(): Promise<ValidationResult> {
-    const view = new Int32Array(this.flushMutex.buffer);
-    const acquired = Atomics.compareExchange(view, 0, 0, 1) === 0;
-
-    return {
-      isValid: acquired,
-      errors: acquired ? undefined : ['Failed to acquire flush lock']
+  private createFlushCallback(): () => Promise<void> {
+    return async () => {
+      await this.flushQueue();
     };
   }
 
-  private releaseFlushLock(): void {
-    const view = new Int32Array(this.flushMutex.buffer);
-    Atomics.store(view, 0, 0);
+  private async acquireFlushLock(): Promise<boolean> {
+    if (this.flushLock) return false;
+    this.flushLock = true;
+    await this.flushQueue();
+    this.flushLock = false;
+    return true;
   }
 
-  private startMemoryMonitoring(): void {
-    const checkMemory = (): void => {
-      if (typeof performance === 'undefined' || !('memory' in performance)) {
-        return;
-      }
-
-      try {
-        const memoryInfo = performance.memory as {
-          usedJSHeapSize: number;
-          totalJSHeapSize: number;
-          jsExternalHeapSize?: number;
-          arrayBuffers?: number;
-        };
-
-        this.metrics.memoryUsage = {
-          rss: memoryInfo.totalJSHeapSize / MemoryUnit.MB,
-          [MemoryMetricKey.HeapUsed]: memoryInfo.usedJSHeapSize / MemoryUnit.MB,
-          [MemoryMetricKey.HeapTotal]: memoryInfo.totalJSHeapSize / MemoryUnit.MB,
-          [MemoryMetricKey.External]: memoryInfo.jsExternalHeapSize ? memoryInfo.jsExternalHeapSize / MemoryUnit.MB : 0,
-          [MemoryMetricKey.ArrayBuffers]: memoryInfo.arrayBuffers ? memoryInfo.arrayBuffers / MemoryUnit.MB : 0,
-          [MemoryMetricKey.Threshold]: EDGE_DEFAULTS.maxPayloadSize / MemoryUnit.MB
-        } as MemoryMetrics;
-
-        // Implement backpressure if memory usage is high
-        if (this.metrics.memoryUsage &&
-          this.metrics.memoryUsage[MemoryMetricKey.HeapUsed] /
-          this.metrics.memoryUsage[MemoryMetricKey.HeapTotal] > 0.9) {
-          this.handleBackpressure();
-        }
-      } catch (error) {
-        console.error('Memory monitoring error:', error);
-        this.metrics.memoryUsage = null;
-      }
-    };
-
-    setInterval(checkMemory, this.MEMORY_CHECK_INTERVAL);
-    checkMemory();
+  private async persistQueue(): Promise<void> {
+    if (!this.queue.length) return;
+    await this.storage.setItem('queue', this.queue);
   }
 
-  private handleBackpressure(): void {
-    this.metrics.backpressureEvents++;
-    this.metrics.lastBackpressureTime = Date.now();
-
-    // Drop oldest entries if queue is too large
-    if (this.queue.length > this.config.bufferSize * 0.9) {
-      const toRemove = Math.ceil(this.queue.length * 0.2); // Remove 20% of entries
-      this.queue.splice(0, toRemove);
-      this.metrics.droppedMessages += toRemove;
+  private async restoreQueue(): Promise<void> {
+    const storedQueue = await Promise.resolve(this.storage.getItem('queue'));
+    if (Array.isArray(storedQueue)) {
+      this.queue = storedQueue;
     }
   }
 
-  private async persistQueue(): Promise<ValidationResult> {
-    if (!this.config.persistQueue) {
-      return { isValid: true };
-    }
+  private isMemoryExceeded(metrics: MemoryMetrics): boolean {
+    return metrics.heapUsed > 0 && metrics.heapUsed >= this._memoryThreshold;
+  }
 
+  private async flushQueue(): Promise<void> {
     try {
-      // Edge-specific persistence logic can be added later
-      return { isValid: true };
+      await this.persistQueue();
     } catch (error) {
-      return {
-        isValid: false,
-        errors: [(error as Error).message]
-      };
+      console.error('Failed to flush queue:', error);
     }
   }
 
-  private async restoreQueue(): Promise<ValidationResult> {
-    if (!this.config.persistQueue) {
-      return { isValid: true };
-    }
-
-    try {
-      // Edge-specific restoration logic can be added later
-      return { isValid: true };
-    } catch (error) {
-      return {
-        isValid: false,
-        errors: [(error as Error).message]
-      };
-    }
+  private async flush(): Promise<void> {
+    if (this.queue.length === 0) return;
+    const payload = JSON.stringify(this.queue);
+    this.queue = [];
+    await fetch(this.config.endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload
+    });
   }
 
-  public async flush(): Promise<void> {
-    const lockResult = await this.acquireFlushLock();
-    if (!lockResult.isValid) return;
-
-    try {
-      if (!this._isConnected) {
-        this.releaseFlushLock();
-        return;
-      }
-
-      const batch = [];
-      let payloadSize = 0;
-      const batchId = crypto.randomUUID();
-      const batchMetrics: BatchMetrics = {
-        size: 0,
-        entryCount: 0,
-        processingTime: 0,
-        retryCount: 0,
-        success: false
-      };
-
-      const startTime = performance.now();
-
-      while (this.queue.length > 0 && batch.length < this.config.batchSize) {
-        const entry = this.queue[0];
-        const entrySize = entry._metadata?._size ?? JSON.stringify(entry).length;
-
-        if (payloadSize + entrySize > this.config.maxPayloadSize) {
-          if (batch.length === 0) {
-            // Single entry exceeds max size, drop it
-            this.queue.shift();
-            this.metrics.droppedMessages++;
-            continue;
-          }
-          break;
-        }
-
-        batch.push(this.queue.shift()!);
-        payloadSize += entrySize;
-        batchMetrics.entryCount++;
-        batchMetrics.size += entrySize;
-      }
-
-      if (batch.length === 0) {
-        this.releaseFlushLock();
-        return;
-      }
-
-      this.batchMetrics.set(batchId, batchMetrics);
-      await this.throttledSendPayload(JSON.stringify(batch), batchId);
-
-      batchMetrics.processingTime = performance.now() - startTime;
-      batchMetrics.success = true;
-
-      // Update metrics
-      this.updateBatchMetrics(batchMetrics);
-      this.metrics.lastFlushTime = Date.now();
-    } catch (error) {
-      console.error('Flush error:', error);
-      throw error; // Re-throw to ensure test failures are visible
-    } finally {
-      this.releaseFlushLock();
-      if (this.config.persistQueue) {
-        await this.persistQueue();
-      }
-    }
-  }
-
-  private updateBatchMetrics(metrics: BatchMetrics): void {
-    // Update running averages
-    const alpha = 0.1; // Smoothing factor
-    this.metrics.avgBatchSize = (1 - alpha) * this.metrics.avgBatchSize + alpha * metrics.entryCount;
-    this.metrics.batchSuccessRate = (1 - alpha) * this.metrics.batchSuccessRate + alpha * (metrics.success ? 1 : 0);
+  private async processBatch(batch: LogEntry[]): Promise<void> {
+    // Implementation
   }
 
   private async sendPayload(payload: string, batchId: string): Promise<void> {
@@ -409,8 +317,8 @@ export class EdgeTransport implements LogTransport {
       }
 
       this._isConnected = false;
-      this.metrics.interruptions++;
-      this.metrics.lastInterruptionTime = Date.now();
+      this.metrics.errorCount++;
+      this.metrics.lastErrorTime = Date.now();
 
       if (this.retryCount < this.config.maxRetries) {
         this.retryCount++;
@@ -446,7 +354,7 @@ export class EdgeTransport implements LogTransport {
     }
   }
 
-  public async write(entry: LogEntry<Record<string, unknown>>): Promise<void> {
+  public async write<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void> {
     const startTime = performance.now();
 
     if (!this._isConnected && this.config.autoReconnect) {
@@ -473,7 +381,7 @@ export class EdgeTransport implements LogTransport {
     });
 
     this.queue.push(immutableEntry);
-    this.metrics.bufferUtilization = this.queue.length / this.config.bufferSize;
+    this.metrics.bufferUsage = this.queue.length / this.config.bufferSize;
 
     // Enforce buffer limits with circular buffer behavior
     if (this.queue.length > this.config.bufferSize) {
@@ -563,5 +471,43 @@ export class EdgeTransport implements LogTransport {
 
     this.queue = [];
     this.updateCallbacks.clear();
+  }
+
+  private updateMetrics(): void {
+    try {
+      const memoryInfo = process.memoryUsage();
+
+      this.metrics.memoryUsage = {
+        heapUsed: memoryInfo.heapUsed / MemoryUnit.MB,
+        heapTotal: memoryInfo.heapTotal / MemoryUnit.MB,
+        external: memoryInfo.external / MemoryUnit.MB,
+        arrayBuffers: 0, // Not available in standard Node.js memory usage
+        threshold: EDGE_DEFAULTS.maxPayloadSize / MemoryUnit.MB,
+        rss: memoryInfo.rss / MemoryUnit.MB
+      };
+
+      // Check for memory pressure
+      if (this.metrics.memoryUsage.heapUsed / this.metrics.memoryUsage.heapTotal > 0.9) {
+        this.onMemoryPressure();
+      }
+    } catch (error) {
+      // Log error but don't throw to avoid crashing the transport
+      console.error('Failed to update metrics:', error);
+    }
+  }
+
+  private onMemoryPressure(): void {
+    // Implement memory pressure handling
+    this.flush();
+    this.clearBuffer();
+  }
+
+  private clearBuffer(): void {
+    this.queue = [];
+    this.metrics.bufferUsage = 0;
+  }
+
+  private startMemoryMonitoring(): void {
+    // Implementation
   }
 }

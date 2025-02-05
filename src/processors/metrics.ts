@@ -1,4 +1,4 @@
-import { LogEntry, LogProcessor, Environment, Runtime, RuntimeType, EnvironmentType, LogLevel, LogContext } from "../types/core";
+import { Environment, EnvironmentType, LogEntry, Processor, Runtime, RuntimeType } from "../types/core";
 
 interface MetricsData {
   timestamp: number;
@@ -21,7 +21,7 @@ interface MetricsProcessorOptions {
   trackEventLoop?: boolean;
 }
 
-export class MetricsProcessor implements LogProcessor {
+export class MetricsProcessor implements Processor {
   private lastSampleTime = 0;
   private warningCount = 0;
   private samples = 0;

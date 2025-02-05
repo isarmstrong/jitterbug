@@ -87,6 +87,22 @@ interface VersionEvent {
     };
 }
 
+interface NextData {
+    __NEXT_DATA__?: {
+        buildId?: string;
+    };
+}
+
+interface ReactDevTools {
+    __REACT_DEVTOOLS_GLOBAL_HOOK__?: {
+        version?: string;
+    };
+}
+
+interface EdgeRuntimeEnv {
+    EdgeRuntime?: string;
+}
+
 export class VersionTransport extends BaseTransport implements LogTransport {
     private metrics: VersionMetrics = {
         nextVersion: null,
@@ -125,9 +141,9 @@ export class VersionTransport extends BaseTransport implements LogTransport {
 
         if (typeof window !== 'undefined') {
             // Try to detect Next.js and React versions from window
-            const next = (window as any).__NEXT_DATA__?.buildId;
+            const next = this.getNextBuildId();
             if (next) {
-                this.metrics.nextVersion = this.extractNextVersion(next);
+                this.metrics.nextVersion = next;
                 this.metrics.isNextCompatible = this.checkVersionCompatibility(
                     'next',
                     this.metrics.nextVersion
@@ -135,7 +151,7 @@ export class VersionTransport extends BaseTransport implements LogTransport {
             }
 
             // React version can be detected from React DevTools global
-            const react = (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__?.renderers?.get(1)?.version;
+            const react = this.getReactDevToolsVersion();
             if (react) {
                 this.metrics.reactVersion = react;
                 this.metrics.isReactCompatible = this.checkVersionCompatibility(
@@ -146,9 +162,9 @@ export class VersionTransport extends BaseTransport implements LogTransport {
         }
 
         // Edge runtime version
-        const edgeRuntime = typeof globalThis !== 'undefined' ? (globalThis as any).EdgeRuntime : undefined;
-        if (isEdgeRuntime(edgeRuntime)) {
-            this.metrics.edgeRuntimeVersion = edgeRuntime.version;
+        const edgeRuntime = this.getEdgeRuntime();
+        if (edgeRuntime) {
+            this.metrics.edgeRuntimeVersion = edgeRuntime;
             this.metrics.isEdgeCompatible = true; // Edge runtime is always compatible if available
         }
     }
@@ -365,9 +381,42 @@ export class VersionTransport extends BaseTransport implements LogTransport {
         return issues;
     }
 
-    private extractNextVersion(buildId: string): string {
-        // Next.js build IDs don't contain version info directly
-        // This is a placeholder for actual version detection logic
-        return '13.0.0';
+    private getNextBuildId(): string | null {
+        const nextData = (window as unknown as NextData).__NEXT_DATA__;
+        if (nextData?.buildId != null) {
+            return this.sanitizeVersion(nextData.buildId);
+        }
+        return null;
+    }
+
+    private getReactDevToolsVersion(): string | null {
+        const devTools = (window as unknown as ReactDevTools).__REACT_DEVTOOLS_GLOBAL_HOOK__;
+        if (devTools?.version != null) {
+            return this.sanitizeVersion(devTools.version);
+        }
+        return null;
+    }
+
+    private getEdgeRuntime(): string | null {
+        const runtime = (process as unknown as EdgeRuntimeEnv).EdgeRuntime;
+        return runtime != null ? runtime : null;
+    }
+
+    private sanitizeVersion(version: string | null | undefined): string | null {
+        if (version == null) return null;
+        return version.trim() || null;
+    }
+
+    private isValidVersion(version: string | null | undefined): version is string {
+        return version != null && version.trim().length > 0;
+    }
+
+    private async handleData(data: unknown): Promise<void> {
+        if (!this.isValidData(data)) return;
+        // Rest of the implementation
+    }
+
+    private isValidData(data: unknown): data is { version: string } {
+        return typeof data === 'object' && data != null && 'version' in data && typeof data.version === 'string';
     }
 } 

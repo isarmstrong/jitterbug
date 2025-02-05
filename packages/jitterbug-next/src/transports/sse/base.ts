@@ -1,5 +1,6 @@
-import type { ValidationResult } from '@isarmstrong/jitterbug';
-import type { LogType, SSETransportConfig } from '../../types';
+import type { ValidationResult } from '@isarmstrong/jitterbug-core-types';
+import type { LogType } from '@isarmstrong/jitterbug-types';
+import type { SSETransportConfig } from '../../api/transport';
 
 export abstract class BaseSSETransport {
     protected config: SSETransportConfig;
@@ -59,7 +60,8 @@ export abstract class BaseSSETransport {
 
         return {
             isValid,
-            errors: isValid ? undefined : ['Unsupported media type: Expected text/event-stream']
+            errors: isValid ? undefined : ['Unsupported media type: Expected text/event-stream'],
+            value: isValid ? req : null
         };
     }
 

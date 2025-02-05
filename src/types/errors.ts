@@ -1,9 +1,9 @@
-import type { RuntimeType } from "../types.js";
+import type { Runtime } from './runtime';
 
 /**
  * Extended error context interface
  */
-export interface ErrorContext extends Record<string, unknown> {
+export interface ErrorContext {
   /**
    * Component stack trace for React errors
    */
@@ -12,12 +12,12 @@ export interface ErrorContext extends Record<string, unknown> {
   /**
    * Original error that was wrapped
    */
-  originalError?: unknown;
+  originalError?: Error;
 
   /**
    * Runtime where the error occurred
    */
-  runtime?: RuntimeType;
+  runtime?: Runtime;
 
   /**
    * Additional context specific to the error
@@ -42,13 +42,15 @@ export interface ExtendedError extends Error {
   /**
    * Original error that was wrapped
    */
-  originalError?: unknown;
+  originalError?: Error;
+
+  metadata: ErrorMetadata;
 }
 
 /**
  * Debug data types that can be wrapped as errors
  */
-export type DebugData = ErrorContext | Error | string;
+export type DebugData = Error | string | ErrorContext;
 
 /**
  * Error wrapping configuration
@@ -71,4 +73,29 @@ export interface ErrorWrapperConfig {
    * @default 50
    */
   maxStackLines?: number;
+}
+
+export const ErrorSeverity = {
+  Low: 'low',
+  Medium: 'medium',
+  High: 'high',
+  Critical: 'critical'
+} as const;
+
+export type ErrorSeverityType = typeof ErrorSeverity[keyof typeof ErrorSeverity];
+
+export const ErrorCategory = {
+  Runtime: 'runtime',
+  Component: 'component',
+  System: 'system',
+  Network: 'network'
+} as const;
+
+export type ErrorCategoryType = typeof ErrorCategory[keyof typeof ErrorCategory];
+
+export interface ErrorMetadata {
+  severity: ErrorSeverityType;
+  category: ErrorCategoryType;
+  timestamp: number;
+  source?: string;
 }

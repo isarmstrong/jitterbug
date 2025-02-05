@@ -1,16 +1,10 @@
 {
-    "extends": "../../tsconfig.base.json",
+    "extends": "../../tsconfig.json",
     "compilerOptions": {
-        "outDir": "../../dist/jitterbug-next",
-        "rootDir": "./src",
-        "composite": true,
-        "tsBuildInfoFile": "../../dist/jitterbug-next/.tsbuildinfo",
-        "jsx": "react-jsx",
+        "rootDir": "../../",
+        "outDir": "dist",
         "baseUrl": ".",
         "paths": {
-            "@/*": [
-                "./src/*"
-            ],
             "@isarmstrong/jitterbug": [
                 "../../src"
             ],
@@ -22,25 +16,32 @@
             ],
             "@isarmstrong/jitterbug-types/*": [
                 "../jitterbug-types/src/*"
+            ],
+            "@isarmstrong/jitterbug-core-types": [
+                "../core-types/src"
+            ],
+            "@isarmstrong/jitterbug-core-types/*": [
+                "../core-types/src/*"
             ]
         }
     },
-    "references": [
-        {
-            "path": "../../src"
-        },
-        {
-            "path": "../jitterbug-types"
-        }
-    ],
     "include": [
-        "src/**/*"
+        "src/**/*",
+        "../../src/**/*",
+        "global.d.ts"
     ],
     "exclude": [
         "node_modules",
         "dist",
-        "test",
         "**/*.test.ts",
         "**/*.spec.ts"
+    ],
+    "references": [
+        {
+            "path": "../jitterbug-types"
+        },
+        {
+            "path": "../core-types"
+        }
     ]
 }

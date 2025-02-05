@@ -1,6 +1,6 @@
 'use client';
 
-import type { LogType } from '@/types/index';
+import type { LogType } from '@isarmstrong/jitterbug-types';
 import React, { useEffect, useState } from 'react';
 import { EConnectionState, useEventSource } from '../hooks/useEventSource';
 

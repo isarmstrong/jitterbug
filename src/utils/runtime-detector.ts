@@ -1,52 +1,42 @@
-import type { RuntimeType, EnvironmentType } from "../types.js";
-import { Runtime, Environment } from "../types";
+import { Environment } from "../types";
+import type { EnvironmentType } from "../types.js";
+import { Runtime, RuntimeType } from '../types/runtime';
 
 /**
  * Runtime detection utility
  */
 export class RuntimeDetector {
+  private static runtime: RuntimeType;
+
   /**
    * Detect the current runtime environment
    */
   static detectRuntime(): RuntimeType {
-    // Check for Edge Runtime first as it's most specific
-    if (typeof EdgeRuntime === "string") {
-      return Runtime.EDGE;
+    if (this.runtime) {
+      return this.runtime;
     }
 
-    // Then check for Browser environment
-    if (
-      typeof window === "object" &&
-      window !== null &&
-      typeof window.document === "object" &&
-      window.document !== null &&
-      "createElement" in window.document
-    ) {
-      return Runtime.BROWSER;
+    if (typeof window !== 'undefined') {
+      this.runtime = Runtime.BROWSER;
+      return this.runtime;
     }
 
-    // Check for Node.js environment with multiple indicators
-    if (
-      // Check for process object and versions
-      (typeof process === "object" &&
-        process !== null &&
-        typeof process.versions === "object" &&
-        process.versions !== null &&
-        typeof process.versions.node === "string" &&
-        process.versions.node.length > 0) ||
-      // Additional Node.js indicators
-      (typeof process === "object" &&
-        process !== null &&
-        typeof process.env === "object" &&
-        process.env !== null &&
-        typeof process.pid === "number")
-    ) {
-      return Runtime.NODE;
+    if (typeof process !== 'undefined' && process.release?.name === 'node') {
+      this.runtime = Runtime.NODE;
+      return this.runtime;
     }
 
-    // Default to Node if no other runtime is detected
-    // This is safer as Edge should be explicitly detectable
-    return Runtime.NODE;
+    // Edge runtime is the default for serverless environments
+    this.runtime = Runtime.EDGE;
+    return this.runtime;
+  }
+
+  public static setRuntime(runtime: RuntimeType): void {
+    this.runtime = runtime;
+  }
+
+  public static resetRuntime(): void {
+    this.runtime = undefined;
   }
 
   /**

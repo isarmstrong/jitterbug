@@ -1,4 +1,4 @@
-import type { EnvironmentType, LogEntry, LogProcessor, RuntimeType } from '../types/index';
+import type { EnvironmentType, LogEntry, Processor, RuntimeType } from '../types/index';
 
 /**
  * Sanitize processor configuration
@@ -21,7 +21,7 @@ export interface SanitizeConfig {
 /**
  * Sanitize processor implementation
  */
-export class SanitizeProcessor implements LogProcessor {
+export class SanitizeProcessor implements Processor {
   private readonly config: Required<SanitizeConfig>;
   private sensitiveKeys: string[];
 

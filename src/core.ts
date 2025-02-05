@@ -1,5 +1,5 @@
 import { processLog, writeLog } from "./logger.js";
-import type { EnvironmentType, JitterbugConfig, JitterbugFactory, JitterbugInstance, LogContext, LogEntry, LogLevel, LogTransport, RuntimeType } from "./types/index";
+import type { /*LogContext*/ BaseContext, EnvironmentType, JitterbugConfig, JitterbugFactory, JitterbugInstance, LogEntry, LogLevel, LogTransport, RuntimeType } from "./types/index";
 import { Environment, LogLevels, Runtime } from "./types/index";
 
 declare global {
@@ -49,7 +49,7 @@ class RuntimeDetector {
  */
 export class JitterbugImpl implements JitterbugInstance {
   private enabled: boolean;
-  private context: LogContext;
+  private context: BaseContext;
   private config: Required<JitterbugConfig>;
   private transports: LogTransport[] = [];
 
@@ -128,11 +128,11 @@ export class JitterbugImpl implements JitterbugInstance {
     void this.processAndWrite(entry).catch(this.onError);
   }
 
-  setContext(context: Partial<LogContext>): void {
+  setContext(context: Partial<BaseContext>): void {
     this.context = { ...this.context, ...context };
   }
 
-  getContext(): LogContext {
+  getContext(): BaseContext {
     return { ...this.context };
   }
 
@@ -195,7 +195,7 @@ export class JitterbugImpl implements JitterbugInstance {
     };
   };
 
-  private getLogContext(context?: LogContext): LogContext {
+  private getLogContext(context?: BaseContext): BaseContext {
     const baseContext = {
       timestamp: new Date().toISOString(),
       runtime: this.config.runtime,
@@ -221,7 +221,7 @@ export class JitterbugImpl implements JitterbugInstance {
       return msg;
     })();
 
-    const updatedContext: LogContext = {
+    const updatedContext: BaseContext = {
       ...baseContext,
       ...context,
       message,

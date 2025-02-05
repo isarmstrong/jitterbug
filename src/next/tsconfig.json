@@ -25,6 +25,18 @@
             ],
             "@jitterbug-next/*": [
                 "../../packages/jitterbug-next/src/*"
+            ],
+            "@jitterbug-next/api": [
+                "../../packages/jitterbug-next/src/api/index"
+            ],
+            "@jitterbug-next/api/*": [
+                "../../packages/jitterbug-next/src/api/*"
+            ],
+            "@isarmstrong/jitterbug-next/api": [
+                "../../packages/jitterbug-next/src/api/index"
+            ],
+            "@isarmstrong/jitterbug-next/api/*": [
+                "../../packages/jitterbug-next/src/api/*"
             ]
         }
     },
@@ -37,7 +49,8 @@
         }
     ],
     "include": [
-        "./**/*"
+        "./**/*",
+        "../../packages/jitterbug-next/src/api/**/*"
     ],
     "exclude": [
         "node_modules",

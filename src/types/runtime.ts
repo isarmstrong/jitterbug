@@ -1,8 +1,10 @@
-export enum Runtime {
-    EDGE = 'edge',
-    NODE = 'node',
-    BROWSER = 'browser'
+export const enum Runtime {
+    EDGE = 'EDGE',
+    NODE = 'NODE',
+    BROWSER = 'BROWSER'
 }
+
+export type RuntimeType = Runtime | undefined;
 
 // Add detection helper for tests
 export function detectRuntime(): Runtime {

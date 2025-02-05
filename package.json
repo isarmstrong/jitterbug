@@ -3,15 +3,14 @@
     "version": "0.1.6",
     "description": "Edge-first debugger with runtime component",
     "type": "module",
-    "main": "./dist/src/index.js",
-    "module": "./dist/src/index.js",
-    "types": "./dist/src/index.d.ts",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
     "exports": {
         ".": {
-            "types": "./dist/src/index.d.ts",
-            "import": "./dist/src/index.js",
-            "require": "./dist/src/index.js",
-            "default": "./dist/src/index.js"
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "require": "./dist/index.js"
         },
         "./next": {
             "types": "./dist/next/src/next/index.d.ts",
@@ -25,11 +24,20 @@
             "require": "./dist/src/types/ebl/index.js",
             "default": "./dist/src/types/ebl/index.js"
         },
-        "./transports/*": {
-            "types": "./dist/src/transports/*.d.ts",
-            "import": "./dist/src/transports/*.js",
-            "require": "./dist/src/transports/*.js",
-            "default": "./dist/src/transports/*.js"
+        "./transports/console": {
+            "types": "./dist/transports/console.d.ts",
+            "import": "./dist/transports/console.js",
+            "require": "./dist/transports/console.js"
+        },
+        "./transports/edge": {
+            "types": "./dist/transports/edge.d.ts",
+            "import": "./dist/transports/edge.js",
+            "require": "./dist/transports/edge.js"
+        },
+        "./types/core": {
+            "types": "./dist/types/core.d.ts",
+            "import": "./dist/types/core.js",
+            "require": "./dist/types/core.js"
         },
         "./processors/*": {
             "types": "./dist/src/processors/*.d.ts",
@@ -39,7 +47,8 @@
         }
     },
     "files": [
-        "dist"
+        "dist",
+        "src"
     ],
     "scripts": {
         "build": "pnpm run build:clean && pnpm run build:all",
@@ -88,7 +97,8 @@
         "p-throttle": "^5.1.0",
         "react-dom": "18.2.0",
         "semver": "^7.6.3",
-        "zod": "^3.22.4"
+        "zod": "^3.22.4",
+        "@isarmstrong/jitterbug-core-types": "workspace:*"
     },
     "devDependencies": {
         "@types/node": "^20.11.5",

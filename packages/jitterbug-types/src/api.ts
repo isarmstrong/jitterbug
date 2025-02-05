@@ -1,9 +1,9 @@
-import { LogLevel } from '@isarmstrong/jitterbug';
+import type { LogLevel } from '@isarmstrong/jitterbug-core-types';
 
 export interface LogType {
     message: string;
     level: LogLevel;
-    timestamp: number;
+    timestamp: string;
     [key: string]: unknown;
 }
 

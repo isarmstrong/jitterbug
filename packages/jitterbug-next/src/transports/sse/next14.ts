@@ -1,4 +1,4 @@
-import { ValidationResult } from '@isarmstrong/jitterbug';
+import type { ValidationResult } from '@isarmstrong/jitterbug-core-types';
 import type { LogType, SSETransportConfig } from '../../types';
 import { BaseSSETransport } from './base';
 
@@ -44,7 +44,7 @@ export class Next14SSETransport extends BaseSSETransport {
                 // Send initial connection message
                 await this.write({
                     message: 'Connected to SSE stream',
-                    level: 'info',
+                    level: 'INFO',
                     timestamp: new Date().toISOString(),
                     context: {
                         clientId,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { isString } from '../../src/utils/type-guards';
 import {
     arrayOf,
     combineValidators,
@@ -7,7 +8,6 @@ import {
     isError,
     isNumber,
     isObject,
-    isString,
     isValidEnvironment,
     isValidRuntime,
     optional,

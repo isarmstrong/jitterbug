@@ -9,50 +9,35 @@
 const EDGE_MEMORY_THRESHOLD = 128;
 
 // Define memory units for clarity
-export const enum MemoryUnit {
-    Bytes = 1,
-    KB = 1024,
-    MB = 1024 * 1024,
-    GB = 1024 * 1024 * 1024
-}
+export const MemoryUnit = {
+    B: 1,
+    KB: 1024,
+    MB: 1024 * 1024,
+    GB: 1024 * 1024 * 1024
+} as const;
 
 // Define memory metric keys for type safety
-export const enum MemoryMetricKey {
-    HeapUsed = 'heapUsed',
-    HeapTotal = 'heapTotal',
-    External = 'external',
-    ArrayBuffers = 'arrayBuffers',
-    Threshold = 'memoryThreshold'
-}
+export const MemoryMetricKey = {
+    HeapUsed: 'heapUsed',
+    HeapTotal: 'heapTotal',
+    External: 'external',
+    ArrayBuffers: 'arrayBuffers',
+    Threshold: 'threshold',
+    RSS: 'rss'
+} as const;
+
+export type MemoryMetricKeyType = typeof MemoryMetricKey[keyof typeof MemoryMetricKey];
 
 // Added type alias for clarity in memory measurements
 export type MemoryMB = number;
 
 export interface MemoryMetrics {
-    /**
-     * Resident Set Size in MB.
-     */
-    rss: MemoryMB;
-    /**
-     * Heap memory used in MB.
-     */
-    [MemoryMetricKey.HeapUsed]: MemoryMB;
-    /**
-     * Total heap memory allocated in MB.
-     */
-    [MemoryMetricKey.HeapTotal]: MemoryMB;
-    /**
-     * External memory used in MB (if available).
-     */
-    [MemoryMetricKey.External]?: MemoryMB;
-    /**
-     * Array buffers memory used in MB (if available).
-     */
-    [MemoryMetricKey.ArrayBuffers]?: MemoryMB;
-    /**
-     * Configured memory threshold in MB.
-     */
-    [MemoryMetricKey.Threshold]: MemoryMB;
+    [MemoryMetricKey.HeapUsed]: number;
+    [MemoryMetricKey.HeapTotal]: number;
+    [MemoryMetricKey.External]: number;
+    [MemoryMetricKey.ArrayBuffers]: number;
+    [MemoryMetricKey.Threshold]: number;
+    [MemoryMetricKey.RSS]?: number;
 }
 
 export interface MemoryLayer {
@@ -95,14 +80,14 @@ export class MemoryManager {
      * Retrieves current memory usage metrics.
      */
     public getMetrics(): MemoryMetrics {
-        const usage: NodeJS.MemoryUsage = process.memoryUsage();
+        const usage = process.memoryUsage();
         return {
-            rss: usage.rss / MemoryUnit.MB,
             [MemoryMetricKey.HeapUsed]: usage.heapUsed / MemoryUnit.MB,
             [MemoryMetricKey.HeapTotal]: usage.heapTotal / MemoryUnit.MB,
-            [MemoryMetricKey.External]: usage.external ? usage.external / MemoryUnit.MB : undefined,
-            [MemoryMetricKey.ArrayBuffers]: usage.arrayBuffers ? usage.arrayBuffers / MemoryUnit.MB : undefined,
-            [MemoryMetricKey.Threshold]: this._memoryThreshold
+            [MemoryMetricKey.External]: usage.external ? usage.external / MemoryUnit.MB : 0,
+            [MemoryMetricKey.ArrayBuffers]: usage.arrayBuffers ? usage.arrayBuffers / MemoryUnit.MB : 0,
+            [MemoryMetricKey.Threshold]: this._memoryThreshold,
+            [MemoryMetricKey.RSS]: usage.rss / MemoryUnit.MB
         };
     }
 
@@ -111,7 +96,7 @@ export class MemoryManager {
      */
     public isMemoryExceeded(): boolean {
         const metrics = this.getMetrics();
-        return metrics[MemoryMetricKey.HeapUsed] > metrics[MemoryMetricKey.Threshold];
+        return metrics[MemoryMetricKey.HeapUsed] > this._memoryThreshold;
     }
 
     /**
@@ -133,7 +118,7 @@ export class MemoryManager {
      */
     public cleanup(): void {
         // Force garbage collection if available
-        if (global.gc) {
+        if (typeof global.gc === 'function') {
             global.gc();
         }
 

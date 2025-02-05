@@ -1,8 +1,8 @@
+import legacy from '@isarmstrong/jitterbug/legacy.facade';
 import { NextRequest, NextResponse } from 'next/server';
-import type { LogType, LogHandlerConfig } from './types';
-import { EdgeTransport, type EdgeTransportConfig } from '@isarmstrong/jitterbug/transports/edge';
-import { ConsoleTransport, LogLevels, createJitterbug } from '@isarmstrong/jitterbug';
+import type { LogHandlerConfig, LogType } from './types';
 import { detectNextEnvironment, detectNextRuntime, isNext15Plus } from './utils';
+const { ConsoleTransport, LogLevels, createJitterbug } = legacy;
 
 // Default configuration that enhances Jitterbug's core defaults for Next.js
 const DEFAULT_CONFIG: Required<LogHandlerConfig> = {

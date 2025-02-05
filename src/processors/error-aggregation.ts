@@ -1,5 +1,5 @@
 import { LogLevels, Runtime, Environment } from '../types/core';
-import type { LogEntry, LogProcessor, RuntimeType, EnvironmentType } from '../types/core';
+import type { LogEntry, Processor, RuntimeType, EnvironmentType } from '../types/core';
 import { hashString } from "../utils/index.js";
 
 interface ErrorPattern {
@@ -31,7 +31,7 @@ interface ErrorContext {
   }>;
 }
 
-export class ErrorAggregationProcessor implements LogProcessor {
+export class ErrorAggregationProcessor implements Processor {
   private patterns: Map<string, ErrorPattern> = new Map();
   private recentErrors: Array<{
     message: string;

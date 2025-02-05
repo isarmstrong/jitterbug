@@ -1,6 +1,8 @@
-import { Environment, Runtime } from '@isarmstrong/jitterbug';
+import type { Environment, LogEntry, LogLevel, LogTransport, Runtime } from '@isarmstrong/jitterbug-core-types';
+import type { LogType } from '@isarmstrong/jitterbug-types';
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'ERROR';
+export { Environment, Runtime };
+export type { LogEntry, LogLevel, LogTransport, LogType };
 
 export interface ErrorContext {
     errorId?: string;
@@ -38,19 +40,6 @@ export interface LogContext {
         };
     };
     [key: string]: any;
-}
-
-export interface LogType {
-    message: string;
-    level: LogLevel;
-    timestamp: string;
-    context?: LogContext;
-    error?: Record<string, any>;
-    _metadata?: {
-        queueTime?: number;
-        sequence?: number;
-        _size?: number;
-    };
 }
 
 export interface LogHandlerConfig {
@@ -134,10 +123,7 @@ export interface NextLoggerConfig {
 
 export interface SSETransportConfig {
     endpoint: string;
-    nextVersion?: string;
+    forceVersion?: string;
     heartbeatInterval?: number;
-    signal?: AbortSignal;
-    autoReconnect?: boolean;
-    retryInterval?: number;
     maxDuration?: number;
-} 
+}

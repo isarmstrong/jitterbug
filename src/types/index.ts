@@ -1,177 +1,48 @@
 /**
- * Consolidated core type definitions for Jitterbug
+ * Type exports for Jitterbug
+ * Edge-first logging with progressive enhancement
  */
 
-/* Pool A: Core Constants */
-export const LogLevels = Object.freeze({
-    DEBUG: "DEBUG",
-    INFO: "INFO",
-    WARN: "WARN",
-    ERROR: "ERROR",
-    FATAL: "FATAL",
-} as const);
+// Core exports
+export {
+    Environment,
+    LogLevels,
+    Runtime,
+    // Core Types
+    type BaseContext,
+    type BaseEntry,
+    type Config,
+    type EnvironmentType,
+    type Factory,
+    type Instance, type JitterbugConfig, type JitterbugFactory, type JitterbugInstance,
+    // Public API Types
+    type LogEntry, type LogLevel, type LogTransport, type Processor,
+    type ReadonlyConfig,
+    type ReadonlyEntry,
+    type RuntimeConfig,
+    type RuntimeType,
+    type Transport
+} from './core';
 
-export const Runtime = Object.freeze({
-    EDGE: "EDGE",
-    NODE: "NODE",
-    BROWSER: "BROWSER",
-} as const);
+// Feature exports
+export {
+    type CacheContext, type ExtendedContext,
+    type RequestContext
+} from './features/context';
 
-export const Environment = Object.freeze({
-    DEVELOPMENT: "DEVELOPMENT",
-    STAGING: "STAGING",
-    PRODUCTION: "PRODUCTION",
-    TEST: "TEST",
-} as const);
+export {
+    type ExtendedConfig, type ExtendedEntry, type ExtendedInstance,
+    type ExtendedProcessor, type ExtendedRuntimeConfig, type ExtendedTransport, type ReadonlyExtendedConfig, type ReadonlyExtendedEntry
+} from './features/jitterbug';
 
-/* Core Types */
-export type LogLevel = keyof typeof LogLevels | Lowercase<keyof typeof LogLevels>;
-export type RuntimeType = keyof typeof Runtime;
-export type EnvironmentType = keyof typeof Environment;
-
-/* Log Interfaces */
-export interface BaseLog {
-    timestamp: string;
-    level: LogLevel;
-    message: string;
-}
-
-export interface InfoLog extends BaseLog {
-    level: 'INFO' | 'info';
-    data?: unknown;
-}
-
-export interface WarnLog extends BaseLog {
-    level: 'WARN' | 'warn';
-    data?: unknown;
-}
-
-export interface ErrorLog extends BaseLog {
-    level: 'ERROR' | 'error';
-    error: Error;
-    stack?: string;
-}
-
-/* Serialized Log */
-export interface SerializedErrorLog extends Omit<ErrorLog, 'error'> {
-    level: 'ERROR' | 'error';
-    errorMessage: string;
-    errorName: string;
-    errorStack?: string;
-}
-
-export type SerializedLogType = InfoLog | WarnLog | SerializedErrorLog;
-export type LogType = InfoLog | WarnLog | ErrorLog;
-
-/* Type Guard */
-export const isSerializedErrorLog = (log: SerializedLogType): log is SerializedErrorLog =>
-    (log.level === 'ERROR' || log.level === 'error') && 'errorMessage' in log;
-
-/* Extended Core Interfaces */
-export interface RequestContext {
-    url?: string;
-    method?: string;
-    headers?: Record<string, string>;
-    params?: Record<string, string>;
-    query?: Record<string, string>;
-    body?: unknown;
-    requestId?: string;
-    duration?: number;
-    status?: number;
-}
-
-export interface CacheContext {
-    operation: "get" | "set" | "delete" | "has" | "clear";
-    key: string;
-    ttl?: number;
-    size?: number;
-    hit?: boolean;
-    duration?: number;
-}
-
-export interface LogContext {
-    timestamp: string;
-    runtime: RuntimeType;
-    environment: EnvironmentType;
-    namespace: string;
-    request?: RequestContext;
-    cache?: CacheContext;
-    [key: string]: unknown;
-}
-
-export interface LogEntry<T = Record<string, unknown>> {
-    level: LogLevel;
-    message: string;
-    data?: T;
-    error?: Error;
-    context: LogContext;
-    warnings?: string[];
-}
-
-export type ProcessedLogEntry<T = Record<string, unknown>> = LogEntry<T>;
-
-/* Implementation Interfaces */
-export interface LogProcessor {
-    process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>>;
-    supports(runtime: RuntimeType): boolean;
-    allowedIn(environment: EnvironmentType): boolean;
-}
-
-export interface LogTransport {
-    write<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void>;
-}
-
-/* Configuration Types */
-export interface JitterbugConfig {
-    namespace: string;
-    enabled?: boolean;
-    level?: LogLevel;
-    minLevel?: LogLevel;
-    runtime?: RuntimeType;
-    environment?: EnvironmentType;
-    processors?: LogProcessor[];
-    transports?: LogTransport[];
-}
-
-export interface JitterbugInstance {
-    debug<T extends Record<string, unknown>>(message: string, data?: T): void;
-    info<T extends Record<string, unknown>>(message: string, data?: T): void;
-    warn<T extends Record<string, unknown>>(message: string, data?: T): void;
-    error(message: string, error: Error, data?: Record<string, unknown>): void;
-    fatal(message: string, error: Error, data?: Record<string, unknown>): void;
-    render<T extends Record<string, unknown>>(message: string, data?: T): void;
-    setContext(context: Partial<LogContext>): void;
-    getContext(): LogContext;
-    enable(): void;
-    disable(): void;
-    isEnabled(): boolean;
-    configure(config: Partial<JitterbugConfig>): void;
-}
-
-export interface JitterbugFactory {
-    create: (config: JitterbugConfig) => JitterbugInstance;
-    createDebug: (namespace: string, config?: Partial<JitterbugConfig>) => JitterbugInstance;
-    getRuntime: () => RuntimeType;
-    getEnvironment: () => EnvironmentType;
-}
-
-/* Additional Types */
-export type CoreLogEntry = Readonly<LogEntry>;
-export type TransportLogEntry = LogEntry & { warnings?: string[] };
-export type SafeConfig = Readonly<JitterbugConfig>;
-export type RuntimeConfig = Partial<JitterbugConfig>;
-
-// Re-export all core types
-export * from './core';
-
-// Add a default export with LogLevels
+// Add a default export with LogLevels for convenience
 export default {
     LogLevels: {
-        DEBUG: 'debug',
-        INFO: 'info',
-        WARN: 'warn',
-        ERROR: 'error',
-        FATAL: 'fatal'
+        DEBUG: 'DEBUG',
+        INFO: 'INFO',
+        WARN: 'WARN',
+        ERROR: 'ERROR',
+        FATAL: 'FATAL'
     }
 };
 

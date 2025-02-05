@@ -1,4 +1,4 @@
-import type { LogEntry, LogTransport } from "../../../../src/types/index";
+import type { LogEntry, LogTransport } from '@isarmstrong/jitterbug-core-types';
 
 interface EdgeTransportConfig {
     endpoint: string;

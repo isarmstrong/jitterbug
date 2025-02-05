@@ -1,9 +1,12 @@
 import type {
-  ErrorContext,
-  ExtendedError,
   DebugData,
+  ErrorContext,
+  ErrorMetadata,
+  ErrorSeverityType,
   ErrorWrapperConfig,
+  ExtendedError
 } from "../types/errors.js";
+import { ErrorCategory, ErrorSeverity } from "../types/errors.js";
 import { RuntimeDetector } from "../utils/runtime-detector.js";
 
 /**
@@ -14,6 +17,56 @@ const DEFAULT_CONFIG: Required<ErrorWrapperConfig> = {
   autoWrapErrors: true,
   maxStackLines: 50,
 };
+
+// Define a proper error hierarchy
+export class JitterbugError extends Error implements ExtendedError {
+  public context?: ErrorContext;
+  public metadata: ErrorMetadata;
+
+  constructor(message: string, context?: ErrorContext, severity: ErrorSeverityType = ErrorSeverity.Medium) {
+    super(message);
+    this.name = 'JitterbugError';
+    this.context = context;
+    this.metadata = {
+      severity,
+      category: ErrorCategory.System,
+      timestamp: Date.now(),
+      source: 'jitterbug'
+    };
+    Object.setPrototypeOf(this, JitterbugError.prototype);
+  }
+}
+
+export class RuntimeError extends JitterbugError {
+  constructor(message: string, context?: ErrorContext, severity: ErrorSeverityType = ErrorSeverity.High) {
+    super(message, context, severity);
+    this.name = 'RuntimeError';
+    this.metadata.category = ErrorCategory.Runtime;
+    Object.setPrototypeOf(this, RuntimeError.prototype);
+  }
+}
+
+export class ComponentError extends JitterbugError {
+  constructor(message: string, context?: ErrorContext, severity: ErrorSeverityType = ErrorSeverity.Medium) {
+    super(message, context, severity);
+    this.name = 'ComponentError';
+    this.metadata.category = ErrorCategory.Component;
+    Object.setPrototypeOf(this, ComponentError.prototype);
+  }
+}
+
+// Type guards for error discrimination
+export function isJitterbugError(error: unknown): error is JitterbugError {
+  return error instanceof JitterbugError;
+}
+
+export function isRuntimeError(error: unknown): error is RuntimeError {
+  return error instanceof RuntimeError;
+}
+
+export function isComponentError(error: unknown): error is ComponentError {
+  return error instanceof ComponentError;
+}
 
 /**
  * Error wrapper service implementation
@@ -54,65 +107,94 @@ export class ErrorWrapperService {
   }
 
   /**
-   * Wrap an existing Error object
+   * Wrap an unknown error into an ExtendedError with proper type checks and null guards
    */
-  private wrapError(error: Error): ExtendedError {
-    const extendedError = error as ExtendedError;
-
-    // Add runtime context if not present
-    if (!extendedError.context?.runtime) {
-      extendedError.context = {
-        ...extendedError.context,
-        runtime: RuntimeDetector.detectRuntime(),
-      };
+  public wrapError(error: unknown, severity?: ErrorSeverityType): ExtendedError {
+    if (error === null || error === undefined) {
+      return new JitterbugError('Unknown error: null or undefined', {
+        runtime: RuntimeDetector.detectRuntime()
+      }, ErrorSeverity.Low);
     }
 
-    // Format stack trace if configured
-    if (
-      this.config.maxStackLines !== undefined &&
-      error.stack !== undefined &&
-      error.stack !== null &&
-      typeof error.stack === "string" &&
-      error.stack.length > 0
-    ) {
-      const lines = error.stack.split("\n");
-      if (lines.length > this.config.maxStackLines) {
-        error.stack = lines
-          .slice(0, this.config.maxStackLines)
-          .join("\n")
-          .concat(
-            `\n... ${lines.length - this.config.maxStackLines} more lines`,
-          );
+    if (isJitterbugError(error)) {
+      if (severity) {
+        error.metadata.severity = severity;
       }
+      return error;
     }
 
-    return extendedError;
+    if (error instanceof Error) {
+      const context: ErrorContext = {
+        originalError: error,
+        runtime: RuntimeDetector.detectRuntime(),
+        stack: error.stack
+      };
+      return new RuntimeError(error.message, context, severity || ErrorSeverity.High);
+    }
+
+    if (typeof error === 'string') {
+      return this.wrapString(error, severity);
+    }
+
+    return new JitterbugError('An unknown error occurred', {
+      runtime: RuntimeDetector.detectRuntime()
+    }, severity || ErrorSeverity.Low);
   }
 
   /**
-   * Wrap a string as an Error
+   * Wrap an error and attach additional context safely
    */
-  private wrapString(message: string): ExtendedError {
-    const error = new Error(message) as ExtendedError;
-    error.context = {
-      message,
-      runtime: RuntimeDetector.detectRuntime(),
+  public wrapErrorWithContext(error: unknown, context: ErrorContext, severity?: ErrorSeverityType): ExtendedError {
+    const wrapped = this.wrapError(error, severity);
+    wrapped.context = {
+      ...wrapped.context,
+      ...context,
+      runtime: context.runtime ?? wrapped.context?.runtime ?? RuntimeDetector.detectRuntime()
     };
-    return error;
+    return wrapped;
   }
 
   /**
-   * Wrap an error context object
+   * Wrap a string as an Error with proper type safety
+   */
+  private wrapString(message: string, severity?: ErrorSeverityType): ExtendedError {
+    if (!message || typeof message !== 'string') {
+      return new JitterbugError('Invalid message provided', {
+        runtime: RuntimeDetector.detectRuntime()
+      }, ErrorSeverity.Low);
+    }
+
+    return new JitterbugError(message, {
+      message,
+      runtime: RuntimeDetector.detectRuntime()
+    }, severity || ErrorSeverity.Medium);
+  }
+
+  private isErrorContext(context: unknown): context is ErrorContext {
+    return typeof context === 'object' && context !== null && !Array.isArray(context);
+  }
+
+  /**
+   * Wrap an error context object with proper type validation
    */
   private wrapContext(context: ErrorContext): ExtendedError {
-    const error = new Error("Debug context") as ExtendedError;
-    error.context = {
+    if (!this.isErrorContext(context)) {
+      return new JitterbugError('Invalid context provided', {
+        runtime: RuntimeDetector.detectRuntime()
+      }, ErrorSeverity.Low);
+    }
+
+    const safeContext: ErrorContext = {
       ...context,
-      runtime: context.runtime ?? RuntimeDetector.detectRuntime(),
+      runtime: context.runtime ?? RuntimeDetector.detectRuntime()
     };
-    return error;
+
+    return new JitterbugError('Debug context', safeContext, ErrorSeverity.Medium);
   }
 
+  /**
+   * Get a safe error message with proper type checking
+   */
   private getErrorMessage(error: unknown): string {
     if (error === undefined || error === null) {
       return "Unknown error occurred";
@@ -120,13 +202,7 @@ export class ErrorWrapperService {
 
     if (error instanceof Error) {
       const msg = error.message;
-      if (msg === undefined || msg === null) {
-        return "Unknown error occurred";
-      }
-      if (typeof msg !== "string") {
-        return "Unknown error occurred";
-      }
-      if (msg.length === 0) {
+      if (msg === undefined || msg === null || typeof msg !== "string" || msg.length === 0) {
         return "Unknown error occurred";
       }
       return msg;

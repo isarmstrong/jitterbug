@@ -22,7 +22,7 @@ export function createJitterbug(...args: any[]): any {
     return {};
 }
 
-export interface LogProcessor { }
+export interface Processor { }
 
 export interface BaseLogContext {
     context?: any;

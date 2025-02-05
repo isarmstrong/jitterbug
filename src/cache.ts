@@ -1,4 +1,4 @@
-import type { LogLevel, ProcessedLogEntry } from './types';
+import type { LogEntry, LogLevel } from './types';
 
 interface CacheKeyParams {
   level: LogLevel;
@@ -15,15 +15,15 @@ interface CacheEntry<T> {
 
 // Extend globalThis with our cache type
 declare global {
-  var __JITTERBUG_CACHE__: Map<string, CacheEntry<ProcessedLogEntry<Record<string, unknown>>>>;
+  var __JITTERBUG_CACHE__: Map<string, CacheEntry<LogEntry<Record<string, unknown>>>>;
 }
 
 // Initialize cache in global scope if it doesn't exist
 if (!globalThis.__JITTERBUG_CACHE__) {
-  globalThis.__JITTERBUG_CACHE__ = new Map<string, CacheEntry<ProcessedLogEntry<Record<string, unknown>>>>();
+  globalThis.__JITTERBUG_CACHE__ = new Map<string, CacheEntry<LogEntry<Record<string, unknown>>>>();
 }
 
-export async function set(keyParams: CacheKeyParams, value: ProcessedLogEntry<Record<string, unknown>>): Promise<void> {
+export async function set(keyParams: CacheKeyParams, value: LogEntry<Record<string, unknown>>): Promise<void> {
   const key = generateKey(keyParams);
   globalThis.__JITTERBUG_CACHE__.set(key, {
     value,
@@ -32,7 +32,7 @@ export async function set(keyParams: CacheKeyParams, value: ProcessedLogEntry<Re
   });
 }
 
-export async function get(keyParams: CacheKeyParams): Promise<ProcessedLogEntry<Record<string, unknown>> | null> {
+export async function get(keyParams: CacheKeyParams): Promise<LogEntry<Record<string, unknown>> | null> {
   const key = generateKey(keyParams);
   const entry = globalThis.__JITTERBUG_CACHE__.get(key);
   return entry ? entry.value : null;

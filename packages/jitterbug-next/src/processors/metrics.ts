@@ -1,9 +1,4 @@
-import type {
-    EnvironmentType,
-    LogEntry,
-    LogProcessor,
-    RuntimeType
-} from '@isarmstrong/jitterbug/types/core';
+import { LogEntry, Transport } from "@isarmstrong/jitterbug-core-types";
 
 interface MetricsData {
     samples: number;
@@ -18,7 +13,7 @@ interface MetricsData {
     };
 }
 
-export const createMetricsProcessor = (): LogProcessor => {
+export const createMetricsProcessor = (): Transport => {
     let lastCheck = Date.now();
     let eventLoopLag = 0;
 
@@ -32,7 +27,7 @@ export const createMetricsProcessor = (): LogProcessor => {
     checkEventLoop();
 
     return {
-        process: async <T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>> => {
+        write: async <T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void> => {
             const { memoryUsage } = process;
             const memory = memoryUsage();
             const context = entry.context;
@@ -64,17 +59,7 @@ export const createMetricsProcessor = (): LogProcessor => {
                 };
             }
 
-            const newContext = {
-                ...context,
-                metrics
-            };
-
-            return {
-                ...entry,
-                context: newContext
-            } as LogEntry<T>;
-        },
-        supports: (runtime: RuntimeType) => runtime === 'NODE',
-        allowedIn: (environment: EnvironmentType) => true
+            Object.assign(context, { metrics });
+        }
     };
 }; 

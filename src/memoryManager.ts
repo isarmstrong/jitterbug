@@ -13,4 +13,12 @@ export class MemoryManager {
             memoryThreshold: this.memoryThreshold
         };
     }
+
+    public setMemoryThreshold(threshold: number): void {
+        this.memoryThreshold = threshold;
+    }
+
+    public getMemoryThreshold(): number {
+        return this.memoryThreshold;
+    }
 } 

@@ -1,4 +1,4 @@
-import type { ValidationResult } from '@isarmstrong/jitterbug';
+import type { ValidationResult } from '@isarmstrong/jitterbug-core-types';
 import type { LogType, SSETransportConfig } from '../../types';
 import { BaseSSETransport } from './base';
 
@@ -43,7 +43,7 @@ export class Next13SSETransport extends BaseSSETransport {
                     // Send initial connection message
                     await this.write({
                         message: 'Connected to SSE stream',
-                        level: 'info',
+                        level: 'INFO',
                         timestamp: new Date().toISOString(),
                         context: {
                             clientId,
@@ -71,7 +71,7 @@ export class Next13SSETransport extends BaseSSETransport {
                     const cleanup = setTimeout(async () => {
                         if (this.config.autoReconnect) {
                             const reconnectMessage = {
-                                type: 'info',
+                                type: 'INFO',
                                 message: 'Stream duration limit reached, reconnecting...',
                                 timestamp: new Date().toISOString()
                             };
@@ -140,12 +140,12 @@ export class Next13SSETransport extends BaseSSETransport {
         });
     }
 
-    public async connect(): Promise<ValidationResult> {
+    public async connect(): Promise<ValidationResult<boolean>> {
         this.isConnected = true;
-        return { isValid: true };
+        return { isValid: true, value: true };
     }
 
-    public async disconnect(): Promise<ValidationResult> {
+    public async disconnect(): Promise<ValidationResult<boolean>> {
         // Cleanup all clients
         const clientIds = Array.from(this.activeClients);
         await Promise.all(clientIds.map(clientId => this.removeClient(clientId)));
@@ -153,6 +153,6 @@ export class Next13SSETransport extends BaseSSETransport {
         this.messageBuffer.clear();
         this.cleanupTimers.clear();
         this.isConnected = false;
-        return { isValid: true };
+        return { isValid: true, value: true };
     }
 } 

@@ -1,12 +1,12 @@
 import type {
   LogEntry,
-  LogProcessor,
+  Processor,
   LogTransport,
 } from "./types/index.js";
 
 export async function processLog<T extends Record<string, unknown>>(
   entry: LogEntry<T>,
-  processors: LogProcessor[],
+  processors: Processor[],
 ): Promise<LogEntry<T>> {
   let processedEntry = { ...entry };
 
@@ -27,7 +27,7 @@ export async function writeLog<T extends Record<string, unknown>>(
 
 export async function processAndWrite<T extends Record<string, unknown>>(
   entry: LogEntry<T>,
-  processors: LogProcessor[],
+  processors: Processor[],
   transports: LogTransport[],
 ): Promise<void> {
   const processedEntry = await processLog(entry, processors);

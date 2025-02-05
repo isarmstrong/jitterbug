@@ -1,15 +1,25 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import { EdgeTransport } from "../src/transports/edge";
 import { GUITransport } from "../src/transports/gui-transport";
-import { LogLevels, Runtime, Environment } from "../src/types/core";
-import { createEntry } from "./utils.js";
+import { Environment, LogLevels, Runtime } from "../src/types/core";
 
 describe("Jitterbug Core", () => {
   describe("Transport Initialization", () => {
     describe("Edge Transport", () => {
+      beforeEach(() => {
+        // Mock Edge runtime environment
+        global.EdgeRuntime = 'edge';
+        global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+      });
+
+      afterEach(() => {
+        delete global.EdgeRuntime;
+        vi.clearAllMocks();
+      });
+
       it("should initialize with minimal config", () => {
         const transport = new EdgeTransport({
-          endpoint: "http://test.com/events",
+          endpoint: "/api/logs/events",
         });
         expect(transport).toBeDefined();
         expect(transport).toHaveProperty("connect");
@@ -19,7 +29,7 @@ describe("Jitterbug Core", () => {
 
       it("should apply default config values", () => {
         const transport = new EdgeTransport({
-          endpoint: "http://test.com/events",
+          endpoint: "/api/logs/events",
         });
 
         expect(transport.config.maxEntries).toBe(1000);
@@ -32,8 +42,8 @@ describe("Jitterbug Core", () => {
 
       it("should override default config values", () => {
         const config = {
-          endpoint: "http://test.com/events",
-          maxEntries: 50,
+          endpoint: "/api/logs/events",
+          maxEntries: 200,
           bufferSize: 10,
           retryInterval: 1000,
           maxConnectionDuration: 60000,
@@ -231,7 +241,7 @@ describe("Jitterbug Core", () => {
 
         // Read the source files and verify no Node.js APIs are used
         const transport = new EdgeTransport({
-          endpoint: "http://test.com/events",
+          endpoint: "/api/logs/events",
         });
 
         const transportCode = transport.constructor.toString();
