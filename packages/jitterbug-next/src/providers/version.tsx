@@ -1,3 +1,4 @@
+import type { NEXT_DATA } from 'next/dist/shared/lib/utils';
 import React, { createContext, useContext } from 'react';
 
 export interface NextVersionInfo {
@@ -10,6 +11,12 @@ export interface NextVersionInfo {
         webStreams: boolean;
         nodeStreams: boolean;
     };
+}
+
+declare global {
+    interface Window {
+        __NEXT_DATA__: NEXT_DATA;
+    }
 }
 
 const NextVersionContext = createContext<NextVersionInfo | null>(null);
@@ -32,7 +39,7 @@ export function detectNextVersion(): NextVersionInfo {
         }
 
         // Client-side detection
-        const nextData = (window as any).__NEXT_DATA__;
+        const nextData = window.__NEXT_DATA__;
         const runtime = 'browser';
 
         if (!nextData) {

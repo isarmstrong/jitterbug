@@ -17,7 +17,7 @@ export default function Home(): JSX.Element {
   const [lastError, setLastError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleClientError = () => {
+  const handleClientError = (): void => {
     try {
       causeTypeError();
     } catch (error) {
@@ -27,7 +27,7 @@ export default function Home(): JSX.Element {
     }
   };
 
-  const handlePromiseError = () => {
+  const handlePromiseError = (): void => {
     new Promise<void>((_, reject) => {
       reject(new Error('Promised rejection'));
     }).catch(error => {
@@ -37,7 +37,7 @@ export default function Home(): JSX.Element {
     });
   };
 
-  const handleServerError = async () => {
+  const handleServerError = async (): Promise<void> => {
     setIsLoading(true);
     try {
       throw new Error("Simulated server error");
@@ -117,24 +117,4 @@ export default function Home(): JSX.Element {
       </div>
     </main>
   );
-}
-
-function LogStreamContainer(): JSX.Element {
-  // Implementation of LogStreamContainer
-  return <div>LogStreamContainer</div>;
-}
-
-function LogStreamHeader(): JSX.Element {
-  // Implementation of LogStreamHeader
-  return <div>LogStreamHeader</div>;
-}
-
-function LogStreamFooter(): JSX.Element {
-  // Implementation of LogStreamFooter
-  return <div>LogStreamFooter</div>;
-}
-
-function LogStreamContent(): JSX.Element {
-  // Implementation of LogStreamContent
-  return <div>LogStreamContent</div>;
 }

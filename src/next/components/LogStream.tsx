@@ -20,10 +20,17 @@ export function LogStream({ onError }: LogStreamProps): JSX.Element {
     }, [messages]);
 
     // Format time since last heartbeat
-    const getTimeSinceLastHeartbeat = () => {
+    const getTimeSinceLastHeartbeat = (): string => {
         const seconds = Math.floor((Date.now() - lastHeartbeat) / 1000);
         return `${seconds}s ago`;
     };
+
+    // Report errors to parent if provided
+    useEffect(() => {
+        if (error && onError) {
+            onError(error);
+        }
+    }, [error, onError]);
 
     return (
         <div className="space-y-4 p-4">
