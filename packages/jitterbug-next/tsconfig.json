@@ -13,18 +13,6 @@
             ],
             "@isarmstrong/jitterbug/*": [
                 "../../src/*"
-            ],
-            "@isarmstrong/jitterbug-types": [
-                "../jitterbug-types/src"
-            ],
-            "@isarmstrong/jitterbug-types/*": [
-                "../jitterbug-types/src/*"
-            ],
-            "@isarmstrong/jitterbug-core-types": [
-                "../core-types/src"
-            ],
-            "@isarmstrong/jitterbug-core-types/*": [
-                "../core-types/src/*"
             ]
         }
     },
@@ -43,13 +31,5 @@
         "dist",
         "**/*.test.ts",
         "**/*.spec.ts"
-    ],
-    "references": [
-        {
-            "path": "../jitterbug-types"
-        },
-        {
-            "path": "../core-types"
-        }
     ]
 }

@@ -1,11 +1,16 @@
-import type { LogEntry, LogTransport } from '@isarmstrong/jitterbug-core-types';
+import type { BaseEntry, LogTransport } from '@isarmstrong/jitterbug-core-types';
 
-interface EdgeTransportConfig {
+export interface EdgeTransportConfig {
     endpoint: string;
     namespace: string;
     environment: string;
     maxRetries?: number;
     retryInterval?: number;
+    bufferSize?: number;
+    maxEntries?: number;
+    testMode?: boolean;
+    maxPayloadSize?: number;
+    maxConnectionDuration?: number;
 }
 
 export class EdgeTransport implements LogTransport {
@@ -82,12 +87,12 @@ export class EdgeTransport implements LogTransport {
         });
     }
 
-    async write(log: LogEntry): Promise<void> {
+    async write<T extends Record<string, unknown>>(entry: BaseEntry<T>): Promise<void> {
         try {
             console.log('[Jitterbug Edge] Writing log entry:', {
-                level: log.level,
-                message: log.message,
-                hasContext: !!log.context
+                level: entry.level,
+                message: entry.message,
+                hasContext: !!entry.context
             });
 
             const response = await fetch(this.config.endpoint, {
@@ -97,7 +102,7 @@ export class EdgeTransport implements LogTransport {
                     'X-Namespace': this.config.namespace,
                     'X-Environment': this.config.environment
                 },
-                body: JSON.stringify(log)
+                body: JSON.stringify(entry)
             });
 
             console.log('[Jitterbug Edge] Write response:', {

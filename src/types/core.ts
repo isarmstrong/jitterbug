@@ -60,6 +60,8 @@ export interface BaseEntry<T = Record<string, unknown>> {
 
 export interface Transport {
     write<T extends Record<string, unknown>>(entry: BaseEntry<T>): Promise<void>;
+    connect?(): Promise<void>;
+    disconnect?(): void;
 }
 
 export interface Processor {
@@ -100,18 +102,14 @@ export interface Factory {
     getEnvironment: () => EnvironmentType;
 }
 
-/* Utility Types */
-export type ReadonlyEntry = Readonly<BaseEntry>;
-export type ReadonlyConfig = Readonly<Config>;
-export type RuntimeConfig = Partial<Config>;
+/* Validation Types */
+export interface ValidationResult<T = unknown> {
+    isValid: boolean;
+    errors?: string[];
+    value?: T;
+}
 
-// Type aliases for external use
-export type { Config as JitterbugConfig, Factory as JitterbugFactory, Instance as JitterbugInstance, BaseEntry as LogEntry, Transport as LogTransport };
-
-// Added canonical definition for ProcessedLogEntry as the read-only version of BaseEntry
-export type ProcessedLogEntry<T = any> = Readonly<BaseEntry<T>>;
-
-// Pool B: Core Interfaces
+/* Context Types */
 export interface RequestContext {
     url?: string;
     method?: string;
@@ -131,4 +129,40 @@ export interface CacheContext {
     size?: number;
     hit?: boolean;
     duration?: number;
+}
+
+/* Utility Types */
+export type ReadonlyEntry = Readonly<BaseEntry>;
+export type ReadonlyConfig = Readonly<Config>;
+export type RuntimeConfig = Partial<Config>;
+
+/* Type Aliases (Public API) */
+export type {
+    Config as JitterbugConfig,
+    Factory as JitterbugFactory,
+    Instance as JitterbugInstance, BaseContext as LogContext, BaseEntry as LogEntry,
+    Transport as LogTransport
+};
+
+/* Processed Types */
+export type ProcessedLogEntry<T = Record<string, unknown>> = Readonly<BaseEntry<T>>;
+
+/* Edge Runtime Types */
+export interface EdgeRuntimeConfig extends Config {
+    maxMemoryUsage?: number;
+    maxProcessingTime?: number;
+    cleanupInterval?: number;
+}
+
+export interface EdgeTransportConfig {
+    endpoint: string;
+    namespace: string;
+    environment: string;
+    maxRetries?: number;
+    retryInterval?: number;
+    bufferSize?: number;
+    maxEntries?: number;
+    testMode?: boolean;
+    maxPayloadSize?: number;
+    maxConnectionDuration?: number;
 } 

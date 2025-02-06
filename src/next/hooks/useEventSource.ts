@@ -1,6 +1,6 @@
 'use client';
 
-import type { LogType } from '@isarmstrong/jitterbug-types';
+import type { LogEntry } from '@isarmstrong/jitterbug/types';
 import { useEffect, useState } from 'react';
 import { getClientId } from '../lib/client';
 
@@ -52,13 +52,13 @@ type EventSourceStatus = EConnectionState;
 
 interface UseEventSourceResult {
     status: EventSourceStatus;
-    messages: LogType[];
+    messages: LogEntry[];
     error: Error | null;
 }
 
 export function useEventSource(): UseEventSourceResult {
     const [status, setStatus] = useState<EConnectionState>(EConnectionState.DISCONNECTED);
-    const [messages, setMessages] = useState<LogType[]>([]);
+    const [logs, setLogs] = useState<LogEntry[]>([]);
     const [error, setError] = useState<Error | null>(null);
     const [eventSource, setEventSource] = useState<EventSource | null>(null);
 
@@ -87,22 +87,13 @@ export function useEventSource(): UseEventSourceResult {
 
         const handleMessage = (event: MessageEvent): void => {
             try {
-                const parsedData = JSON.parse(event.data);
-                if (!isSerializedLogType(parsedData)) {
-                    console.error('Invalid log data received:', parsedData);
+                const log = JSON.parse(event.data) as LogEntry;
+                if (!isSerializedLogType(log)) {
+                    console.error('Invalid log data received:', log);
                     return;
                 }
 
-                const logEntry: LogType = isSerializedErrorLog(parsedData)
-                    ? {
-                        ...parsedData,
-                        error: new Error(parsedData.errorMessage),
-                        stack: parsedData.errorStack,
-                        timestamp: parsedData.timestamp.toString()
-                    }
-                    : { ...parsedData, timestamp: parsedData.timestamp.toString() };
-
-                setMessages(prev => [...prev, logEntry]);
+                setLogs(prev => [...prev, log]);
             } catch (e) {
                 console.error('Failed to parse message:', e);
                 if (e instanceof Error) {
@@ -126,5 +117,5 @@ export function useEventSource(): UseEventSourceResult {
         };
     }, [eventSource]);
 
-    return { status, messages, error };
+    return { status, messages: logs, error };
 }

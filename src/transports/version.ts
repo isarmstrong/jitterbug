@@ -1,4 +1,4 @@
-import type { ValidationResult } from '@isarmstrong/jitterbug-core-types';
+import type { ValidationResult } from '@isarmstrong/jitterbug/types';
 import * as semver from "semver";
 import { LogEntry, Runtime } from "../types";
 import { BaseEntry } from '../types/core';

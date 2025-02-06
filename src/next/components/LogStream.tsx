@@ -1,76 +1,37 @@
 'use client';
 
-import type { LogType } from '@isarmstrong/jitterbug-types';
-import { useEffect, useState } from 'react';
-import { EConnectionState, useEventSource } from '../hooks/useEventSource';
+import type { LogEntry } from '@isarmstrong/jitterbug/types';
+import { useEventSource } from '../hooks/useEventSource';
+import { LogStreamContent } from './LogStreamContent';
 
-export interface LogStreamProps {
-    onError?: (error: Error) => void;
+interface LogStreamProps {
+    maxLogs?: number;
+    autoScroll?: boolean;
+    showTimestamp?: boolean;
+    showLevel?: boolean;
 }
 
-export function LogStream({ onError }: LogStreamProps): JSX.Element {
+export function LogStream({
+    maxLogs = 100,
+    autoScroll = true,
+    showTimestamp = true,
+    showLevel = true,
+}: LogStreamProps) {
     const { status, messages, error } = useEventSource();
-    const [lastHeartbeat, setLastHeartbeat] = useState<number>(Date.now());
+    const logs = messages as LogEntry[];
 
-    useEffect(() => {
-        // Update heartbeat when we receive messages
-        if (messages.length > 0) {
-            setLastHeartbeat(Date.now());
-        }
-    }, [messages]);
-
-    // Format time since last heartbeat
-    const getTimeSinceLastHeartbeat = (): string => {
-        const seconds = Math.floor((Date.now() - lastHeartbeat) / 1000);
-        return `${seconds}s ago`;
-    };
-
-    // Report errors to parent if provided
-    useEffect(() => {
-        if (error && onError) {
-            onError(error);
-        }
-    }, [error, onError]);
+    if (error) {
+        return <div>Error: {error.message}</div>;
+    }
 
     return (
-        <div className="space-y-4 p-4">
-            <div className="flex justify-between items-center bg-gray-100 p-4 rounded">
-                <div>
-                    <h3 className="font-semibold">
-                        Connection Status: {status}
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                        Last heartbeat: {getTimeSinceLastHeartbeat()}
-                    </p>
-                </div>
-                {error && (
-                    <div className="text-red-600">
-                        {error.message}
-                    </div>
-                )}
-            </div>
-
-            <div className="space-y-2">
-                {messages.map((msg: LogType, idx: number) => (
-                    <div key={idx} className="p-3 bg-white shadow rounded">
-                        <pre className="whitespace-pre-wrap overflow-auto">
-                            {JSON.stringify(msg, null, 2)}
-                        </pre>
-                    </div>
-                ))}
-            </div>
-
-            <div className="text-sm text-gray-500">
-                {status === EConnectionState.CONNECTED ? (
-                    <span className="text-green-600">● Connected</span>
-                ) : status === EConnectionState.CONNECTING ? (
-                    <span className="text-yellow-600">◌ Connecting...</span>
-                ) : status === EConnectionState.FAILED ? (
-                    <span className="text-red-600">✕ Connection Error</span>
-                ) : (
-                    <span className="text-gray-600">○ Disconnected</span>
-                )}
-            </div>
-        </div>
+        <LogStreamContent
+            logs={logs}
+            maxLogs={maxLogs}
+            autoScroll={autoScroll}
+            showTimestamp={showTimestamp}
+            showLevel={showLevel}
+            status={status}
+        />
     );
 } 

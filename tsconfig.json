@@ -30,23 +30,11 @@
       "@/*": [
         "./src/*"
       ],
-      "@isarmstrong/jitterbug-core-types": [
-        "./packages/core-types/src"
+      "@isarmstrong/jitterbug": [
+        "./src"
       ],
-      "@isarmstrong/jitterbug-core-types/*": [
-        "./packages/core-types/src/*"
-      ],
-      "@isarmstrong/jitterbug-next": [
-        "./packages/jitterbug-next/src"
-      ],
-      "@isarmstrong/jitterbug-next/*": [
-        "./packages/jitterbug-next/src/*"
-      ],
-      "@isarmstrong/jitterbug-types": [
-        "./packages/jitterbug-types/src"
-      ],
-      "@isarmstrong/jitterbug-types/*": [
-        "./packages/jitterbug-types/src/*"
+      "@isarmstrong/jitterbug/*": [
+        "./src/*"
       ]
     }
   },
@@ -62,18 +50,11 @@
     "node_modules",
     "dist",
     ".coverage",
-    "examples",
-    "packages/**/*"
+    "examples"
   ],
   "references": [
     {
       "path": "./src"
-    },
-    {
-      "path": "./packages/jitterbug-types"
-    },
-    {
-      "path": "./packages/jitterbug-next"
     }
   ]
 }

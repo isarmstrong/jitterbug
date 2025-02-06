@@ -1,37 +1,96 @@
 'use client';
 
-import type { LogType } from '@/types/index';
 import React from 'react';
-import { useEventSource } from '../hooks/useEventSource';
-import { logger } from '../lib/logger';
+import type { BaseEntry } from '../../types/core';
+import { EConnectionState } from '../hooks/useEventSource';
 
-export const LogStreamContent: React.FC = () => {
-    const { status, messages = [], error } = useEventSource();
+interface LogStreamContentProps {
+    logs: BaseEntry[];
+    maxLogs: number;
+    autoScroll: boolean;
+    showTimestamp: boolean;
+    showLevel: boolean;
+    status: EConnectionState;
+}
 
-    React.useEffect(() => {
-        // Log connection status changes
-        logger.info(`SSE Connection Status: ${status}`);
-        if (error) {
-            logger.error('SSE Connection Error', error);
-        }
-    }, [status, error]);
+export function LogStreamContent({
+    logs,
+    maxLogs,
+    autoScroll,
+    showTimestamp,
+    showLevel,
+    status,
+}: LogStreamContentProps) {
+    const displayLogs = logs.slice(-maxLogs);
 
     return (
-        <div className="space-y-4">
-            <div className="p-4 bg-gray-100 rounded">
-                <h3 className="font-semibold">Connection Status: {status}</h3>
-                {error && (
-                    <p className="text-red-600 mt-2">{error.message}</p>
-                )}
-            </div>
-
+        <div className="space-y-4 p-4">
             <div className="space-y-2">
-                {messages.map((msg: LogType, idx: number) => (
-                    <div key={idx} className="p-3 bg-white shadow rounded">
-                        <pre className="whitespace-pre-wrap">{JSON.stringify(msg, null, 2)}</pre>
+                {displayLogs.map((log, idx) => (
+                    <div key={idx} className={`p-3 bg-white shadow rounded ${getLogLevelClass(log.level)}`}>
+                        <div className="flex items-center gap-2">
+                            {showLevel && (
+                                <span className="text-sm font-semibold">{log.level}</span>
+                            )}
+                            {showTimestamp && log.context?.timestamp && (
+                                <span className="text-sm text-gray-500">
+                                    {new Date(log.context.timestamp).toLocaleTimeString()}
+                                </span>
+                            )}
+                        </div>
+                        <pre className="whitespace-pre-wrap overflow-auto mt-2">
+                            {log.message}
+                            {log.data && (
+                                <>
+                                    {'\n'}
+                                    {JSON.stringify(log.data, null, 2)}
+                                </>
+                            )}
+                            {log.error && (
+                                <>
+                                    {'\n'}
+                                    Error: {log.error.message}
+                                    {log.error.stack && (
+                                        <>
+                                            {'\n'}
+                                            Stack: {log.error.stack}
+                                        </>
+                                    )}
+                                </>
+                            )}
+                        </pre>
                     </div>
                 ))}
             </div>
+
+            <div className="text-sm text-gray-500">
+                {status === EConnectionState.CONNECTED ? (
+                    <span className="text-green-600">● Connected</span>
+                ) : status === EConnectionState.CONNECTING ? (
+                    <span className="text-yellow-600">◌ Connecting...</span>
+                ) : status === EConnectionState.FAILED ? (
+                    <span className="text-red-600">✕ Connection Error</span>
+                ) : (
+                    <span className="text-gray-600">○ Disconnected</span>
+                )}
+            </div>
         </div>
     );
-}; 
+}
+
+function getLogLevelClass(level: string): string {
+    switch (level.toLowerCase()) {
+        case 'debug':
+            return 'border-l-4 border-gray-300';
+        case 'info':
+            return 'border-l-4 border-blue-300';
+        case 'warn':
+            return 'border-l-4 border-yellow-300';
+        case 'error':
+            return 'border-l-4 border-red-300';
+        case 'fatal':
+            return 'border-l-4 border-red-500 bg-red-50';
+        default:
+            return '';
+    }
+} 
