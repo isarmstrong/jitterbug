@@ -1,20 +1,39 @@
-// This is a stub implementation for Storage to satisfy module resolution errors in Pool A.
+import { TransportError, TransportErrorCode } from '../types/transports';
+
+export interface StorageValue {
+    timestamp: number;
+    data: unknown;
+    metadata?: Record<string, unknown>;
+}
+
 export class Storage {
-    private store = new Map<string, any>();
+    private store = new Map<string, StorageValue>();
 
-    setItem(key: string, value: any): void {
-        this.store.set(key, value);
+    public async setItem(key: string, value: unknown): Promise<void> {
+        try {
+            const storageValue: StorageValue = {
+                timestamp: Date.now(),
+                data: value
+            };
+            this.store.set(key, storageValue);
+        } catch (error) {
+            throw new TransportError(
+                `Failed to store item: ${error instanceof Error ? error.message : String(error)}`,
+                TransportErrorCode.SERIALIZATION_FAILED
+            );
+        }
     }
 
-    getItem(key: string): any {
-        return this.store.get(key) || null;
+    public async getItem<T>(key: string): Promise<T | null> {
+        const value = this.store.get(key);
+        return value ? value.data as T : null;
     }
 
-    removeItem(key: string): void {
+    public async removeItem(key: string): Promise<void> {
         this.store.delete(key);
     }
 
-    clear(): void {
+    public async clear(): Promise<void> {
         this.store.clear();
     }
 } 

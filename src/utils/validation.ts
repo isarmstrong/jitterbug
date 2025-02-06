@@ -97,7 +97,7 @@ export function createValidator<T>(
 /**
  * Combines multiple validators into a single validator
  */
-export function combineValidators<T>(
+export function combineValidators<_T>(
     validators: Array<(value: unknown) => ValidationResult>
 ): (value: unknown) => ValidationResult {
     return (value: unknown): ValidationResult => {
@@ -120,7 +120,7 @@ export function combineValidators<T>(
 /**
  * Creates a validator for optional fields
  */
-export function optional<T>(
+export function optional<_T>(
     validator: (value: unknown) => ValidationResult
 ): (value: unknown) => ValidationResult {
     return (value: unknown): ValidationResult => {
@@ -134,7 +134,7 @@ export function optional<T>(
 /**
  * Creates a validator for array fields
  */
-export function arrayOf<T>(
+export function arrayOf<_T>(
     validator: (value: unknown) => ValidationResult
 ): (value: unknown) => ValidationResult {
     return (value: unknown): ValidationResult => {
@@ -159,4 +159,23 @@ export function arrayOf<T>(
             errors: errors.length > 0 ? errors : undefined
         };
     };
+}
+
+export function validateType<TValue>(value: TValue, type: string): boolean {
+    return typeof value === type;
+}
+
+export function validateShape<TShape extends Record<string, unknown>>(
+    value: unknown,
+    shape: TShape
+): value is TShape {
+    if (!value || typeof value !== 'object') return false;
+    return Object.keys(shape).every(key => key in value);
+}
+
+export function validateArray<TItem>(
+    value: unknown,
+    itemValidator: (item: unknown) => item is TItem
+): value is TItem[] {
+    return Array.isArray(value) && value.every(itemValidator);
 } 

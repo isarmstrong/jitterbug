@@ -1,3 +1,4 @@
+import { Environment, Runtime } from '../types/core';
 import type { EnvironmentType, LogEntry, Processor, RuntimeType } from '../types/index';
 
 /**
@@ -25,6 +26,18 @@ export class SanitizeProcessor implements Processor {
   private readonly config: Required<SanitizeConfig>;
   private sensitiveKeys: string[];
 
+  private readonly supportedRuntimes = new Set<RuntimeType>([
+    Runtime.NODE,
+    Runtime.EDGE,
+    Runtime.BROWSER
+  ]);
+
+  private readonly supportedEnvironments = new Set<EnvironmentType>([
+    Environment.DEVELOPMENT,
+    Environment.STAGING,
+    Environment.PRODUCTION
+  ]);
+
   /**
    * @deprecated Since version 1.1.0. Will be removed in version 2.0.0.
    */
@@ -51,26 +64,56 @@ export class SanitizeProcessor implements Processor {
     this.sensitiveKeys = this.config.sensitiveKeys as string[];
   }
 
-  public async process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>> {
-    const sourceData = entry.data ?? ({} as T);
-    // Sanitize by removing sensitive keys
-    const sanitizedData = { ...sourceData };
-    for (const key of this.sensitiveKeys) {
-      if (key in sanitizedData) {
-        delete sanitizedData[key as keyof T];
-      }
-    }
-    return { ...entry, data: sanitizedData } as LogEntry<T>;
-  }
-
   public supports(runtime: RuntimeType): boolean {
-    // Supports all runtimes for now
-    return true;
+    return this.supportedRuntimes.has(runtime);
   }
 
   public allowedIn(environment: EnvironmentType): boolean {
-    // Allowed in all environments for now
-    return true;
+    return this.supportedEnvironments.has(environment);
+  }
+
+  public async process<T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<LogEntry<T>> {
+    const data = entry.data ?? {} as T;
+    const sanitizedData = this.sanitizeData(data);
+    return {
+      ...entry,
+      data: sanitizedData
+    };
+  }
+
+  private sanitizeData<T extends Record<string, unknown>>(data: T): T {
+    const sanitized = { ...data };
+    this.removeSecrets(sanitized);
+    this.sanitizeErrors(sanitized);
+    return sanitized as T;
+  }
+
+  private removeSecrets(obj: Record<string, unknown>): void {
+    const sensitiveKeys = ['password', 'token', 'secret', 'key', 'auth'];
+
+    for (const key of Object.keys(obj)) {
+      const value = obj[key];
+
+      if (sensitiveKeys.some(k => key.toLowerCase().includes(k))) {
+        obj[key] = '[REDACTED]';
+      } else if (value && typeof value === 'object') {
+        this.removeSecrets(value as Record<string, unknown>);
+      }
+    }
+  }
+
+  private sanitizeErrors(obj: Record<string, unknown>): void {
+    for (const [key, value] of Object.entries(obj)) {
+      if (value instanceof Error) {
+        obj[key] = {
+          name: value.name,
+          message: value.message,
+          stack: value.stack
+        };
+      } else if (value && typeof value === 'object') {
+        this.sanitizeErrors(value as Record<string, unknown>);
+      }
+    }
   }
 
   private sanitizeObject<T extends Record<string, unknown>>(obj: T): T {

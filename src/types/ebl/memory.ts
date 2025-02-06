@@ -38,6 +38,7 @@ export interface MemoryMetrics {
     [MemoryMetricKey.ArrayBuffers]: number;
     [MemoryMetricKey.Threshold]: number;
     [MemoryMetricKey.RSS]?: number;
+    memoryThreshold: number;
 }
 
 export interface MemoryLayer {
@@ -87,7 +88,8 @@ export class MemoryManager {
             [MemoryMetricKey.External]: usage.external ? usage.external / MemoryUnit.MB : 0,
             [MemoryMetricKey.ArrayBuffers]: usage.arrayBuffers ? usage.arrayBuffers / MemoryUnit.MB : 0,
             [MemoryMetricKey.Threshold]: this._memoryThreshold,
-            [MemoryMetricKey.RSS]: usage.rss / MemoryUnit.MB
+            [MemoryMetricKey.RSS]: usage.rss / MemoryUnit.MB,
+            memoryThreshold: this._memoryThreshold
         };
     }
 

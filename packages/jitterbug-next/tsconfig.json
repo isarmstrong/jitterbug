@@ -4,6 +4,9 @@
         "rootDir": "../../",
         "outDir": "dist",
         "baseUrl": ".",
+        "composite": true,
+        "declaration": true,
+        "noEmit": false,
         "paths": {
             "@isarmstrong/jitterbug": [
                 "../../src"

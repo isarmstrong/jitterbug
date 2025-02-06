@@ -1,77 +1,86 @@
-import { LogLevel } from '@jitterbug';
+import { NextApiRequest, NextApiResponse } from 'next';
+import { LogEntry, LogLevel } from './core';
+import { TransportConfig } from './transports';
 
-export interface LogType {
-    message: string;
+export interface APIConfig {
     level: LogLevel;
-    timestamp: number;
-    [key: string]: unknown;
-}
-
-export interface LogHandlerConfig {
-    /** Whether to enable CORS */
-    cors?: boolean;
-    /** Custom log processor function */
-    processLogs?: (logs: LogType[]) => Promise<void> | void;
-}
-
-export interface SSETransport {
-    handleRequest(req: Request): Promise<Response>;
-    write(data: unknown): Promise<void>;
-    disconnect(): Promise<void>;
-}
-
-export interface SSETransportConfig {
     endpoint: string;
-    forceVersion?: string;
-    heartbeatInterval?: number;
-    maxDuration?: number;
+    headers?: Record<string, string>;
 }
 
-export function createSSETransport(config: SSETransportConfig): SSETransport {
-    return {
-        handleRequest: async (req: Request) => new Response(),
-        write: async (data: unknown) => { },
-        disconnect: async () => { }
-    };
+export interface APIResponse<T = unknown> {
+    success: boolean;
+    data?: T;
+    error?: string;
 }
 
-export interface LogHandlerResponse {
-    GET(request: Request): Promise<Response>
-    POST(request: Request): Promise<Response>
-    HEAD(): Promise<Response>
-    OPTIONS(): Promise<Response>
+export interface APIHandler<T = unknown> {
+    (req: NextApiRequest, res: NextApiResponse<APIResponse<T>>): Promise<void>;
 }
 
-export type LogHandler = {
-    (req: Request): Promise<Response>
-} & LogHandlerResponse
+export interface LogAPIRequest {
+    entry: LogEntry;
+    config?: TransportConfig;
+}
 
-export function createLogHandler(config?: LogHandlerConfig): LogHandler {
-    const handler = async (req: Request): Promise<Response> => {
-        const method = req.method as keyof LogHandlerResponse;
-        if (method in handler) {
-            return handler[method](req);
+export interface LogAPIResponse {
+    success: boolean;
+    timestamp: string;
+    entryId: string;
+}
+
+export interface ConfigAPIRequest {
+    config: TransportConfig;
+}
+
+export interface ConfigAPIResponse {
+    success: boolean;
+    applied: boolean;
+    warnings?: string[];
+}
+
+export function createAPIHandler<T>(handler: APIHandler<T>): APIHandler<T> {
+    return async (req: NextApiRequest, res: NextApiResponse<APIResponse<T>>): Promise<void> => {
+        try {
+            await handler(req, res);
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                error: error instanceof Error ? error.message : 'Internal Server Error'
+            });
         }
-        return new Response('Method not allowed', { status: 405 });
     };
+}
 
-    handler.GET = async (request: Request): Promise<Response> => {
-        return new Response();
+export function createLogHandler(_config: APIConfig): APIHandler<LogAPIResponse> {
+    return async (req: NextApiRequest, res: NextApiResponse<APIResponse<LogAPIResponse>>): Promise<void> => {
+        const { entry: _entry } = req.body as LogAPIRequest;
+        const timestamp = new Date().toISOString();
+        const entryId = `${timestamp}-${Math.random().toString(36).slice(2)}`;
+
+        res.status(200).json({
+            success: true,
+            data: {
+                success: true,
+                timestamp,
+                entryId
+            }
+        });
     };
+}
 
-    handler.POST = async (request: Request): Promise<Response> => {
-        return new Response();
+export function createConfigHandler(): APIHandler<ConfigAPIResponse> {
+    return async (req: NextApiRequest, res: NextApiResponse<APIResponse<ConfigAPIResponse>>): Promise<void> => {
+        const { config: _config } = req.body as ConfigAPIRequest;
+
+        res.status(200).json({
+            success: true,
+            data: {
+                success: true,
+                applied: true
+            }
+        });
     };
-
-    handler.HEAD = async (): Promise<Response> => {
-        return new Response();
-    };
-
-    handler.OPTIONS = async (): Promise<Response> => {
-        return new Response();
-    };
-
-    return handler;
 }
 
 export const runtime = 'edge'; 

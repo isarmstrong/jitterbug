@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "es2020",
+    "target": "ES2020",
     "lib": [
       "dom",
       "dom.iterable",
@@ -11,9 +11,8 @@
     "skipLibCheck": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-    "noEmit": false,
     "esModuleInterop": true,
-    "module": "commonjs",
+    "module": "esnext",
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
@@ -25,6 +24,8 @@
     "baseUrl": ".",
     "composite": true,
     "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
     "paths": {
       "@/*": [
         "./src/*"
@@ -52,23 +53,17 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
-    "packages/*/src/**/*.ts",
-    "packages/*/src/**/*.tsx",
-    "packages/*/*.ts",
-    "packages/*/*.tsx",
-    "test/**/*.ts",
-    "test/**/*.tsx",
-    "*.ts",
-    "*.tsx"
+    "types/**/*.d.ts",
+    "__tests__/**/*.ts",
+    "__tests__/**/*.tsx",
+    "next-env.d.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "coverage",
-    ".next",
-    "**/*.js",
-    "**/*.cjs",
-    "**/*.mjs"
+    ".coverage",
+    "examples",
+    "packages/**/*"
   ],
   "references": [
     {

@@ -6,8 +6,8 @@ export interface LogHandlerConfig {
     validateClientId?: (clientId: string) => Promise<boolean>;
 }
 
-export function createLogHandler(config: LogHandlerConfig) {
-    return async function handler(req: NextRequest) {
+export function createLogHandler(config: LogHandlerConfig): (req: NextRequest) => Promise<NextResponse> {
+    return async function handler(req: NextRequest): Promise<NextResponse> {
         try {
             const logs = await req.json() as LogType[];
 

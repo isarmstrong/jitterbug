@@ -25,7 +25,7 @@ export class Next14SSETransport extends BaseSSETransport {
     }
 
     private getClientId(req: Request): string {
-        const matches = req.url.match(/\/logs\/([^\/\?]+)/);
+        const matches = req.url.match(/\/logs\/([^/?]+)/);
         return matches?.[1] || `client-${Date.now()}`;
     }
 
@@ -109,7 +109,7 @@ export class Next14SSETransport extends BaseSSETransport {
         const encoded = this.encoder.encode(message);
 
         // Write to all active streams
-        const writePromises = Array.from(this.activeControllers.entries()).map(async ([clientId, controller]) => {
+        const writePromises = Array.from(this.activeControllers.entries()).map(async ([clientId]) => {
             try {
                 const { writable } = new TransformStream();
                 const writer = writable.getWriter();

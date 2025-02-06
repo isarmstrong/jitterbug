@@ -4,7 +4,6 @@ import type { LogType } from '@isarmstrong/jitterbug-types';
 import { useEffect, useState } from 'react';
 import { getClientId } from '../lib/client';
 
-// Add missing type and type guard for SerializedLogType
 interface SerializedLogType {
     message: string;
     level: "DEBUG" | "INFO" | "WARN" | "ERROR" | "FATAL";
@@ -12,6 +11,30 @@ interface SerializedLogType {
     errorMessage?: string;
     errorStack?: string;
     [key: string]: unknown;
+}
+
+interface SSEEvent extends MessageEvent {
+    type: 'message' | 'error' | 'open';
+    data: string;
+    lastEventId: string;
+}
+
+function isSSEEvent(event: Event): event is SSEEvent {
+    return event instanceof MessageEvent &&
+        ['message', 'error', 'open'].includes(event.type) &&
+        typeof event.data === 'string';
+}
+
+function isSerializedLogType(data: unknown): data is SerializedLogType {
+    if (!data || typeof data !== 'object') return false;
+
+    const candidate = data as Partial<SerializedLogType>;
+    return (
+        typeof candidate.message === 'string' &&
+        typeof candidate.level === 'string' &&
+        ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'].includes(candidate.level) &&
+        typeof candidate.timestamp === 'number'
+    );
 }
 
 function isSerializedErrorLog(log: SerializedLogType): log is SerializedLogType & { errorMessage: string; errorStack: string } {
@@ -37,7 +60,7 @@ export function useEventSource(): UseEventSourceResult {
     const [status, setStatus] = useState<EConnectionState>(EConnectionState.DISCONNECTED);
     const [messages, setMessages] = useState<LogType[]>([]);
     const [error, setError] = useState<Error | null>(null);
-    const [_eventSource, setEventSource] = useState<EventSource | null>(null);
+    const [eventSource, setEventSource] = useState<EventSource | null>(null);
 
     useEffect((): (() => void) => {
         const clientId = getClientId();
@@ -47,39 +70,61 @@ export function useEventSource(): UseEventSourceResult {
         setEventSource(es);
         setStatus(EConnectionState.CONNECTING);
 
-        es.onopen = (): void => {
+        const handleOpen = (): void => {
             setStatus(EConnectionState.CONNECTED);
             setError(null);
         };
 
-        es.onerror = (_e: Event): void => {
+        const handleError = (event: Event): void => {
             setStatus(EConnectionState.FAILED);
-            setError(new Error('EventSource failed to connect'));
+            if (isSSEEvent(event)) {
+                setError(new Error(`EventSource failed: ${event.data}`));
+            } else {
+                setError(new Error('EventSource failed to connect'));
+            }
             es.close();
         };
 
-        es.onmessage = (event: MessageEvent): void => {
+        const handleMessage = (event: MessageEvent): void => {
             try {
-                const data = JSON.parse(event.data) as SerializedLogType;
-                const logEntry: LogType = isSerializedErrorLog(data)
+                const parsedData = JSON.parse(event.data);
+                if (!isSerializedLogType(parsedData)) {
+                    console.error('Invalid log data received:', parsedData);
+                    return;
+                }
+
+                const logEntry: LogType = isSerializedErrorLog(parsedData)
                     ? {
-                        ...data,
-                        error: new Error(data.errorMessage),
-                        stack: data.errorStack,
-                        timestamp: data.timestamp.toString()
+                        ...parsedData,
+                        error: new Error(parsedData.errorMessage),
+                        stack: parsedData.errorStack,
+                        timestamp: parsedData.timestamp.toString()
                     }
-                    : { ...data, timestamp: data.timestamp.toString() };
+                    : { ...parsedData, timestamp: parsedData.timestamp.toString() };
+
                 setMessages(prev => [...prev, logEntry]);
             } catch (e) {
                 console.error('Failed to parse message:', e);
+                if (e instanceof Error) {
+                    setError(e);
+                }
             }
         };
 
+        es.addEventListener('open', handleOpen);
+        es.addEventListener('error', handleError);
+        es.addEventListener('message', handleMessage);
+
         return (): void => {
-            es.close();
+            es.removeEventListener('open', handleOpen);
+            es.removeEventListener('error', handleError);
+            es.removeEventListener('message', handleMessage);
+            if (eventSource) {
+                eventSource.close();
+            }
             setStatus(EConnectionState.DISCONNECTED);
         };
-    }, []);
+    }, [eventSource]);
 
     return { status, messages, error };
 }

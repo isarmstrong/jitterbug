@@ -1,15 +1,10 @@
-import { NextRequest } from "next/server";
-import { createLogHandler } from "../../../../../../packages/jitterbug-next/src/api/index";
+import { NextRequest } from 'next/server';
+import { createHandler } from '../../../../../../packages/jitterbug-next/src/api';
 
 // Set runtime to edge
 export const runtime = "edge";
 
-// Create a log handler using the re-exported function
-const apiHandler = createLogHandler({
-    processLogs: async (logs: unknown[]) => {
-        console.log('Processing logs:', logs);
-    }
-}) as unknown as ((req: NextRequest) => Promise<Response>) & { processLogs?: (logs: unknown[]) => Promise<void> | void };
+const apiHandler = createHandler();
 
 export const GET = apiHandler;
 export const POST = apiHandler;
@@ -19,10 +14,8 @@ export const OPTIONS = apiHandler;
 // Default export API route handler that handles all HTTP methods
 export default async function defaultHandler(req: NextRequest): Promise<Response> {
     if (req.method === "POST") {
-        const logs = await req.json();
-        if (apiHandler.processLogs) {
-            await apiHandler.processLogs(logs);
-        }
+        // Parse the logs but do not process them as processLogs is not supported
+        await req.json();
         return new Response(JSON.stringify({ success: true }), { status: 200 });
     } else if (req.method === "OPTIONS") {
         return new Response(null, { status: 204 });

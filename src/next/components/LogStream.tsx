@@ -1,10 +1,14 @@
 'use client';
 
 import type { LogType } from '@isarmstrong/jitterbug-types';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { EConnectionState, useEventSource } from '../hooks/useEventSource';
 
-export const LogStream: React.FC = () => {
+export interface LogStreamProps {
+    onError?: (error: Error) => void;
+}
+
+export function LogStream({ onError }: LogStreamProps): JSX.Element {
     const { status, messages, error } = useEventSource();
     const [lastHeartbeat, setLastHeartbeat] = useState<number>(Date.now());
 
@@ -62,4 +66,4 @@ export const LogStream: React.FC = () => {
             </div>
         </div>
     );
-}; 
+} 

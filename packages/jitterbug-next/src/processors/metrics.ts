@@ -1,27 +1,30 @@
-import { LogEntry, Transport } from "@isarmstrong/jitterbug-core-types";
+import type { LogEntry, Transport } from '@isarmstrong/jitterbug-core-types';
 
 interface MetricsData {
     samples: number;
-    eventLoop?: {
+    eventLoop: {
         lag: number;
         samples: number;
     };
-    memoryUsage?: {
+    memoryUsage: {
         heapUsed: number;
         heapTotal: number;
         external: number;
     };
 }
 
+interface MetricsContext extends Record<string, unknown> {
+    metrics?: MetricsData;
+}
+
 export const createMetricsProcessor = (): Transport => {
     let lastCheck = Date.now();
-    let eventLoopLag = 0;
 
     const checkEventLoop = () => {
         const now = Date.now();
-        eventLoopLag = Math.max(0, now - lastCheck - 1000);
+        const lag = Math.max(0, now - lastCheck - 1000);
         lastCheck = now;
-        setTimeout(checkEventLoop, 1000);
+        return lag;
     };
 
     checkEventLoop();
@@ -30,8 +33,8 @@ export const createMetricsProcessor = (): Transport => {
         write: async <T extends Record<string, unknown>>(entry: LogEntry<T>): Promise<void> => {
             const { memoryUsage } = process;
             const memory = memoryUsage();
-            const context = entry.context;
-            const currentMetrics = (context as any).metrics || {
+            const context = entry.context as MetricsContext;
+            const currentMetrics = context.metrics || {
                 samples: 0,
                 eventLoop: {
                     lag: 0,
@@ -47,7 +50,7 @@ export const createMetricsProcessor = (): Transport => {
             const metrics: MetricsData = { ...currentMetrics };
             metrics.samples++;
             metrics.eventLoop = {
-                lag: (metrics.eventLoop?.lag || 0) + eventLoopLag,
+                lag: (metrics.eventLoop?.lag || 0) + checkEventLoop(),
                 samples: (metrics.eventLoop?.samples || 0) + 1
             };
 

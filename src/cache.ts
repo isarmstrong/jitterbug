@@ -13,19 +13,25 @@ interface CacheEntry<T> {
   key: string;
 }
 
-// Extend globalThis with our cache type
+// Declare the global property
 declare global {
-  var __JITTERBUG_CACHE__: Map<string, CacheEntry<LogEntry<Record<string, unknown>>>>;
+  interface GlobalThis {
+    __JITTERBUG_CACHE__?: Map<string, CacheEntry<LogEntry<Record<string, unknown>>>>;
+  }
 }
 
+// Create a typed alias for globalThis
+const globalCache = globalThis as typeof globalThis & { __JITTERBUG_CACHE__?: Map<string, CacheEntry<LogEntry<Record<string, unknown>>>> };
+
 // Initialize cache in global scope if it doesn't exist
-if (!globalThis.__JITTERBUG_CACHE__) {
-  globalThis.__JITTERBUG_CACHE__ = new Map<string, CacheEntry<LogEntry<Record<string, unknown>>>>();
+if (!globalCache.__JITTERBUG_CACHE__) {
+  const cache = new Map<string, CacheEntry<LogEntry<Record<string, unknown>>>>();
+  globalCache.__JITTERBUG_CACHE__ = cache;
 }
 
 export async function set(keyParams: CacheKeyParams, value: LogEntry<Record<string, unknown>>): Promise<void> {
   const key = generateKey(keyParams);
-  globalThis.__JITTERBUG_CACHE__.set(key, {
+  globalCache.__JITTERBUG_CACHE__!.set(key, {
     value,
     timestamp: Date.now(),
     key
@@ -34,7 +40,7 @@ export async function set(keyParams: CacheKeyParams, value: LogEntry<Record<stri
 
 export async function get(keyParams: CacheKeyParams): Promise<LogEntry<Record<string, unknown>> | null> {
   const key = generateKey(keyParams);
-  const entry = globalThis.__JITTERBUG_CACHE__.get(key);
+  const entry = globalCache.__JITTERBUG_CACHE__!.get(key);
   return entry ? entry.value : null;
 }
 

@@ -39,7 +39,7 @@ export interface LogContext {
             external?: number;
         };
     };
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 export interface LogHandlerConfig {

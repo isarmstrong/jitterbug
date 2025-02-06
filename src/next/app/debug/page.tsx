@@ -13,7 +13,7 @@ function causeTypeError(): never {
   throw new Error('This should never be reached');
 }
 
-export default function Home() {
+export default function Home(): JSX.Element {
   const [lastError, setLastError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -117,4 +117,24 @@ export default function Home() {
       </div>
     </main>
   );
+}
+
+function LogStreamContainer(): JSX.Element {
+  // Implementation of LogStreamContainer
+  return <div>LogStreamContainer</div>;
+}
+
+function LogStreamHeader(): JSX.Element {
+  // Implementation of LogStreamHeader
+  return <div>LogStreamHeader</div>;
+}
+
+function LogStreamFooter(): JSX.Element {
+  // Implementation of LogStreamFooter
+  return <div>LogStreamFooter</div>;
+}
+
+function LogStreamContent(): JSX.Element {
+  // Implementation of LogStreamContent
+  return <div>LogStreamContent</div>;
 }

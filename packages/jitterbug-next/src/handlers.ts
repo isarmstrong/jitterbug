@@ -2,7 +2,7 @@ import legacy from '@isarmstrong/jitterbug/legacy.facade';
 import { NextRequest, NextResponse } from 'next/server';
 import type { LogHandlerConfig, LogType } from './types';
 import { detectNextEnvironment, detectNextRuntime, isNext15Plus } from './utils';
-const { ConsoleTransport, LogLevels, createJitterbug } = legacy;
+const { createJitterbug } = legacy;
 
 // Default configuration that enhances Jitterbug's core defaults for Next.js
 const DEFAULT_CONFIG: Required<LogHandlerConfig> = {
@@ -57,17 +57,7 @@ export function createLogHandler(userConfig: LogHandlerConfig = {}) {
             const stream = new ReadableStream({
                 start(controller) {
                     const start = Date.now();
-                    let timer: NodeJS.Timeout;
-
-                    // Send initial logs
-                    if (logs.length > 0) {
-                        controller.enqueue(
-                            encoder.encode(`data: ${JSON.stringify(logs)}\n\n`)
-                        );
-                    }
-
-                    // Set up interval to check for new logs
-                    timer = setInterval(() => {
+                    const timer = setInterval(() => {
                         const now = Date.now();
                         if (now - start >= config.maxSSEDuration) {
                             if (config.autoReconnectSSE) {

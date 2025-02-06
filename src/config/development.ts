@@ -1,8 +1,8 @@
-import { JitterbugConfig, LogLevels, Environment } from '../types';
-import { GUITransport } from '../transports/gui';
-import { ConsoleTransport } from '../transports/console';
-import { SanitizeProcessor } from '../processors/sanitize';
 import { createJitterbug } from '../core';
+import { SanitizeProcessor } from '../processors/sanitize';
+import { ConsoleTransport } from '../transports/console';
+import { GUITransport } from '../transports/gui';
+import { Environment, JitterbugConfig, JitterbugInstance, LogLevels } from '../types';
 
 /**
  * Default development configuration for Jitterbug
@@ -30,7 +30,7 @@ export const developmentConfig: Partial<JitterbugConfig> = {
 /**
  * Helper to create a development debug instance with the default configuration
  */
-export function createDevDebug(namespace: string, config: Partial<JitterbugConfig> = {}) {
+export function createDevDebug(namespace: string, config: Partial<JitterbugConfig> = {}): JitterbugInstance {
     return createJitterbug({
         ...developmentConfig,
         namespace,
@@ -39,4 +39,4 @@ export function createDevDebug(namespace: string, config: Partial<JitterbugConfi
 }
 
 // Re-export for convenience
-export { createJitterbug }; 
+export { createJitterbug };

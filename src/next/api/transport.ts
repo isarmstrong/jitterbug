@@ -1,18 +1,17 @@
-import { NextRequest } from 'next/server';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import type { NextRequest } from 'next/server';
+import type { LogEntry } from '../../types/core';
 import type { LogType } from '../../types/logs';
+import type { TransportConfig } from '../../types/transports';
 
 export interface SSETransportConfig {
     getInitialLogs?: (clientId: string) => Promise<LogType[]>;
     validateClientId?: (clientId: string) => Promise<boolean>;
 }
 
-export function createSSETransport(config: SSETransportConfig) {
-    return async function handler(req: NextRequest) {
-        const clientId = req.nextUrl.searchParams.get('clientId');
-
-        if (!clientId) {
-            return new Response('Client ID required', { status: 400 });
-        }
+export function createSSETransport(config: SSETransportConfig): (req: NextRequest) => Promise<Response> {
+    return async function handler(req: NextRequest): Promise<Response> {
+        const clientId = req.headers.get('x-client-id') || 'anonymous';
 
         if (config.validateClientId) {
             const isValid = await config.validateClientId(clientId);
@@ -23,7 +22,7 @@ export function createSSETransport(config: SSETransportConfig) {
 
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
-            async start(controller) {
+            async start(controller): Promise<void> {
                 if (config.getInitialLogs) {
                     const initialLogs = await config.getInitialLogs(clientId);
                     controller.enqueue(encoder.encode(`data: ${JSON.stringify(initialLogs)}\n\n`));
@@ -37,7 +36,6 @@ export function createSSETransport(config: SSETransportConfig) {
                 // Cleanup on close
                 req.signal.addEventListener('abort', () => {
                     clearInterval(keepAlive);
-                    controller.close();
                 });
             }
         });
@@ -50,4 +48,34 @@ export function createSSETransport(config: SSETransportConfig) {
             }
         });
     };
-} 
+}
+
+/**
+ * Handles transport configuration updates
+ */
+export async function configureTransport(
+    _config: TransportConfig,
+    _req: NextApiRequest,
+    _res: NextApiResponse
+): Promise<void> {
+    return Promise.resolve();
+}
+
+/**
+ * Processes log entries through the transport
+ */
+export async function processLogEntry(
+    _entry: LogEntry,
+    _config: TransportConfig
+): Promise<void> {
+    return Promise.resolve();
+}
+
+/**
+ * Validates transport configuration
+ */
+export function validateConfig(config: TransportConfig): boolean {
+    return Boolean(config);
+}
+
+export const runtime = 'edge'; 

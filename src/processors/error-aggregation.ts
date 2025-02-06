@@ -1,6 +1,6 @@
-import { LogLevels, Runtime, Environment } from '../types/core';
-import type { LogEntry, Processor, RuntimeType, EnvironmentType } from '../types/core';
-import { hashString } from "../utils/index.js";
+import { createHash } from 'crypto';
+import type { EnvironmentType, LogEntry, Processor, RuntimeType } from '../types/core';
+import { Environment, LogLevels, Runtime } from '../types/core';
 
 interface ErrorPattern {
   message: string;
@@ -31,6 +31,26 @@ interface ErrorContext {
   }>;
 }
 
+interface ErrorGroup {
+  count: number;
+  firstSeen: Date;
+  lastSeen: Date;
+  samples: Error[];
+}
+
+interface ErrorAggregation {
+  [key: string]: ErrorGroup;
+}
+
+function generateErrorHash(error: Error): string {
+  const hash = createHash('sha256');
+  hash.update(error.message);
+  if (error.stack) {
+    hash.update(error.stack);
+  }
+  return hash.digest('hex');
+}
+
 export class ErrorAggregationProcessor implements Processor {
   private patterns: Map<string, ErrorPattern> = new Map();
   private recentErrors: Array<{
@@ -48,6 +68,12 @@ export class ErrorAggregationProcessor implements Processor {
     Environment.STAGING,
     Environment.PRODUCTION
   ]);
+  private groups: ErrorAggregation = {};
+  private readonly maxSamples: number;
+
+  constructor(maxSamples = 10) {
+    this.maxSamples = maxSamples;
+  }
 
   public supports(runtime: RuntimeType): boolean {
     return this.supportedRuntimes.has(runtime);
@@ -199,8 +225,36 @@ export class ErrorAggregationProcessor implements Processor {
     return `err-${Math.abs(hash)}`;
   }
 
-  private groupError(error: Error): string {
-    const err = error;
+  private groupError(_error: Error): string {
     return `err-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  }
+
+  public aggregate(error: Error): void {
+    const hash = generateErrorHash(error);
+
+    if (!this.groups[hash]) {
+      this.groups[hash] = {
+        count: 0,
+        firstSeen: new Date(),
+        lastSeen: new Date(),
+        samples: []
+      };
+    }
+
+    const group = this.groups[hash];
+    group.count++;
+    group.lastSeen = new Date();
+
+    if (group.samples.length < this.maxSamples) {
+      group.samples.push(error);
+    }
+  }
+
+  public getGroups(): ErrorAggregation {
+    return { ...this.groups };
+  }
+
+  public clear(): void {
+    this.groups = {};
   }
 }

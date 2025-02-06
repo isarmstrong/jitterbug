@@ -3,12 +3,15 @@ import {
     BaseTransport,
     HydrationConfig,
     HydrationEvent,
-    HydrationMetrics
+    HydrationMetrics,
+    TransportErrorCode
 } from "../types/transports";
 
 export type { HydrationConfig };
 
 export class HydrationTransport extends BaseTransport implements LogTransport {
+    protected override config!: Required<HydrationConfig>;
+
     private metrics: HydrationMetrics = {
         messageCount: 0,
         avgProcessingTime: 0,
@@ -54,7 +57,6 @@ export class HydrationTransport extends BaseTransport implements LogTransport {
     public async write<T extends Record<string, unknown>>(
         entry: LogEntry<T>
     ): Promise<void> {
-        // Only process hydration-related entries
         if (!this.isHydrationEntry(entry)) {
             return Promise.resolve();
         }
@@ -78,14 +80,17 @@ export class HydrationTransport extends BaseTransport implements LogTransport {
     ): boolean {
         return (
             entry.context?.runtime === Runtime.BROWSER &&
-            (entry as any).data?.type === 'hydration'
+            typeof entry.data === 'object' &&
+            entry.data !== null &&
+            'type' in entry.data &&
+            entry.data.type === 'hydration'
         );
     }
 
     private parseHydrationEvent<T extends Record<string, unknown>>(
         entry: LogEntry<T>
     ): HydrationEvent | null {
-        const data = (entry as any).data as Record<string, unknown>;
+        const data = entry.data as Record<string, unknown>;
 
         if (!data.eventType || typeof data.eventType !== 'string') {
             return null;
@@ -161,7 +166,7 @@ export class HydrationTransport extends BaseTransport implements LogTransport {
             this.streamingDelays.reduce((a, b) => a + b, 0) / this.streamingDelays.length;
     }
 
-    private processSuspenseUpdate(event: HydrationEvent): void {
+    private processSuspenseUpdate(_event: HydrationEvent): void {
         this.metrics.suspenseBoundaryUpdates++;
     }
 
@@ -203,7 +208,19 @@ export class HydrationTransport extends BaseTransport implements LogTransport {
     }
 
     protected onError(_event: Event): void {
-        // Handle error
+        // Handle error events
+        if (_event instanceof ErrorEvent) {
+            this.metrics.errorCount++;
+            this.metrics.lastErrorTime = Date.now();
+        }
+    }
+
+    protected handleError(error: Error, code: TransportErrorCode): void {
+        this.config.errorHandler({
+            code,
+            message: error.message,
+            name: error.name
+        });
     }
 
     private validateString(value: string | null | undefined): string | null {

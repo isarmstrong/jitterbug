@@ -107,7 +107,7 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
       persistQueue: config.persistQueue ?? false,
       testMode: config.testMode ?? EDGE_DEFAULTS.testMode,
       memoryThreshold: config.memoryThreshold ?? 128,
-      errorHandler: config.errorHandler ?? ((error) => console.error('Transport Error:', error)),
+      errorHandler: config.errorHandler ?? ((error): void => console.error('Transport Error:', error)),
       retryStrategy: config.retryStrategy ?? defaultRetryStrategy
     } as Required<EdgeTransportConfig>;
 
@@ -117,12 +117,12 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
 
     // Use config to determine if we're in test mode
     if (this.config.testMode) {
-      this.throttledSendPayload = (payload: string, batchId: string) => this.sendPayload(payload, batchId);
+      this.throttledSendPayload = (payload: string, batchId: string): Promise<void> => this.sendPayload(payload, batchId);
     } else {
       this.throttledSendPayload = pThrottle({
         limit: this.config.maxConcurrent,
         interval: 1000 / this.config.requestsPerSecond
-      })((payload: string, batchId: string) => this.sendPayload(payload, batchId));
+      })((payload: string, batchId: string): Promise<void> => this.sendPayload(payload, batchId));
     }
 
     if (this.config.autoReconnect) {
@@ -134,7 +134,7 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
   }
 
   private createFlushCallback(): () => Promise<void> {
-    return async () => {
+    return async (): Promise<void> => {
       await this.flushQueue();
     };
   }
@@ -207,9 +207,9 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
     const batchMetrics = this.batchMetrics.get(batchId);
 
     try {
-      await this.withRetry(async () => {
+      await this.withRetry(async (): Promise<void> => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const timeoutId = setTimeout((): void => { controller.abort(); }, 30000);
 
         try {
           const response = await fetch(this.config.endpoint, {
@@ -249,6 +249,11 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
     }
   }
 
+  // Add the function at class root level
+  private connectionTimeoutExecutor(_resolve: (value: never) => void, reject: (reason?: unknown) => void): void {
+    void setTimeout((): void => { reject(new Error("Connection timeout")); }, 10000);
+  }
+
   public async connect(): Promise<void> {
     if (this._isConnected) return;
 
@@ -257,7 +262,6 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
     this.abortController = new AbortController();
 
     try {
-      // Validate endpoint with timeout
       const response = await Promise.race([
         fetch(this.config.endpoint, {
           method: "HEAD",
@@ -267,9 +271,9 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
           },
           signal: this.abortController.signal
         }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Connection timeout")), 10000)
-        )
+        new Promise<never>((resolve: (value: never) => void, reject: (reason?: unknown) => void): void => {
+          this.connectionTimeoutExecutor(resolve, reject);
+        })
       ]);
 
       if (!response.ok) {
@@ -296,7 +300,9 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
           this.config.retryInterval * Math.pow(2, this.retryCount - 1),
           30000 // Max 30 second delay
         );
-        await new Promise((resolve) => setTimeout(resolve, backoff));
+        await new Promise<void>((resolve: () => void): void => {
+          void setTimeout((): void => { resolve(); }, backoff);
+        });
         return this.connect();
       }
       // Reset state on max retries
@@ -328,8 +334,7 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
 
     try {
       if (!this._isConnected && this.config.autoReconnect) {
-        await this.withRetry(
-          () => this.connect(),
+        await this.withRetry(((): Promise<void> => this.connect()),
           TransportErrorCode.CONNECTION_FAILED
         );
       }
@@ -368,8 +373,7 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
 
       // Immediate flush if batch size reached
       if (this.queue.length >= this.config.batchSize) {
-        await this.withRetry(
-          () => this.flush(),
+        await this.withRetry(((): Promise<void> => this.flush()),
           TransportErrorCode.SERIALIZATION_FAILED
         );
       }
@@ -410,7 +414,7 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
 
     if (!this._isConnected) return;
 
-    this.flushTimeout = setTimeout(() => {
+    this.flushTimeout = setTimeout((): void => {
       void this.flush();
       if (this._isConnected) {
         this.setupFlushInterval();
@@ -459,7 +463,7 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
   }
 
   private startMemoryMonitoring(): void {
-    setInterval(() => {
+    setInterval((): void => {
       const now = Date.now();
       if (now - this.lastMemoryCheck >= this.MEMORY_CHECK_INTERVAL) {
         this.updateMetrics();
@@ -512,7 +516,7 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
     this.metrics.bufferUsage = 0;
   }
 
-  private notifyEvent(event: EdgeEvent): void {
+  private notifyEvent(_event: EdgeEvent): void {
     // Notify subscribers about transport events
     this.updateCallbacks.forEach(callback => {
       try {
@@ -523,6 +527,44 @@ export class EdgeTransport extends BaseTransport implements LogTransport {
           TransportErrorCode.INVALID_STATE
         );
       }
+    });
+  }
+
+  protected onError(_event: Event): void {
+    // Handle error events
+    if (_event instanceof ErrorEvent) {
+      this.metrics.errorCount++;
+      this.metrics.lastErrorTime = Date.now();
+    }
+  }
+
+  protected async withRetry<T>(operation: () => Promise<T>, _errorCode: TransportErrorCode): Promise<T> {
+    let attempt = 0;
+    const { maxRetries, baseDelay, maxDelay, backoffFactor } = this.config.retryStrategy;
+
+    while (attempt < maxRetries) {
+      try {
+        const result = await operation();
+        return result;
+      } catch (error) {
+        attempt++;
+        if (attempt === maxRetries) {
+          throw error;
+        }
+        const delay = Math.min(baseDelay * Math.pow(backoffFactor, attempt - 1), maxDelay);
+        await new Promise<void>((resolve: () => void): void => {
+          void setTimeout((): void => { resolve(); }, delay);
+        });
+      }
+    }
+    throw new Error('Unreachable code in withRetry');
+  }
+
+  protected handleError(error: Error, code: TransportErrorCode): void {
+    this.config.errorHandler({
+      code,
+      message: error.message,
+      name: error.name
     });
   }
 }

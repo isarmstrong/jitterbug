@@ -1,4 +1,5 @@
 import { LogLevel } from '@isarmstrong/jitterbug';
+import type { ValidationResult } from '@isarmstrong/jitterbug-core-types';
 import type { LogHandler, LogHandlerConfig, LogHandlerResponse } from '@isarmstrong/jitterbug-types';
 
 export type { LogHandler, LogHandlerConfig, LogHandlerResponse };
@@ -13,7 +14,7 @@ export interface LogType {
 export interface SSETransport {
     handleRequest(req: Request): Promise<Response>;
     write(data: unknown): Promise<void>;
-    disconnect(): Promise<void>;
+    disconnect(): Promise<ValidationResult>;
 }
 
 export interface SSETransportConfig {
@@ -21,45 +22,46 @@ export interface SSETransportConfig {
     forceVersion?: string;
     heartbeatInterval?: number;
     maxDuration?: number;
+    autoReconnect?: boolean;
+    signal?: AbortSignal;
 }
 
-export function createSSETransport(config: SSETransportConfig): SSETransport {
+export function createSSETransport(): SSETransport {
     return {
-        handleRequest: async (req: Request) => new Response(),
-        write: async (data: unknown) => { },
-        disconnect: async () => { }
+        handleRequest: async () => new Response(),
+        write: async () => { },
+        disconnect: async () => ({ isValid: true })
     };
 }
 
 /**
  * Creates a Next.js API route handler for Jitterbug logs
  */
-export function createHandler(config?: LogHandlerConfig): LogHandler {
-    const handler = async (req: Request): Promise<Response> => {
+export function createHandler(): LogHandler {
+    const handler: LogHandlerResponse = {
+        async GET(): Promise<Response> {
+            return new Response();
+        },
+        async POST(): Promise<Response> {
+            return new Response();
+        },
+        async HEAD(): Promise<Response> {
+            return new Response();
+        },
+        async OPTIONS(): Promise<Response> {
+            return new Response();
+        }
+    };
+
+    const wrappedHandler = async (req: Request): Promise<Response> => {
         const method = req.method.toUpperCase() as keyof LogHandlerResponse;
-        if (method in handler && typeof (handler as any)[method] === 'function') {
-            return (handler as any)[method](req);
+        if (method in handler) {
+            return handler[method](req);
         }
         return new Response('Method not allowed', { status: 405 });
     };
 
-    handler.GET = async (request: Request): Promise<Response> => {
-        return new Response();
-    };
-
-    handler.POST = async (request: Request): Promise<Response> => {
-        return new Response();
-    };
-
-    handler.HEAD = async (): Promise<Response> => {
-        return new Response();
-    };
-
-    handler.OPTIONS = async (): Promise<Response> => {
-        return new Response();
-    };
-
-    return handler as unknown as LogHandler;
+    return Object.assign(wrappedHandler, handler) as LogHandler;
 }
 
 export const createLogHandler = createHandler;
@@ -68,7 +70,7 @@ export const createLogHandler = createHandler;
 export const runtime = 'edge';
 
 // Instead, export any additional helpers as needed
-export function apiStub() {
+export function apiStub(): string {
     return "apiStub";
 }
 

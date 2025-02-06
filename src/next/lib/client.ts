@@ -2,17 +2,21 @@
 
 // Client-side utilities that depend on browser APIs
 
-// Simple client ID generation
-export const getClientId = () => {
+import { randomUUID } from 'crypto';
+
+const CLIENT_ID_KEY = 'jitterbug_client_id';
+
+/**
+ * Gets or generates a unique client ID for the current session
+ */
+export function getClientId(): string {
     if (typeof window === 'undefined') return 'server';
 
-    const storageKey = 'jitterbug_client_id';
-    let clientId = localStorage.getItem(storageKey);
-
+    const clientId = localStorage.getItem(CLIENT_ID_KEY);
     if (!clientId) {
-        clientId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        localStorage.setItem(storageKey, clientId);
+        const newClientId = randomUUID();
+        localStorage.setItem(CLIENT_ID_KEY, newClientId);
+        return newClientId;
     }
-
     return clientId;
-}; 
+} 

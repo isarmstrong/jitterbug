@@ -1,17 +1,21 @@
+import type { ValidationResult } from '@isarmstrong/jitterbug-core-types';
 import * as semver from "semver";
-import { LogEntry, LogTransport, Runtime } from "../types";
-import { BaseTransport, TransportConfig } from "./types";
+import { LogEntry, Runtime } from "../types";
+import { BaseEntry } from '../types/core';
+import { BaseTransport, EdgeTransportConfig, TransportError, TransportErrorCode } from "../types/transports";
 
-interface EdgeRuntimeGlobal {
+interface _EdgeRuntimeGlobal {
     name: string;
     version: string;
 }
 
-function isEdgeRuntime(value: unknown): value is EdgeRuntimeGlobal {
-    return typeof value === 'object' &&
-        value !== null &&
-        'version' in value &&
-        typeof (value as EdgeRuntimeGlobal).version === 'string';
+interface MetricEntry {
+    count: number;
+    lastSeen: Date;
+    severity?: 'warning' | 'error';
+    details?: string;
+    isValid?: boolean;
+    issues?: string[];
 }
 
 export interface VersionMetrics {
@@ -28,31 +32,19 @@ export interface VersionMetrics {
     isEdgeCompatible: boolean;
 
     // Pattern Usage
-    incompatiblePatterns: Map<string, {
-        count: number;
-        lastSeen: number;
-        severity: 'warning' | 'error';
-        details: string;
-    }>;
+    incompatiblePatterns: Map<string, MetricEntry>;
 
     // SSE Patterns
-    sseImplementations: Map<string, {
-        isValid: boolean;
-        issues: string[];
-        lastUsed: number;
-    }>;
+    sseImplementations: Map<string, MetricEntry>;
 
     // React Patterns
-    reactPatterns: Map<string, {
-        isAsync: boolean;
-        usesSuspense: boolean;
-        usesServerComponents: boolean;
-        lastSeen: number;
-        issues: string[];
-    }>;
+    reactPatterns: Map<string, MetricEntry>;
+
+    // Version Mismatches
+    versionMismatches: Map<string, MetricEntry>;
 }
 
-export interface VersionConfig extends TransportConfig {
+export interface VersionConfig extends EdgeTransportConfig {
     requiredVersions?: {
         next?: string;
         react?: string;
@@ -103,7 +95,44 @@ interface EdgeRuntimeEnv {
     EdgeRuntime?: string;
 }
 
-export class VersionTransport extends BaseTransport implements LogTransport {
+export interface VersionInfo {
+    major: number;
+    minor: number;
+    patch: number;
+    prerelease?: string;
+    build?: string;
+}
+
+export interface VersionMetadata {
+    timestamp: number;
+    environment: string;
+    runtime: string;
+    dependencies: Record<string, string>;
+}
+
+export interface VersionData {
+    current: VersionInfo;
+    previous?: VersionInfo;
+    metadata: VersionMetadata;
+}
+
+export interface VersionTransportConfig extends EdgeTransportConfig {
+    currentVersion: VersionInfo;
+    trackHistory?: boolean;
+    maxHistorySize?: number;
+    requiredVersions?: {
+        next?: string;
+        stable?: string;
+        latest?: string;
+        react?: string;
+        node?: string;
+    };
+    allowedPatterns?: Set<string>;
+}
+
+export class VersionTransport extends BaseTransport {
+    protected override config: Required<VersionTransportConfig>;
+    private versionHistory: VersionData[] = [];
     private metrics: VersionMetrics = {
         nextVersion: null,
         reactVersion: null,
@@ -114,21 +143,26 @@ export class VersionTransport extends BaseTransport implements LogTransport {
         isNodeCompatible: false,
         isEdgeCompatible: false,
         incompatiblePatterns: new Map(),
-        sseImplementations: new Map(),
-        reactPatterns: new Map()
+        versionMismatches: new Map(),
+        reactPatterns: new Map(),
+        sseImplementations: new Map()
     };
 
-    private readonly requiredVersions: Required<NonNullable<VersionConfig['requiredVersions']>>;
-    private readonly allowedPatterns: Set<string>;
-
-    constructor(config?: VersionConfig) {
+    constructor(config: VersionTransportConfig) {
         super(config);
-        this.requiredVersions = {
-            next: config?.requiredVersions?.next ?? '13.0.0',
-            react: config?.requiredVersions?.react ?? '18.2.0',
-            node: config?.requiredVersions?.node ?? '16.0.0'
-        };
-        this.allowedPatterns = new Set(config?.allowedPatterns ?? []);
+        this.config = {
+            ...config,
+            trackHistory: config.trackHistory ?? true,
+            maxHistorySize: config.maxHistorySize ?? 100,
+            requiredVersions: {
+                next: config.requiredVersions?.next ?? '13.0.0',
+                stable: config.requiredVersions?.stable ?? '12.0.0',
+                latest: config.requiredVersions?.latest ?? '11.0.0',
+                react: config.requiredVersions?.react ?? '18.2.0',
+                node: config.requiredVersions?.node ?? '16.0.0'
+            },
+            allowedPatterns: config.allowedPatterns ?? new Set(['*'])
+        } as Required<VersionTransportConfig>;
 
         // Initialize with current runtime versions if available
         if (typeof process !== 'undefined') {
@@ -169,39 +203,157 @@ export class VersionTransport extends BaseTransport implements LogTransport {
         }
     }
 
-    public async write<T extends Record<string, unknown>>(
-        entry: LogEntry<T>
-    ): Promise<void> {
-        if (!this.isVersionEntry(entry)) {
-            return Promise.resolve();
+    public override async write<T extends Record<string, unknown>>(entry: BaseEntry<T>): Promise<void> {
+        try {
+            const data = entry.data as unknown;
+            if (this.isVersionEvent(data)) {
+                await this.processVersionEvent({
+                    type: data.eventType,
+                    framework: data.framework,
+                    pattern: data.pattern,
+                    sse: data.sse,
+                    react: data.react
+                });
+            } else {
+                const versionData = this.validateVersionData(data);
+                await this.processVersionUpdate(versionData);
+            }
+        } catch (error) {
+            throw new TransportError(
+                `Failed to process version update: ${error instanceof Error ? error.message : String(error)}`,
+                TransportErrorCode.SERIALIZATION_FAILED
+            );
+        }
+    }
+
+    private validateVersionData(data: unknown): VersionData {
+        if (!this.isVersionData(data)) {
+            throw new TransportError(
+                'Invalid version data format',
+                TransportErrorCode.SERIALIZATION_FAILED
+            );
+        }
+        return data;
+    }
+
+    private isVersionData(data: unknown): data is VersionData {
+        if (!data || typeof data !== 'object') return false;
+
+        const candidate = data as Partial<VersionData>;
+        return (
+            this.isVersionInfo(candidate.current) &&
+            (candidate.previous === undefined || this.isVersionInfo(candidate.previous)) &&
+            this.isVersionMetadata(candidate.metadata)
+        );
+    }
+
+    private isVersionInfo(info: unknown): info is VersionInfo {
+        if (!info || typeof info !== 'object') return false;
+
+        const candidate = info as Partial<VersionInfo>;
+        return (
+            typeof candidate.major === 'number' &&
+            typeof candidate.minor === 'number' &&
+            typeof candidate.patch === 'number'
+        );
+    }
+
+    private isVersionMetadata(metadata: unknown): metadata is VersionMetadata {
+        if (!metadata || typeof metadata !== 'object') return false;
+
+        const candidate = metadata as Partial<VersionMetadata>;
+        return (
+            typeof candidate.timestamp === 'number' &&
+            typeof candidate.environment === 'string' &&
+            typeof candidate.runtime === 'string' &&
+            this.isValidDependencies(candidate.dependencies)
+        );
+    }
+
+    private isValidDependencies(deps: unknown): deps is Record<string, string> {
+        if (!deps || typeof deps !== 'object') return false;
+
+        return Object.entries(deps).every(
+            ([key, value]) => typeof key === 'string' && typeof value === 'string'
+        );
+    }
+
+    private async processVersionUpdate(data: VersionData): Promise<void> {
+        if (this.config.trackHistory) {
+            this.versionHistory.push(data);
+            if (this.versionHistory.length > this.config.maxHistorySize) {
+                this.versionHistory.shift();
+            }
         }
 
-        const event = this.parseVersionEvent(entry);
-        if (!event) return Promise.resolve();
+        // Update version metrics
+        const { dependencies } = data.metadata;
+        this.metrics.reactVersion = dependencies.react ?? null;
+        this.metrics.nodeVersion = dependencies.node ?? null;
+        this.metrics.nextVersion = dependencies.next ?? null;
+        this.metrics.edgeRuntimeVersion = dependencies['edge-runtime'] ?? null;
 
-        this.processVersionEvent(event);
-        return Promise.resolve();
+        // Check version compatibility
+        if (dependencies.react) {
+            this.metrics.isReactCompatible = this.checkVersionCompatibility('react', dependencies.react);
+        }
+        if (dependencies.node) {
+            this.metrics.isNodeCompatible = this.checkVersionCompatibility('node', dependencies.node);
+        }
+        if (dependencies.next) {
+            this.metrics.isNextCompatible = this.checkVersionCompatibility('next', dependencies.next);
+        }
+        if (dependencies['edge-runtime']) {
+            this.metrics.isEdgeCompatible = this.checkVersionCompatibility('latest', dependencies['edge-runtime']);
+        }
+    }
+
+    private checkVersionCompatibility(
+        framework: keyof Required<VersionTransportConfig>['requiredVersions'],
+        version: string
+    ): boolean {
+        const requiredVersion = this.config.requiredVersions[framework];
+        if (!requiredVersion || !version) return false;
+
+        const isCompatible = semver.gte(version, requiredVersion);
+        if (!isCompatible) {
+            this.metrics.versionMismatches.set(framework, {
+                count: (this.metrics.versionMismatches.get(framework)?.count ?? 0) + 1,
+                lastSeen: new Date()
+            });
+        }
+        return isCompatible;
+    }
+
+    public getVersionHistory(): ReadonlyArray<VersionData> {
+        return Object.freeze([...this.versionHistory]);
     }
 
     public getMetrics(): Readonly<VersionMetrics> {
         return Object.freeze({
             ...this.metrics,
             incompatiblePatterns: new Map(this.metrics.incompatiblePatterns),
-            sseImplementations: new Map(this.metrics.sseImplementations),
-            reactPatterns: new Map(this.metrics.reactPatterns)
+            versionMismatches: new Map(this.metrics.versionMismatches),
+            reactPatterns: new Map(this.metrics.reactPatterns),
+            sseImplementations: new Map(this.metrics.sseImplementations)
         });
     }
 
     private isVersionEntry<T extends Record<string, unknown>>(
         entry: LogEntry<T>
     ): boolean {
-        return (entry as any).data?.type === 'version';
+        return 'data' in entry && typeof entry.data === 'object' && entry.data !== null &&
+            'type' in entry.data && entry.data.type === 'version';
     }
 
     private parseVersionEvent<T extends Record<string, unknown>>(
         entry: LogEntry<T>
     ): VersionEvent | null {
-        const data = (entry as any).data as Record<string, unknown>;
+        if (!('data' in entry) || typeof entry.data !== 'object' || entry.data === null) {
+            return null;
+        }
+
+        const data = entry.data as Record<string, unknown>;
 
         if (!data.eventType || typeof data.eventType !== 'string') {
             return null;
@@ -216,95 +368,106 @@ export class VersionTransport extends BaseTransport implements LogTransport {
         };
     }
 
-    private processVersionEvent(event: VersionEvent): void {
+    private async processVersionEvent(event: VersionEvent): Promise<void> {
         switch (event.type) {
             case 'framework':
-                this.processFrameworkVersion(event.framework);
+                if (event.framework) {
+                    this.updateFrameworkVersion(event.framework);
+                }
                 break;
             case 'pattern':
-                this.processPatternUsage(event.pattern);
+                if (event.pattern) {
+                    this.updatePatternMetrics(event.pattern);
+                }
                 break;
             case 'sse':
-                this.processSSEImplementation(event.sse);
+                if (event.sse) {
+                    this.updateSSEMetrics(event.sse);
+                }
                 break;
             case 'react':
-                this.processReactPattern(event.react);
+                if (event.react) {
+                    this.updateReactPatternMetrics(event.react);
+                }
                 break;
         }
     }
 
-    private processFrameworkVersion(framework?: VersionEvent['framework']): void {
-        if (!framework?.name || !framework.version) return;
+    private updatePatternMetrics(pattern: VersionEvent['pattern']): void {
+        if (!pattern) return;
 
-        switch (framework.name.toLowerCase()) {
-            case 'next':
-                this.metrics.nextVersion = framework.version;
-                this.metrics.isNextCompatible = this.checkVersionCompatibility(
-                    'next',
-                    framework.version
-                );
-                break;
-            case 'react':
-                this.metrics.reactVersion = framework.version;
-                this.metrics.isReactCompatible = this.checkVersionCompatibility(
-                    'react',
-                    framework.version
-                );
-                break;
-            case 'node':
-                this.metrics.nodeVersion = framework.version;
-                this.metrics.isNodeCompatible = this.checkVersionCompatibility(
-                    'node',
-                    framework.version
-                );
-                break;
+        const entry: MetricEntry = {
+            severity: 'error' as const,
+            details: 'may cause hydration mismatches',
+            lastSeen: new Date(),
+            count: 1
+        };
+
+        // Handle useLayoutEffect in Edge runtime
+        if (pattern.context?.runtime === Runtime.EDGE && pattern.name === 'useLayoutEffect') {
+            this.metrics.incompatiblePatterns.set(pattern.name, entry);
         }
-    }
 
-    private processPatternUsage(pattern?: VersionEvent['pattern']): void {
-        if (!pattern?.name || !pattern.implementation) return;
-
-        if (!this.allowedPatterns.has(pattern.name)) {
+        // Handle sync fetch in Edge runtime
+        if (pattern.context?.runtime === Runtime.EDGE && pattern.name === 'fetch' &&
+            pattern.implementation?.includes('sync fetch in Edge')) {
             this.metrics.incompatiblePatterns.set(pattern.name, {
-                count: (this.metrics.incompatiblePatterns.get(pattern.name)?.count ?? 0) + 1,
-                lastSeen: Date.now(),
-                severity: this.determinePatternSeverity(pattern),
-                details: this.generatePatternDetails(pattern)
+                ...entry,
+                details: 'synchronous fetch in Edge runtime may cause performance issues'
             });
         }
     }
 
-    private processSSEImplementation(sse?: VersionEvent['sse']): void {
-        if (!sse?.endpoint || !sse.implementation) return;
+    private updateSSEMetrics(sse: VersionEvent['sse']): void {
+        if (!sse) return;
 
-        const isValid = this.validateSSEImplementation(sse);
-        const issues = this.identifySSEIssues(sse);
+        const entry = {
+            isValid: true,
+            issues: [],
+            lastSeen: new Date(),
+            count: 1
+        };
 
-        this.metrics.sseImplementations.set(sse.endpoint, {
-            isValid,
+        this.metrics.sseImplementations.set(sse.endpoint, entry);
+    }
+
+    private updateReactPatternMetrics(react: VersionEvent['react']): void {
+        if (!react) return;
+
+        const issues = [];
+        if (react.async && !react.suspense) {
+            issues.push('Async component without Suspense boundary');
+        }
+        if (react.patterns.includes('useLayoutEffect') && react.serverComponent) {
+            issues.push('useLayoutEffect in Server Component');
+        }
+
+        const entry = {
             issues,
-            lastUsed: Date.now()
-        });
+            lastSeen: new Date(),
+            count: 1
+        };
+
+        this.metrics.reactPatterns.set(react.component, entry);
     }
 
-    private processReactPattern(react?: VersionEvent['react']): void {
-        if (!react?.component) return;
+    private updateFrameworkVersion(framework: VersionEvent['framework']): void {
+        if (!framework) return;
 
-        this.metrics.reactPatterns.set(react.component, {
-            isAsync: react.async ?? false,
-            usesSuspense: react.suspense ?? false,
-            usesServerComponents: react.serverComponent ?? false,
-            lastSeen: Date.now(),
-            issues: this.identifyReactPatternIssues(react)
-        });
-    }
-
-    private checkVersionCompatibility(
-        framework: keyof typeof this.requiredVersions,
-        version: string | null
-    ): boolean {
-        if (!version) return false;
-        return semver.gte(version, this.requiredVersions[framework]);
+        switch (framework.name.toLowerCase()) {
+            case 'next':
+                this.metrics.nextVersion = framework.version;
+                this.metrics.isNextCompatible = this.checkVersionCompatibility('next', framework.version);
+                break;
+            case 'react':
+                this.metrics.reactVersion = framework.version;
+                this.metrics.isReactCompatible = this.checkVersionCompatibility('react', framework.version);
+                break;
+            case 'node':
+                this.metrics.nodeVersion = framework.version;
+                this.metrics.isNodeCompatible = this.checkVersionCompatibility('node', framework.version);
+                break;
+        }
     }
 
     private determinePatternSeverity(pattern: NonNullable<VersionEvent['pattern']>): 'warning' | 'error' {
@@ -419,4 +582,46 @@ export class VersionTransport extends BaseTransport implements LogTransport {
     private isValidData(data: unknown): data is { version: string } {
         return typeof data === 'object' && data != null && 'version' in data && typeof data.version === 'string';
     }
+
+    private isVersionEvent(data: unknown): data is { type: 'version'; eventType: 'framework' | 'pattern' | 'sse' | 'react'; framework?: VersionEvent['framework']; pattern?: VersionEvent['pattern']; sse?: VersionEvent['sse']; react?: VersionEvent['react'] } {
+        if (typeof data !== 'object' || data === null) return false;
+        const event = data as Partial<{ type: 'version'; eventType: 'framework' | 'pattern' | 'sse' | 'react'; framework?: VersionEvent['framework']; pattern?: VersionEvent['pattern']; sse?: VersionEvent['sse']; react?: VersionEvent['react'] }>;
+        return event.type === 'version' &&
+            typeof event.eventType === 'string' &&
+            ['framework', 'pattern', 'sse', 'react'].includes(event.eventType);
+    }
+}
+
+export function isEdgeCompatible(): boolean {
+    return typeof globalThis.EdgeRuntime !== 'undefined';
+}
+
+export function validateConfig(config: EdgeTransportConfig): ValidationResult {
+    const errors: string[] = [];
+
+    if (config.maxPayloadSize && typeof config.maxPayloadSize !== 'number') {
+        errors.push('maxPayloadSize must be a number');
+    }
+
+    if (config.maxRetries && typeof config.maxRetries !== 'number') {
+        errors.push('maxRetries must be a number');
+    }
+
+    return {
+        isValid: errors.length === 0,
+        errors: errors.length > 0 ? errors : undefined
+    };
+}
+
+export function validatePayload(payload: unknown): ValidationResult {
+    const errors: string[] = [];
+
+    if (!payload || typeof payload !== 'object') {
+        errors.push('Payload must be an object');
+    }
+
+    return {
+        isValid: errors.length === 0,
+        errors: errors.length > 0 ? errors : undefined
+    };
 } 

@@ -1,11 +1,11 @@
 export * from './types/api';
 
 export class LogTransport {
-    constructor(...args: any[]) { }
+    constructor(_options: Record<string, unknown> = {}) { }
 }
 
 export class ConsoleTransport {
-    constructor(...args: any[]) { }
+    constructor(_options: Record<string, unknown> = {}) { }
 }
 
 export const LogLevels = {
@@ -13,32 +13,46 @@ export const LogLevels = {
     WARN: 'warn',
     ERROR: 'error',
     DEBUG: 'debug'
-};
+} as const;
 
 export type Environment = 'node' | 'browser' | 'edge';
 export type Runtime = 'node' | 'browser' | 'edge';
 
-export function createJitterbug(...args: any[]): any {
+export function createJitterbug(_options: Record<string, unknown> = {}): Record<string, unknown> {
     return {};
 }
 
-export interface Processor { }
+export interface Processor {
+    process(entry: LogEntry): Promise<LogEntry>;
+}
 
 export interface BaseLogContext {
-    context?: any;
+    context?: Record<string, unknown>;
     message?: string;
-    level?: any;
+    level?: string;
 }
 
-export interface RuntimeType { }
-export interface EnvironmentType { }
-export interface LogLevel { }
-export interface LogEntry<T = any> {
-    context?: any;
-    message?: string;
-    level?: any;
+export interface RuntimeType {
+    type: Runtime;
 }
-export interface ProcessedLogEntry<T = any> { }
+
+export interface EnvironmentType {
+    type: Environment;
+}
+
+export interface LogLevel {
+    level: keyof typeof LogLevels;
+}
+
+export interface LogEntry<TContext = Record<string, unknown>> {
+    context?: TContext;
+    message?: string;
+    level?: keyof typeof LogLevels;
+}
+
+export interface ProcessedLogEntry<TContext = Record<string, unknown>> extends LogEntry<TContext> {
+    processed: boolean;
+}
 
 export const EnvironmentConstants: { DEVELOPMENT: Environment; PRODUCTION: Environment; TEST: Environment } = {
     DEVELOPMENT: 'node',
