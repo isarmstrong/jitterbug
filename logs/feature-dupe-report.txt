@@ -1,0 +1,66 @@
+/* Consolidated Duplicate Type Definitions Report for Feature Silos
+===================================================================
+This report consolidates duplicate type definitions identified across multiple feature sources into a single reference for easier tracking and resolution.
+
+Consolidated Summary:
+A. Core Type Duplications:
+   • LogEntry: Multiple definitions in core.ts and packages/jitterbug/src/index.ts
+   • LogContext: Duplicated between types/core.ts and packages/jitterbug-next/src/types.ts
+   • BaseContext: Overlapping with LogContext in multiple locations
+   • Transport/LogTransport: Multiple implementations with varying interfaces
+
+B. Feature-Specific Extensions:
+   - From src/types/features/jitterbug.ts:
+      • ExtendedEntry: extends BaseEntry (canonical LogEntry)
+      • ExtendedInstance: extends Instance from core types
+      • ExtendedProcessor: extends Processor from core types
+      • ExtendedConfig: extends Config from core types
+      • ExtendedTransport: extends Transport from core types
+
+   - From src/types/features/context.ts:
+      • ExtendedContext: extends BaseContext from core types
+      • RequestContext: Duplicated in core.ts and context.ts
+      • CacheContext: Duplicated in core.ts and context.ts
+
+C. Transport Layer Duplications:
+   • BaseTransport: Multiple implementations in src/transports/types.ts and src/types/transports.ts
+   • TransportConfig: Overlapping definitions across transport implementations
+
+Observations:
+------------
+1. Core Type System Issues:
+   - Multiple competing definitions of LogEntry with different generic constraints
+   - Inconsistent context type hierarchies between core and feature packages
+   - Transport interface implementations vary across the codebase
+
+2. Feature Extension Patterns:
+   - Feature-specific interfaces properly extend core types but create parallel hierarchies
+   - Context types are duplicated between core and feature-specific implementations
+   - Transport layer has multiple base implementations that should be consolidated
+
+3. Package Boundary Issues:
+   - jitterbug-next package imports core types but also redefines some
+   - Type definitions split between core types and feature-specific extensions
+   - Inconsistent use of type exports across package boundaries
+
+Recommendations:
+---------------
+1. Consolidate core type definitions into src/types/core.ts
+2. Implement proper type hierarchy with single source of truth
+3. Use type composition over inheritance where possible
+4. Standardize transport layer implementations
+5. Remove duplicate context type definitions
+
+This report tracks duplicate type definitions to maintain type system integrity and follows the TypeScript Design Philosophy of progressive enhancement and single source of truth.
+
+Detailed Duplicates:
+1. In src/types/features/jitterbug.ts:
+   - ExtendedEntry: extends BaseEntry (i.e., the canonical LogEntry).
+   - ExtendedInstance: extends Instance from core types.
+   - ExtendedProcessor: extends Processor from core types.
+   - ExtendedConfig: extends Config from core types.
+   - ExtendedTransport: extends Transport from core types.
+
+2. In src/types/features/context.ts:
+   - ExtendedContext: extends BaseContext from core types.
+*/ 
