@@ -247,6 +247,15 @@ const HELP_REGISTRY: HelpEntry[] = [
     since: '0.2',
     category: 'console',
     example: 'jitterbug.console.stop()'
+  },
+  // Debug Umbrella help entry (Phase C)
+  {
+    name: 'debug',
+    summary: 'Unified debug interface - logs, console, config, emit',
+    signature: 'debug.{ logs, emojiConsole, config, emit }',
+    since: '0.2',
+    category: 'debug',
+    example: 'debug.logs.export({ format: "jsonl" }), debug.emojiConsole()'
   }
 ];
 
@@ -430,8 +439,8 @@ export function initializeJitterbug(global: Window = window): void {
         '  Console: console.start(), console.stop() - beautiful emoji console transport',
         '  System: ready(), diagnostics(), help(topic)',
         '  Config: saveConfig(), loadConfig(), resetConfig() - localStorage persistence',
-        'Future: exportLogs()',
-        'Use help("saveConfig") or help("logInspector") for details.'
+        '  🆕 Umbrella: debug.{ logs, emojiConsole, config, emit } - unified interface',
+        'Use help("debug") or help("logInspector") for details.'
       ].join('\n');
     }
 

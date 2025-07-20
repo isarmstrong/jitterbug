@@ -14,16 +14,20 @@ export { initializeJitterbug } from './bootstrap.js';
 export { ensureJitterbugReady, emitJitterbugEvent } from './utils.js';
 
 // Experimental features (Task 3.4)
-/** @experimental Configuration persistence API - subject to schema changes */
+/** @deprecated Use debug.config */
 export { configPersistence } from './config-persistence.js';
 
 // Experimental emission utilities  
-/** @experimental Low-level emission utility - prefer using jitterbug.emit() */
+/** @deprecated Use debug.emit */
 export { safeEmit as experimentalSafeEmit } from './schema-registry.js';
 
-// Task 3.5 - Log Inspection Phase 1
-/** @experimental Log inspection query interface - subject to API changes */
+// Task 3.5 - Log Inspection Phase 1  
+/** @deprecated Use debug.logs */
 export { logInspector } from './public-logs.js';
+
+// Task 4 - Emoji Console Transport
+/** @deprecated Use debug.emojiConsole */
+export { experimentalEmojiConsole } from './transports/emoji-console.js';
 
 // Public type facades (surface control)
 export type {
@@ -39,6 +43,29 @@ export type {
   EmitOptions,
   EventFilter
 } from './types.js';
+
+import { logInspector } from './public-logs.js';
+import { experimentalEmojiConsole } from './transports/emoji-console.js';
+import { configPersistence } from './config-persistence.js';
+import { safeEmit } from './schema-registry.js';
+
+// Phase C: Debug Umbrella Consolidation
+/** @experimental Unified debug interface - consolidates logs, console, config, and emit */
+export const debug = {
+  /** @experimental Log inspection and export interface */
+  logs: logInspector,
+  /** @experimental Beautiful emoji console transport */
+  emojiConsole: experimentalEmojiConsole,
+  /** @experimental Configuration persistence interface */
+  config: {
+    load: configPersistence.load.bind(configPersistence),
+    save: configPersistence.save.bind(configPersistence),
+    reset: configPersistence.reset.bind(configPersistence),
+    snapshot: configPersistence.snapshot.bind(configPersistence),
+  },
+  /** @experimental Safe event emission utility */
+  emit: safeEmit
+} as const;
 
 // Internal types NOT exported:
 // - All branded types (PlanHash, StepId, etc.) - internal only

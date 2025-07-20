@@ -11,12 +11,14 @@ import { describe, it, expect } from 'vitest';
 
 // Locked surface snapshot - update deliberately only
 const EXPECTED_EXPORTS = [
-  'configPersistence',       // Task 3.4 - @experimental (config API - schema volatile)
+  'configPersistence',       // Task 3.4 - @experimental (config API - schema volatile) @deprecated Use debug.config
+  'debug',                   // Phase C - @experimental (unified debug interface - logs, console, config, emit)
   'emitJitterbugEvent',      // @experimental (programmatic emission)
   'ensureJitterbugReady',    // @experimental (initialization utility)
-  'experimentalSafeEmit',    // @experimental (low-level emission - prefer jitterbug.emit())
+  'experimentalEmojiConsole',// Task 4 - @experimental (emoji console transport) @deprecated Use debug.emojiConsole
+  'experimentalSafeEmit',    // @experimental (low-level emission - prefer jitterbug.emit()) @deprecated Use debug.emit
   'initializeJitterbug',     // @stable (primary entry point)
-  'logInspector',            // Task 3.5 Phase 1 - @experimental (query-only log inspection)
+  'logInspector',            // Task 3.5 Phase 1 - @experimental (query-only log inspection) @deprecated Use debug.logs
 ].sort();
 
 const TIER_LIMITS = {
