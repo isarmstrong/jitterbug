@@ -540,6 +540,59 @@ export const eventSchemas = {
 export type EventType = keyof typeof eventSchemas;
 export type PayloadOf<T extends EventType> = ReturnType<(typeof eventSchemas)[T]['validate']>;
 
+// Required Events Set Definition
+export const REQUIRED_CORE_EVENTS = [
+  'orchestrator.plan.build.started',
+  'orchestrator.plan.build.completed',
+  'orchestrator.plan.build.failed',
+  'orchestrator.plan.execution.started',
+  'orchestrator.plan.execution.completed',
+  'orchestrator.plan.execution.failed',
+  'orchestrator.plan.finalized',
+  'orchestrator.step.started',
+  'orchestrator.step.completed', 
+  'orchestrator.step.failed',
+  'orchestrator.step.dispatch.started',
+  'orchestrator.step.dispatch.completed',
+  'orchestrator.step.dispatch.failed'
+] as const;
+
+export const REQUIRED_LIFECYCLE_EVENTS = [
+  'orchestrator.core.initialization.started',
+  'orchestrator.core.initialization.completed',
+  'orchestrator.core.initialization.failed',
+  'orchestrator.core.shutdown.started',
+  'orchestrator.core.shutdown.completed',
+  'orchestrator.core.shutdown.failed',
+  'orchestrator.branch.registration.started',
+  'orchestrator.branch.registration.completed',
+  'orchestrator.branch.registration.failed',
+  'orchestrator.branch.unregistration.started',
+  'orchestrator.branch.unregistration.completed',
+  'orchestrator.branch.unregistration.failed',
+  'orchestrator.log.processing.started',
+  'orchestrator.log.processing.completed',
+  'orchestrator.log.processing.failed'
+] as const;
+
+export const ALL_REQUIRED_EVENTS = [...REQUIRED_CORE_EVENTS, ...REQUIRED_LIFECYCLE_EVENTS] as const;
+
+// Emit guard for development/test
+export function safeEmit<T extends EventType>(type: T, payload: PayloadOf<T>, opts?: any) {
+  if (process.env.NODE_ENV !== 'production') {
+    if (!eventSchemas[type]) {
+      throw new Error(`[schema-missing] Event '${type}' emitted without registered schema`);
+    }
+    try {
+      const validated = eventSchemas[type].validate(payload);
+      return { type, payload: validated, opts };
+    } catch (error) {
+      throw new Error(`[schema-invalid] Event '${type}' payload validation failed: ${error}`);
+    }
+  }
+  return { type, payload, opts };
+}
+
 // Validation function
 export function validateEventPayload<T extends EventType>(
   type: T,

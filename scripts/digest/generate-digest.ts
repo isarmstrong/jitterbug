@@ -120,7 +120,12 @@ class DigestGenerator {
 
   async generate(): Promise<string> {
     const metrics = await this.collectMetrics();
-    return this.synthesizeDigest(metrics);
+    const digest = this.synthesizeDigest(metrics);
+    
+    // Persist current coverage for next run
+    this.persistCurrentCoverage(metrics);
+    
+    return digest;
   }
 
   private async collectMetrics(): Promise<DigestMetrics> {
@@ -1182,13 +1187,28 @@ class DigestGenerator {
       'internalized (this commit)': { count: 0, delta: 0, notes: 'Formerly public; now internal' }
     };
 
-    // Count current exports by category
+    // Count current exports by category (all current symbols, not just added)
+    for (const symbol of metrics.symbols.current) {
+      const category = this.categorizeExport(symbol.name, symbol.file);
+      if (breakdown[category]) {
+        breakdown[category].count++;
+      }
+    }
+    
+    // Calculate deltas from added/removed
     for (const exp of metrics.exports.added) {
       const [file, name] = exp.split(':');
       const category = this.categorizeExport(name, file);
       if (breakdown[category]) {
-        breakdown[category].count++;
         breakdown[category].delta++;
+      }
+    }
+    
+    for (const exp of metrics.exports.removed) {
+      const [file, name] = exp.split(':');
+      const category = this.categorizeExport(name, file);
+      if (breakdown[category]) {
+        breakdown[category].delta--;
       }
     }
 
@@ -1197,6 +1217,12 @@ class DigestGenerator {
     breakdown['internalized (this commit)'].count = internalizations.length;
     breakdown['internalized (this commit)'].delta = internalizations.length;
 
+    // If all counts are zero, provide explicit explanation
+    const totalCount = Object.values(breakdown).reduce((sum, cat) => sum + cat.count, 0);
+    if (totalCount === 0) {
+      breakdown['core'].notes = 'No public exports (all internalized for pre-release)';
+    }
+
     return breakdown;
   }
 
@@ -1204,12 +1230,21 @@ class DigestGenerator {
    * Categorize an export for the summary table
    */
   private categorizeExport(name: string, file: string): string {
-    if (file.includes('scripts/') || file.includes('digest') || name.includes('generate')) {
+    // Tool category - build/dev scripts
+    if (file.includes('scripts/') || file.includes('digest') || 
+        name.includes('generate') || name.includes('Generator') ||
+        file.includes('test') || file.includes('spec')) {
       return 'tool';
     }
-    if (name.includes('View') || name.includes('Helper') || name.includes('Util')) {
+    
+    // Util category - helper types and utility functions
+    if (name.includes('View') || name.includes('Helper') || 
+        name.includes('Util') || name.includes('Options') ||
+        name.includes('Config') || name.endsWith('Payload')) {
       return 'util';
     }
+    
+    // Core category - main runtime API
     return 'core';
   }
 
@@ -1391,57 +1426,67 @@ class DigestGenerator {
   }
 
   /**
-   * Get schema completeness matrix for event coverage validation
+   * Get schema completeness matrix for required events only
    */
   private getSchemaCompletenessMatrix(): { [eventType: string]: boolean } {
     const matrix: { [eventType: string]: boolean } = {};
     
     try {
-      // Read schema registry to get expected event types
+      // Import the required events list from schema registry
       const registryPath = join(this.projectRoot, 'src/browser/schema-registry.ts');
       const registryContent = readFileSync(registryPath, 'utf8');
       
-      // Extract event type keys from the registry
-      const eventTypeRegex = /'([^']+)':\s*{/g;
-      let match;
-      while ((match = eventTypeRegex.exec(registryContent)) !== null) {
-        const eventType = match[1];
-        
-        // Check if this event type is actually used in instrumentation
-        try {
-          const usagePattern = new RegExp(`emitJitterbugEvent\\s*\\(\\s*['"\`]${eventType}['"\`]`, 'g');
-          const srcFiles = execSync(
-            `find ${this.projectRoot}/src -name "*.ts" -not -path "*/test/*" -not -path "*/*.test.ts"`,
-            { cwd: this.projectRoot, encoding: 'utf8' }
-          ).trim().split('\n');
-          
-          let isUsed = false;
-          for (const file of srcFiles) {
-            const content = readFileSync(file, 'utf8');
-            if (usagePattern.test(content)) {
-              isUsed = true;
-              break;
-            }
-          }
-          
-          matrix[eventType] = isUsed;
-        } catch {
-          matrix[eventType] = false;
+      // Extract required events from the constants
+      const requiredCoreMatch = registryContent.match(/REQUIRED_CORE_EVENTS\s*=\s*\[([\s\S]*?)\]/);
+      const requiredLifecycleMatch = registryContent.match(/REQUIRED_LIFECYCLE_EVENTS\s*=\s*\[([\s\S]*?)\]/);
+      
+      const requiredEvents: string[] = [];
+      
+      if (requiredCoreMatch) {
+        const coreEvents = requiredCoreMatch[1].match(/'([^']+)'/g);
+        if (coreEvents) {
+          requiredEvents.push(...coreEvents.map(e => e.slice(1, -1)));
         }
       }
-    } catch {
-      // Fallback - minimal expected events
-      const expectedEvents = [
-        'orchestrator.core.initialization.started',
-        'orchestrator.core.initialization.completed',
+      
+      if (requiredLifecycleMatch) {
+        const lifecycleEvents = requiredLifecycleMatch[1].match(/'([^']+)'/g);
+        if (lifecycleEvents) {
+          requiredEvents.push(...lifecycleEvents.map(e => e.slice(1, -1)));
+        }
+      }
+      
+      // Check which required events have schemas defined
+      const eventSchemaRegex = /'([^']+)':\s*{/g;
+      const definedSchemas = new Set<string>();
+      let match;
+      while ((match = eventSchemaRegex.exec(registryContent)) !== null) {
+        definedSchemas.add(match[1]);
+      }
+      
+      // Build matrix for required events only
+      for (const eventType of requiredEvents) {
+        matrix[eventType] = definedSchemas.has(eventType);
+      }
+      
+    } catch (error) {
+      console.error('Failed to parse required events:', error);
+      // Fallback - core required events
+      const fallbackEvents = [
         'orchestrator.plan.build.started',
-        'orchestrator.plan.build.completed',
-        'orchestrator.step.dispatch.started',
-        'orchestrator.step.dispatch.completed'
+        'orchestrator.plan.build.completed', 
+        'orchestrator.plan.build.failed',
+        'orchestrator.plan.execution.started',
+        'orchestrator.plan.execution.completed',
+        'orchestrator.plan.execution.failed',
+        'orchestrator.plan.finalized',
+        'orchestrator.step.started',
+        'orchestrator.step.completed',
+        'orchestrator.step.failed'
       ];
       
-      expectedEvents.forEach(event => {
-        matrix[event] = false; // Conservative default
+      fallbackEvents.forEach(event => {
+        matrix[event] = false; // Conservative - mark as missing
       });
     }
     
@@ -1453,34 +1498,65 @@ class DigestGenerator {
    */
   private getPreviousCoverage(): { [scope: string]: number } {
     try {
-      // Look for the most recent digest file
+      // First try cache file for accuracy
+      const cacheFile = join(this.projectRoot, '.cache/coverage-prev.json');
+      if (existsSync(cacheFile)) {
+        const cached = JSON.parse(readFileSync(cacheFile, 'utf8'));
+        return cached;
+      }
+      
+      // Fallback to parsing previous digest file
       const digestDir = join(this.projectRoot, 'scripts/digest/reports');
-      const digestFiles = execSync(`find ${digestDir} -name "digest-*.md" | head -5`, { 
+      const digestFiles = execSync(`find ${digestDir} -name "digest-*.md" | sort -r | head -2`, { 
         cwd: this.projectRoot, 
         encoding: 'utf8' 
       }).trim().split('\n').filter(Boolean);
       
-      if (digestFiles.length === 0) {
+      if (digestFiles.length < 2) {
         return { 'runtime-core': 0, 'debugger-lifecycle': 0 };
       }
       
-      // Read the most recent digest file
-      const latestDigest = readFileSync(digestFiles[0], 'utf8');
+      // Read the second most recent digest file (skip current)
+      const prevDigest = readFileSync(digestFiles[1], 'utf8');
       
-      // Extract coverage percentages
-      const coveragePattern = /\| ([^|]+) \| \d+ \/ \d+ \| (\d+)% /g;
+      // Extract coverage percentages with better pattern
+      const coveragePattern = /\| (runtime-core|debugger-lifecycle) \| \d+ \/ \d+ \| (\d+)% /g;
       const coverage: { [scope: string]: number } = {};
       
       let match;
-      while ((match = coveragePattern.exec(latestDigest)) !== null) {
+      while ((match = coveragePattern.exec(prevDigest)) !== null) {
         const scope = match[1].trim();
         const percent = parseInt(match[2], 10);
         coverage[scope] = percent;
       }
       
-      return coverage;
+      return coverage.hasOwnProperty('runtime-core') ? coverage : { 'runtime-core': 0, 'debugger-lifecycle': 0 };
     } catch {
       return { 'runtime-core': 0, 'debugger-lifecycle': 0 };
+    }
+  }
+
+  /**
+   * Persist current coverage for next run
+   */
+  private persistCurrentCoverage(metrics: any): void {
+    try {
+      const cacheDir = join(this.projectRoot, '.cache');
+      const cacheFile = join(cacheDir, 'coverage-prev.json');
+      
+      // Ensure cache directory exists
+      if (!existsSync(cacheDir)) {
+        execSync(`mkdir -p ${cacheDir}`, { cwd: this.projectRoot });
+      }
+      
+      const coverage = {
+        'runtime-core': Math.round(metrics.events.scopes['runtime-core'].coverage * 100),
+        'debugger-lifecycle': Math.round(metrics.events.scopes['debugger-lifecycle'].coverage * 100)
+      };
+      
+      writeFileSync(cacheFile, JSON.stringify(coverage, null, 2));
+    } catch (error) {
+      console.warn('Failed to persist coverage cache:', error);
     }
   }
 }
