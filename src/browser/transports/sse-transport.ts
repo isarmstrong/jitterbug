@@ -41,12 +41,31 @@ interface SSETransportOptions {
   };
 }
 
+interface SSETransportDiagnostics {
+  transport: {
+    running: boolean;
+    enabled: boolean;
+    options?: Required<SSETransportOptions>;
+  };
+  endpoint?: {
+    path: string;
+    cors: boolean;
+    uptime: number;
+  };
+  hub?: {
+    activeClients: number;
+    totalConnections: number;
+    uptime: number;
+    messagesDispatched: number;
+  };
+}
+
 type SSETransportController = {
   start(): void;
   stop(): void;
   isRunning(): boolean;
   handleRequest(request: SSERequest): SSEResponse;
-  getDiagnostics(): unknown;
+  getDiagnostics(): SSETransportDiagnostics;
   getOptions(): Readonly<Required<SSETransportOptions>>;
   updateOptions(options: Partial<SSETransportOptions>): void;
   send?(level: string, message: string, data?: unknown): void; // P2: client ingestion
@@ -189,7 +208,7 @@ class SSETransport {
     return this.endpoint.handleRequest(request);
   }
 
-  getDiagnostics(): unknown {
+  getDiagnostics(): SSETransportDiagnostics {
     if (!this.endpoint) {
       return {
         transport: {

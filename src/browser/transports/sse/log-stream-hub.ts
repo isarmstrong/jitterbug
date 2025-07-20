@@ -155,7 +155,7 @@ class LogStreamHub {
 
       // P3: Apply filter for log messages (skip filtering for heartbeat/ready)
       if (message.type === 'log' && client.filter) {
-        const logData = message.data;
+        const logData = message.data as { level?: string; branch?: string };
         const filterEntry = {
           level: logData.level || 'info',
           branch: logData.branch
