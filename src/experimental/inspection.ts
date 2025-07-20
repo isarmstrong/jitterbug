@@ -3,7 +3,24 @@
  * @experimental Subject to change without SemVer guarantees
  */
 
-import { REQUIRED_CORE_EVENTS, REQUIRED_LIFECYCLE_EVENTS, ALL_REQUIRED_EVENTS } from '../internal/required-events.js';
+// Inlined required events constants (previously from internal/required-events.js)
+const REQUIRED_CORE_EVENTS = [
+  'orchestrator.plan.build.started',
+  'orchestrator.plan.build.completed', 
+  'orchestrator.plan.build.failed',
+  'orchestrator.plan.execution.started',
+  'orchestrator.plan.execution.completed',
+  'orchestrator.plan.execution.failed'
+] as const;
+
+const REQUIRED_LIFECYCLE_EVENTS = [
+  'orchestrator.core.initialization.started',
+  'orchestrator.core.initialization.completed',
+  'orchestrator.core.shutdown.started',
+  'orchestrator.core.shutdown.completed'
+] as const;
+
+const ALL_REQUIRED_EVENTS = [...REQUIRED_CORE_EVENTS, ...REQUIRED_LIFECYCLE_EVENTS] as const;
 
 /**
  * Introspection: list required events (core, lifecycle).

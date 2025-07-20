@@ -62,8 +62,6 @@ vi.mock('../schema-registry.js', () => ({
 }));
 
 describe('Configuration Persistence (Task 3.4)', () => {
-  let mockApi: any;
-
   beforeEach(() => {
     // Replace global localStorage with mock
     Object.defineProperty(global, 'localStorage', {
@@ -81,9 +79,6 @@ describe('Configuration Persistence (Task 3.4)', () => {
     // Reset timers
     vi.clearAllTimers();
     vi.useFakeTimers();
-
-    // Set up mock API
-    mockApi = { debug: {} };
   });
   
   afterEach(() => {
