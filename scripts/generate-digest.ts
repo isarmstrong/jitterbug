@@ -44,6 +44,16 @@ import { join } from 'path';
 /**
  * Comprehensive metrics collected for digest generation
  */
+interface PublicSymbol {
+  name: string;
+  file: string;
+  category: 'core' | 'error' | 'adapter' | 'script' | 'util';
+  hash: string;
+  prevHash?: string;
+  status: 'new' | 'removed' | 'changed' | 'moved' | 'unchanged';
+  notes?: string;
+}
+
 interface DigestMetrics {
   /** ISO timestamp of when metrics were collected */
   timestamp: string;
@@ -65,6 +75,18 @@ interface DigestMetrics {
     added: string[];
     removed: string[];
     modified: string[];
+  };
+  /** Public API symbol tracking with semantic hashes */
+  symbols: {
+    current: PublicSymbol[];
+    previous: PublicSymbol[];
+    drift: PublicSymbol[];
+  };
+  /** Event coverage metrics */
+  events: {
+    criticalFunctions: string[];
+    instrumented: string[];
+    coverage: number;
   };
   /** Dependency graph analysis */
   dependencies: {
@@ -106,6 +128,8 @@ class DigestGenerator {
     const files = this.getFileChanges();
     const lines = this.getLineChanges();
     const exports = await this.getExportChanges();
+    const symbols = await this.getSymbolDrift();
+    const events = await this.getEventCoverage();
     const dependencies = await this.getDependencyInfo();
     const diagnostics = await this.getDiagnostics();
     const modules = this.getModuleChanges();
@@ -115,6 +139,8 @@ class DigestGenerator {
       files,
       lines,
       exports,
+      symbols,
+      events,
       dependencies,
       diagnostics,
       modules,
@@ -569,6 +595,47 @@ class DigestGenerator {
       digest += '\n';
     }
 
+    // Public API Drift Table
+    if (metrics.symbols.drift.length > 0) {
+      digest += `## Public API Drift\n`;
+      digest += `| Symbol | Status | Cat | Hash (old→new) | Notes |\n`;
+      digest += `|--------|--------|-----|----------------|-------|\n`;
+      
+      // Sort by status priority: removed > changed > new
+      const sortedDrift = metrics.symbols.drift.sort((a, b) => {
+        const priority = { removed: 0, changed: 1, moved: 2, new: 3 };
+        return (priority[a.status] || 4) - (priority[b.status] || 4);
+      });
+      
+      sortedDrift.slice(0, 15).forEach(symbol => {
+        const hashDisplay = symbol.prevHash 
+          ? `${symbol.prevHash}→${symbol.hash}`
+          : symbol.hash;
+        const notes = symbol.notes || (symbol.status === 'removed' ? 'Breaking' : '—');
+        
+        digest += `| \`${symbol.name}\` | ${symbol.status} | ${symbol.category} | ${hashDisplay} | ${notes} |\n`;
+      });
+      
+      if (metrics.symbols.drift.length > 15) {
+        digest += `| ... | ... | ... | ... | +${metrics.symbols.drift.length - 15} more changes |\n`;
+      }
+      
+      digest += '\n';
+    }
+
+    // Event Coverage
+    digest += `## Event Coverage\n`;
+    digest += `- **Defined critical functions:** ${metrics.events.criticalFunctions.length}\n`;
+    digest += `- **Instrumented functions:** ${metrics.events.instrumented.length} (${Math.round(metrics.events.coverage * 100)}%)\n`;
+    if (metrics.events.instrumented.length > 0) {
+      digest += `- **Instrumented:** ${metrics.events.instrumented.join(', ')}\n`;
+    }
+    const missing = metrics.events.criticalFunctions.filter(fn => !metrics.events.instrumented.includes(fn));
+    if (missing.length > 0) {
+      digest += `- **Missing instrumentation:** ${missing.join(', ')}\n`;
+    }
+    digest += `- **Target coverage:** ≥90% (${metrics.events.coverage >= 0.9 ? '✅' : '⚠️'})\n\n`;
+
     // Graph Delta
     digest += `## Graph Delta\n`;
     const graphStats = this.getGraphStats();
@@ -692,6 +759,241 @@ class DigestGenerator {
       const nodes = cycle.split(' → ').length;
       return score + nodes * 2; // Simplified scoring
     }, 0);
+  }
+
+  private async getSymbolDrift(): Promise<{
+    current: PublicSymbol[];
+    previous: PublicSymbol[];
+    drift: PublicSymbol[];
+  }> {
+    try {
+      const currentSymbols = await this.extractSymbolsFromRef('HEAD');
+      const previousSymbols = await this.extractSymbolsFromRef(this.since);
+      const drift = this.calculateSymbolDrift(currentSymbols, previousSymbols);
+      
+      return {
+        current: currentSymbols,
+        previous: previousSymbols,
+        drift
+      };
+    } catch {
+      return { current: [], previous: [], drift: [] };
+    }
+  }
+
+  private async extractSymbolsFromRef(ref: string): Promise<PublicSymbol[]> {
+    const symbols: PublicSymbol[] = [];
+    
+    try {
+      // Get all TypeScript files in the ref
+      const files = execSync(`git ls-tree -r --name-only ${ref} | grep -E "\\.(ts|tsx)$" | grep -v __tests__ | grep -v test`, {
+        cwd: this.projectRoot,
+        encoding: 'utf8',
+      }).trim().split('\n').filter(Boolean);
+
+      for (const file of files) {
+        try {
+          const content = execSync(`git show ${ref}:${file}`, {
+            cwd: this.projectRoot,
+            encoding: 'utf8',
+          });
+          
+          const fileSymbols = this.extractSymbolsFromContent(content, file);
+          symbols.push(...fileSymbols);
+        } catch {
+          // File might not exist in this ref
+        }
+      }
+    } catch {
+      // Git ref might not exist
+    }
+    
+    return symbols;
+  }
+
+  private extractSymbolsFromContent(content: string, file: string): PublicSymbol[] {
+    const symbols: PublicSymbol[] = [];
+    const lines = content.split('\n');
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line.startsWith('export')) continue;
+      
+      const symbol = this.parseSymbolFromLine(line, file, lines, i);
+      if (symbol) {
+        symbols.push(symbol);
+      }
+    }
+    
+    return symbols;
+  }
+
+  private parseSymbolFromLine(line: string, file: string, lines: string[], index: number): PublicSymbol | null {
+    // Enhanced symbol parsing with semantic hashing
+    const patterns = [
+      { pattern: /^export\s+(?:const|let|var)\s+(\w+)/, category: 'util' as const },
+      { pattern: /^export\s+(?:function)\s+(\w+)/, category: 'core' as const },
+      { pattern: /^export\s+(?:class)\s+(\w+)/, category: this.categorizeClass },
+      { pattern: /^export\s+(?:interface|type)\s+(\w+)/, category: 'core' as const },
+      { pattern: /^export\s+\{\s*([^}]+)\s*\}/, category: 'util' as const },
+    ];
+    
+    for (const { pattern, category } of patterns) {
+      const match = line.match(pattern);
+      if (match) {
+        const name = match[1];
+        if (!name) continue;
+        
+        // Extract full symbol definition for hashing
+        const definition = this.extractSymbolDefinition(lines, index, name);
+        const hash = this.hashSymbolDefinition(definition);
+        const finalCategory = typeof category === 'function' ? category(name) : category;
+        
+        return {
+          name,
+          file,
+          category: finalCategory,
+          hash,
+          status: 'unchanged', // Will be updated in drift calculation
+        };
+      }
+    }
+    
+    return null;
+  }
+
+  private categorizeClass = (name: string): PublicSymbol['category'] => {
+    if (name.includes('Error')) return 'error';
+    if (name.includes('Adapter')) return 'adapter';
+    if (name.includes('Generator')) return 'script';
+    return 'core';
+  };
+
+  private extractSymbolDefinition(lines: string[], startIndex: number, name: string): string {
+    // Extract the complete symbol definition for semantic hashing
+    let definition = lines[startIndex];
+    
+    // For functions/classes/interfaces, include the signature
+    if (definition.includes('{')) {
+      let braceCount = 0;
+      let inDefinition = false;
+      
+      for (let i = startIndex; i < Math.min(lines.length, startIndex + 20); i++) {
+        const line = lines[i];
+        definition += line;
+        
+        if (line.includes('{')) {
+          inDefinition = true;
+          braceCount += (line.match(/\{/g) || []).length;
+        }
+        if (line.includes('}')) {
+          braceCount -= (line.match(/\}/g) || []).length;
+          if (inDefinition && braceCount === 0) break;
+        }
+      }
+    }
+    
+    // Normalize the definition for stable hashing
+    return definition
+      .replace(/\/\*[\s\S]*?\*\//g, '') // Remove block comments
+      .replace(/\/\/.*$/gm, '')         // Remove line comments
+      .replace(/\s+/g, ' ')             // Normalize whitespace
+      .trim();
+  }
+
+  private hashSymbolDefinition(definition: string): string {
+    // Use xxhash64 equivalent (simplified for now)
+    return this.simpleHash(definition).slice(0, 8);
+  }
+
+  private calculateSymbolDrift(current: PublicSymbol[], previous: PublicSymbol[]): PublicSymbol[] {
+    const drift: PublicSymbol[] = [];
+    const currentMap = new Map(current.map(s => [`${s.file}:${s.name}`, s]));
+    const previousMap = new Map(previous.map(s => [`${s.file}:${s.name}`, s]));
+    
+    // Find new symbols
+    for (const [key, symbol] of currentMap) {
+      if (!previousMap.has(key)) {
+        drift.push({ ...symbol, status: 'new' });
+      } else {
+        const prevSymbol = previousMap.get(key)!;
+        if (symbol.hash !== prevSymbol.hash) {
+          drift.push({ 
+            ...symbol, 
+            status: 'changed', 
+            prevHash: prevSymbol.hash 
+          });
+        }
+      }
+    }
+    
+    // Find removed symbols
+    for (const [key, symbol] of previousMap) {
+      if (!currentMap.has(key)) {
+        drift.push({ ...symbol, status: 'removed' });
+      }
+    }
+    
+    return drift;
+  }
+
+  private async getEventCoverage(): Promise<{
+    criticalFunctions: string[];
+    instrumented: string[];
+    coverage: number;
+  }> {
+    // Define critical orchestrator functions that should be instrumented
+    const criticalFunctions = [
+      'createExecutionPlan',
+      'executePlan', 
+      'dispatchStep',
+      'finalizePlan',
+      'processLog'
+    ];
+    
+    try {
+      // Simple heuristic: look for emit( calls in orchestrator files
+      const instrumentedFunctions: string[] = [];
+      
+      const orchestratorFiles = execSync('find src/orchestrator -name "*.ts" -not -path "*/test*" -not -path "*/__tests__/*"', {
+        cwd: this.projectRoot,
+        encoding: 'utf8',
+      }).trim().split('\n').filter(Boolean);
+      
+      for (const file of orchestratorFiles) {
+        try {
+          const content = readFileSync(join(this.projectRoot, file), 'utf8');
+          
+          // Look for function definitions that contain emit calls
+          for (const fnName of criticalFunctions) {
+            const fnRegex = new RegExp(`(?:function|const)\\s+${fnName}[^{]*{[^}]*emit\\(`, 's');
+            if (fnRegex.test(content) || content.includes(`${fnName}(`)) {
+              if (content.includes('emit(')) {
+                instrumentedFunctions.push(fnName);
+              }
+            }
+          }
+        } catch {
+          // File might not be readable
+        }
+      }
+      
+      const coverage = criticalFunctions.length > 0 
+        ? Math.round((instrumentedFunctions.length / criticalFunctions.length) * 100) / 100
+        : 0;
+      
+      return {
+        criticalFunctions,
+        instrumented: [...new Set(instrumentedFunctions)],
+        coverage
+      };
+    } catch {
+      return {
+        criticalFunctions,
+        instrumented: [],
+        coverage: 0
+      };
+    }
   }
 }
 
