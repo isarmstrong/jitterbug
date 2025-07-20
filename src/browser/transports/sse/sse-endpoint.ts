@@ -141,7 +141,19 @@ class SSEEndpoint {
   /**
    * Get endpoint diagnostics
    */
-  getDiagnostics() {
+  getDiagnostics(): {
+    endpoint: {
+      path: string;
+      cors: boolean;
+      uptime: number;
+    };
+    hub: {
+      activeClients: number;
+      totalConnections: number;
+      uptime: number;
+      messagesDispatched: number;
+    };
+  } {
     const hubDiagnostics = this.hub.getDiagnostics();
     
     return {
@@ -169,5 +181,5 @@ class SSEEndpoint {
   }
 }
 
-// Export only for internal module use
+// Internal module exports - not part of public surface
 export { SSEEndpoint, type SSEEndpointConfig, type SSERequest, type SSEResponse };

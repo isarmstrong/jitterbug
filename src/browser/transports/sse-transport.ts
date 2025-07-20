@@ -237,7 +237,7 @@ function isSSESupported(): boolean {
   return typeof EventSource !== 'undefined' && typeof ReadableStream !== 'undefined';
 }
 
-// Export only what's needed for umbrella integration
+// Internal module exports - not part of public surface, only for umbrella integration
 export { connectSSE, isSSESupported };
 
 // Test-only exports (not in public surface)

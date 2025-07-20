@@ -48,6 +48,7 @@ import { logInspector } from './public-logs.js';
 import { experimentalEmojiConsole } from './transports/emoji-console.js';
 import { configPersistence } from './config-persistence.js';
 import { safeEmit } from './schema-registry.js';
+// Internal access - not re-exported to prevent surface leakage
 import { connectSSE, isSSESupported } from './transports/sse-transport.js';
 
 // Phase C: Debug Umbrella Consolidation
