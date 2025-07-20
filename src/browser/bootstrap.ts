@@ -17,6 +17,8 @@ import type {
 } from './types.js';
 
 import { INTERNAL } from './types.js';
+import type { EventType } from './schema-registry.js';
+import { validateEventPayload, eventSchemas } from './schema-registry.js';
 
 // Simple ULID-like ID generator (simplified for bootstrap)
 function generateId(): string {
@@ -125,22 +127,39 @@ export function initializeJitterbug(global: Window = window): void {
     }
   }
 
-  function emit<T extends string, P extends Record<string, unknown>>(
+  function emit<T extends string>(
     type: T, 
-    payload: P = {} as P, 
+    payload: unknown = {}, 
     opts: EmitOptions = {}
   ): string {
     assertValidType(type as string);
+    
+    // Validate payload if schema exists
+    let validatedPayload = payload;
+    if (type in eventSchemas) {
+      try {
+        validatedPayload = validateEventPayload(type as EventType, payload);
+      } catch (validationError) {
+        // In development, throw validation errors
+        if (process.env.NODE_ENV === 'development') {
+          throw new TypeError(`Event validation failed for '${type}': ${validationError instanceof Error ? validationError.message : String(validationError)}`);
+        }
+        // In production, log warning and continue with original payload
+        console.warn(`Jitterbug validation failed for '${type}':`, validationError);
+      }
+    }
+    
     const id = generateId();
-    const evt: JitterbugEvent<T, P> = {
+    const schema = eventSchemas[type as EventType];
+    const evt: JitterbugEvent = {
       id,
       t: Date.now(),
       type,
-      level: opts.level,
+      level: opts.level || schema?.level,
       planHash: opts.planHash,
       branch: opts.branch || 'main',
       stepId: opts.stepId,
-      payload,
+      payload: validatedPayload as Record<string, unknown>,
       meta: { 
         source: 'console', 
         seq: ++state.seq, 

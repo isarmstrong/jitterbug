@@ -85,7 +85,7 @@
         "description": "Create an interactive browser console API that exposes window.jitterbug for runtime configuration, debugging control, and settings persistence with auto-initialization capabilities.",
         "details": "Implement the window.jitterbug global API that provides interactive access to the Jitterbug debugging system from the browser console. Create methods for creating and managing debug branches dynamically (jitterbug.createBranch(), jitterbug.getBranches()). Build debug mode controls with methods like jitterbug.enable(), jitterbug.disable(), jitterbug.setLevel(), and jitterbug.getStatus(). Implement persistent configuration using localStorage with methods like jitterbug.saveConfig(), jitterbug.loadConfig(), and jitterbug.resetConfig(). Add utility methods for inspecting current state such as jitterbug.listActiveBranches(), jitterbug.getRecentLogs(), and jitterbug.exportLogs(). Ensure the API auto-initializes on page load by attaching to window object and setting up early error capture before other scripts execute. Include proper error handling and validation for all API methods. Design the interface to be discoverable with help methods and clear naming conventions. Integrate with the orchestrator to ensure all console commands properly delegate to the appropriate debugging branches.",
         "testStrategy": "Verify window.jitterbug is available immediately after script load. Test all API methods work correctly from browser console. Validate configuration persistence across page reloads by testing localStorage integration. Test branch creation and management through console API matches internal state. Verify debug mode toggling affects actual logging behavior. Test early error capture by intentionally triggering errors during page initialization. Validate exported logs contain expected data and formatting. Test API discovery features like help methods return proper documentation. Ensure all methods handle invalid inputs gracefully with clear error messages.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           2
         ],
@@ -97,7 +97,7 @@
             "description": "Create the foundational window.jitterbug object with proper TypeScript interfaces, initialization logic, and auto-attachment to the window object during script load.",
             "dependencies": [],
             "details": "Define the complete TypeScript interface for window.jitterbug API including all method signatures and property types. Implement the core object structure with proper namespacing and module pattern to prevent global scope pollution. Create an initialization system that automatically attaches to window object before other scripts execute, ensuring early error capture capability. Set up proper error boundaries and validation helpers that will be used across all API methods. Implement a help() method that displays available commands and usage examples in the console.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Verify window.jitterbug exists immediately after script inclusion. Test that the object structure matches the defined TypeScript interface. Validate early initialization by checking if errors thrown before DOMContentLoaded are captured. Test the help() method displays comprehensive API documentation."
           },
           {
@@ -237,7 +237,7 @@
     ],
     "metadata": {
       "created": "2025-07-19T22:50:56.179Z",
-      "updated": "2025-07-20T00:23:46.434Z",
+      "updated": "2025-07-20T01:22:24.300Z",
       "description": "Clean rewrite of Jitterbug with orchestrator pattern"
     }
   }

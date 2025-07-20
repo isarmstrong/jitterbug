@@ -50,6 +50,7 @@ archive_2025_01_19/
 # MCP configuration with secrets
 .mcp.json
 
+
 # Logs
 logs
 dev-debug.log

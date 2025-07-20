@@ -4,6 +4,8 @@
  * Tests for the window.jitterbug browser console API bootstrap
  */
 
+/// <reference types="vitest/globals" />
+
 import { initializeJitterbug } from '../bootstrap.js';
 import type { JitterbugGlobal } from '../types.js';
 

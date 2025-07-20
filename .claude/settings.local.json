@@ -28,7 +28,14 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:docs.anthropic.com)",
       "mcp__task-master-ai__update_task",
-      "mcp__task-master-ai__get_task"
+      "mcp__task-master-ai__get_task",
+      "Bash(npm run:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(npm install:*)",
+      "Bash(git add:*)",
+      "mcp__task-master-ai__set_task_status",
+      "Bash(npx tsc:*)",
+      "Bash(pnpm add:*)"
     ],
     "deny": []
   },
