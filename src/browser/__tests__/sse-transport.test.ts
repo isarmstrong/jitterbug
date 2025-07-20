@@ -7,15 +7,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { LogStreamHub, type BroadcastMessage } from '../transports/sse/log-stream-hub.js';
 import { SSEEndpoint, type SSERequest } from '../transports/sse/sse-endpoint.js';
-import { experimentalSSETransport, _resetSSETransport } from '../transports/sse-transport.js';
+import { debug } from '../public.js';
 
 // Mock dependencies to avoid dependency cycles in tests
 vi.mock('../schema-registry.js', () => ({
-  safeEmit: vi.fn()
+  safeEmit: vi.fn(),
+  setGlobalEmitFn: vi.fn()
 }));
 
 vi.mock('../logs/internal/attach.js', () => ({
-  registerLogTap: vi.fn(() => () => {}) // Returns unsubscribe function
+  registerLogTap: vi.fn(() => () => {}), // Returns unsubscribe function
+  attachLogCapture: vi.fn()
 }));
 
 describe('LogStreamHub', () => {
@@ -107,7 +109,7 @@ describe('LogStreamHub', () => {
 
     it('should clean up inactive clients during broadcast', () => {
       const client1 = hub.addClient('client-1');
-      const client2 = hub.addClient('client-2');
+      hub.addClient('client-2');
       
       // Manually mark one client as inactive
       client1.isActive = false;
@@ -144,8 +146,6 @@ describe('LogStreamHub', () => {
 
   describe('Diagnostics', () => {
     it('should provide accurate diagnostics', () => {
-      const startTime = Date.now();
-      
       hub.addClient('client-1');
       hub.addClient('client-2');
       hub.removeClient('client-1');
@@ -295,7 +295,8 @@ describe('SSEEndpoint', () => {
 });
 
 describe('SSETransport Integration', () => {
-  let transport: ReturnType<typeof experimentalSSETransport>;
+  // Use structural typing instead of exported types
+  let transport: ReturnType<typeof debug.sse.connect>;
 
   afterEach(() => {
     if (transport) {
@@ -303,12 +304,15 @@ describe('SSETransport Integration', () => {
     }
     
     // Reset the singleton for clean tests
-    _resetSSETransport();
+    const testHook = (globalThis as any).__JITTERBUG_SSE_TEST__;
+    if (testHook) {
+      testHook.resetSSETransport();
+    }
   });
 
   describe('Transport Lifecycle', () => {
     it('should create transport with default options', () => {
-      transport = experimentalSSETransport();
+      transport = debug.sse.connect();
       
       expect(transport.isRunning()).toBe(true); // autoStart is true by default
       
@@ -319,7 +323,7 @@ describe('SSETransport Integration', () => {
     });
 
     it('should create transport without auto-start', () => {
-      transport = experimentalSSETransport({ autoStart: false });
+      transport = debug.sse.connect({ autoStart: false });
       
       expect(transport.isRunning()).toBe(false);
       
@@ -328,7 +332,7 @@ describe('SSETransport Integration', () => {
     });
 
     it('should handle start/stop cycles', () => {
-      transport = experimentalSSETransport({ autoStart: false });
+      transport = debug.sse.connect({ autoStart: false });
       
       expect(transport.isRunning()).toBe(false);
       
@@ -344,10 +348,8 @@ describe('SSETransport Integration', () => {
     });
 
     it('should update options and restart if running', () => {
-      transport = experimentalSSETransport({ autoStart: true });
+      transport = debug.sse.connect({ autoStart: true });
       expect(transport.isRunning()).toBe(true);
-      
-      const originalOptions = transport.getOptions();
       
       transport.updateOptions({
         endpoint: { path: '/custom-sse' }
@@ -361,7 +363,7 @@ describe('SSETransport Integration', () => {
 
   describe('HTTP Request Handling', () => {
     it('should handle SSE requests', () => {
-      transport = experimentalSSETransport({
+      transport = debug.sse.connect({
         endpoint: { path: '/test-sse' }
       });
 
@@ -377,7 +379,7 @@ describe('SSETransport Integration', () => {
     });
 
     it('should return 503 when transport is stopped', () => {
-      transport = experimentalSSETransport({ autoStart: false });
+      transport = debug.sse.connect({ autoStart: false });
 
       const request: SSERequest = {
         method: 'GET',
@@ -393,7 +395,7 @@ describe('SSETransport Integration', () => {
 
   describe('Diagnostics', () => {
     it('should provide transport diagnostics', () => {
-      transport = experimentalSSETransport();
+      transport = debug.sse.connect();
       
       const diagnostics = transport.getDiagnostics();
       
@@ -404,7 +406,7 @@ describe('SSETransport Integration', () => {
     });
 
     it('should provide minimal diagnostics when stopped', () => {
-      transport = experimentalSSETransport({ autoStart: false });
+      transport = debug.sse.connect({ autoStart: false });
       
       const diagnostics = transport.getDiagnostics();
       

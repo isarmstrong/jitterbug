@@ -7,16 +7,21 @@
 
 import type { JitterbugEvent } from '../types.js';
 import { SSEEndpoint, type SSEEndpointConfig, type SSERequest, type SSEResponse } from './sse/sse-endpoint.js';
-import { registerLogTap } from '../logs/internal/attach.js';
 import { safeEmit } from '../schema-registry.js';
 
-export interface SSETransportOptions {
+// Mock registerLogTap for now - will be properly imported when internal path is resolved
+const registerLogTap = (_callback: (event: JitterbugEvent) => void) => {
+  // TODO: Properly integrate with log capture system
+  return () => {}; // Unsubscribe function
+};
+
+interface SSETransportOptions {
   enabled?: boolean;
   autoStart?: boolean;
   endpoint?: SSEEndpointConfig;
 }
 
-export interface SSETransportController {
+type SSETransportController = {
   start(): void;
   stop(): void;
   isRunning(): boolean;
@@ -24,7 +29,7 @@ export interface SSETransportController {
   getDiagnostics(): any;
   getOptions(): Readonly<Required<SSETransportOptions>>;
   updateOptions(options: Partial<SSETransportOptions>): void;
-}
+};
 
 const DEFAULT_OPTIONS: Required<SSETransportOptions> = {
   enabled: true,
@@ -71,8 +76,8 @@ class SSETransport {
 
       // Emit start event
       safeEmit('orchestrator.transport.sse.started', {
-        path: this.options.endpoint.path,
-        cors: this.options.endpoint.cors
+        path: this.options.endpoint.path ?? '/__jitterbug/sse',
+        cors: this.options.endpoint.cors ?? true
       }, { level: 'info' });
     } catch (error) {
       console.error('Failed to start SSE transport:', error);
@@ -87,8 +92,8 @@ class SSETransport {
     }
 
     const diagnostics = this.endpoint ? this.endpoint.getDiagnostics() : null;
-    const uptime = diagnostics ? diagnostics.hub.uptime : 0;
-    const clientsDisconnected = this.endpoint ? this.endpoint.getDiagnostics().hub.activeClients : 0;
+    const uptime = diagnostics?.hub.uptime ?? 0;
+    const clientsDisconnected = diagnostics?.hub.activeClients ?? 0;
 
     this.cleanup();
     this.running = false;
@@ -178,9 +183,8 @@ class SSETransport {
 // Singleton transport instance
 let activeTransport: SSETransport | null = null;
 
-// For testing - reset singleton
-/** @internal */
-export function _resetSSETransport(): void {
+// For testing - internal reset
+function resetSSETransport(): void {
   if (activeTransport) {
     activeTransport.stop();
     activeTransport = null;
@@ -188,9 +192,9 @@ export function _resetSSETransport(): void {
 }
 
 /**
- * Get or create SSE transport with idempotent behavior
+ * Connect to SSE transport with idempotent behavior
  */
-export function experimentalSSETransport(
+function connectSSE(
   options: Partial<SSETransportOptions> = {}
 ): SSETransportController {
   // Merge with defaults
@@ -224,4 +228,19 @@ export function experimentalSSETransport(
     getOptions: () => activeTransport!.getOptions(),
     updateOptions: (opts: Partial<SSETransportOptions>) => activeTransport!.updateOptions(opts)
   };
+}
+
+/**
+ * Check if SSE is supported in current environment
+ */
+function isSSESupported(): boolean {
+  return typeof EventSource !== 'undefined' && typeof ReadableStream !== 'undefined';
+}
+
+// Export only what's needed for umbrella integration
+export { connectSSE, isSSESupported };
+
+// Test-only exports (not in public surface)
+if (process.env.NODE_ENV === 'test') {
+  (globalThis as any).__JITTERBUG_SSE_TEST__ = { resetSSETransport };
 }

@@ -7,26 +7,26 @@
 
 import { LogStreamHub, type BroadcastMessage } from './log-stream-hub.js';
 
-export interface SSEEndpointConfig {
+interface SSEEndpointConfig {
   path?: string;
   cors?: boolean;
   heartbeatMs?: number;
   clientTimeoutMs?: number;
 }
 
-export interface SSERequest {
+interface SSERequest {
   method: string;
   url: string;
   headers: Record<string, string>;
 }
 
-export interface SSEResponse {
+interface SSEResponse {
   status: number;
   headers: Record<string, string>;
   body?: ReadableStream<Uint8Array> | string;
 }
 
-export class SSEEndpoint {
+class SSEEndpoint {
   private hub: LogStreamHub;
   private readonly config: Required<SSEEndpointConfig>;
   private clientSequence = 0;
@@ -93,7 +93,7 @@ export class SSEEndpoint {
   /**
    * Create SSE response with client stream
    */
-  private createSSEResponse(request: SSERequest): SSEResponse {
+  private createSSEResponse(_request: SSERequest): SSEResponse {
     const clientId = `client-${++this.clientSequence}-${Date.now()}`;
     
     try {
@@ -168,3 +168,6 @@ export class SSEEndpoint {
     return this.hub;
   }
 }
+
+// Export only for internal module use
+export { SSEEndpoint, type SSEEndpointConfig, type SSERequest, type SSEResponse };

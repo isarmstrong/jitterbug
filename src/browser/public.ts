@@ -48,9 +48,10 @@ import { logInspector } from './public-logs.js';
 import { experimentalEmojiConsole } from './transports/emoji-console.js';
 import { configPersistence } from './config-persistence.js';
 import { safeEmit } from './schema-registry.js';
+import { connectSSE, isSSESupported } from './transports/sse-transport.js';
 
 // Phase C: Debug Umbrella Consolidation
-/** @experimental Unified debug interface - consolidates logs, console, config, and emit */
+/** @experimental Unified debug interface - consolidates logs, console, config, emit, and SSE */
 export const debug = {
   /** @experimental Log inspection and export interface */
   logs: logInspector,
@@ -62,6 +63,11 @@ export const debug = {
     save: configPersistence.save.bind(configPersistence),
     reset: configPersistence.reset.bind(configPersistence),
     snapshot: configPersistence.snapshot.bind(configPersistence),
+  },
+  /** @experimental Server-Sent Events transport interface */
+  sse: {
+    connect: connectSSE,
+    isSupported: isSSESupported
   },
   /** @experimental Safe event emission utility */
   emit: safeEmit

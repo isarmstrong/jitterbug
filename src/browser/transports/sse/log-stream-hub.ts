@@ -7,7 +7,7 @@
 
 import { safeEmit } from '../../schema-registry.js';
 
-export interface SSEClient {
+interface SSEClient {
   readonly id: string;
   readonly stream: ReadableStream<Uint8Array>;
   readonly controller: ReadableStreamDefaultController<Uint8Array>;
@@ -16,7 +16,7 @@ export interface SSEClient {
   isActive: boolean;
 }
 
-export interface BroadcastMessage {
+interface BroadcastMessage {
   type: 'log' | 'heartbeat' | 'ready';
   data: any;
   timestamp: number;
@@ -29,7 +29,7 @@ interface HubDiagnostics {
   messagesDispatched: number;
 }
 
-export class LogStreamHub {
+class LogStreamHub {
   private clients = new Map<string, SSEClient>();
   private totalConnections = 0;
   private messagesDispatched = 0;
@@ -259,3 +259,6 @@ export class LogStreamHub {
     this.clients.clear();
   }
 }
+
+// Export only for internal module use
+export { LogStreamHub, type BroadcastMessage };
