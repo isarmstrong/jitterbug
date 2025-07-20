@@ -831,6 +831,84 @@ export const eventSchemas = {
     },
     level: 'info' as const,
     description: 'Configuration reset to defaults'
+  },
+
+  // SSE Transport Events (Task 5)
+  'orchestrator.transport.sse.started': {
+    validate: (payload: unknown): { path: string; cors: boolean } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        path: validateString(p.path, 'path'),
+        cors: typeof p.cors === 'boolean' ? p.cors : false
+      };
+    },
+    level: 'info' as const,
+    description: 'SSE transport started'
+  },
+
+  'orchestrator.transport.sse.stopped': {
+    validate: (payload: unknown): { uptime: number; clientsDisconnected: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        uptime: validateNumber(p.uptime, 'uptime'),
+        clientsDisconnected: validateNumber(p.clientsDisconnected, 'clientsDisconnected')
+      };
+    },
+    level: 'info' as const,
+    description: 'SSE transport stopped'
+  },
+
+  'orchestrator.transport.sse.client.connected': {
+    validate: (payload: unknown): { clientId: string; totalClients: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        clientId: validateString(p.clientId, 'clientId'),
+        totalClients: validateNumber(p.totalClients, 'totalClients')
+      };
+    },
+    level: 'debug' as const,
+    description: 'SSE client connected'
+  },
+
+  'orchestrator.transport.sse.client.disconnected': {
+    validate: (payload: unknown): { clientId: string; uptime: number; totalClients: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        clientId: validateString(p.clientId, 'clientId'),
+        uptime: validateNumber(p.uptime, 'uptime'),
+        totalClients: validateNumber(p.totalClients, 'totalClients')
+      };
+    },
+    level: 'debug' as const,
+    description: 'SSE client disconnected'
+  },
+
+  'orchestrator.transport.sse.broadcast': {
+    validate: (payload: unknown): { eventType: string; clientCount: number; success: boolean } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        eventType: validateString(p.eventType, 'eventType'),
+        clientCount: validateNumber(p.clientCount, 'clientCount'),
+        success: typeof p.success === 'boolean' ? p.success : false
+      };
+    },
+    level: 'debug' as const,
+    description: 'SSE event broadcast'
   }
 } as const;
 
