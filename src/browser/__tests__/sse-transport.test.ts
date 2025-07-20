@@ -494,15 +494,15 @@ describe('SSETransport Integration', () => {
       transport = debug.sse.connect({ autoStart: false });
       
       // Should not throw when transport is stopped
-      expect(() => transport.send('info', 'test message')).not.toThrow();
+      expect(() => transport.send?.('info', 'test message')).not.toThrow();
     });
 
     it('should accept send parameters', () => {
       transport = debug.sse.connect();
       
       // Test various send signatures
-      expect(() => transport.send('info', 'message')).not.toThrow();
-      expect(() => transport.send('error', 'error message', { extra: 'data' })).not.toThrow();
+      expect(() => transport.send?.('info', 'message')).not.toThrow();
+      expect(() => transport.send?.('error', 'error message', { extra: 'data' })).not.toThrow();
     });
   });
 });
