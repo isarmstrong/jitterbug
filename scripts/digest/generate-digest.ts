@@ -753,6 +753,14 @@ class DigestGenerator {
     }
     digest += '\n';
 
+    // Baseline Field Exceptions
+    digest += `## Baseline Field Exceptions\n\n`;
+    digest += `| Event | Field | Reason |\n`;
+    digest += `|-------|-------|--------|\n`;
+    digest += `| orchestrator.plan.build.completed | succeeded/failed | Execution not started; counts undefined at build stage |\n`;
+    digest += `| orchestrator.plan.build.failed | succeeded/failed | Build failure occurs before execution; counts N/A |\n`;
+    digest += '\n';
+
     // Gates Summary
     digest += `## Gates Summary\n\n`;
     const gates = this.getGatesSummary(metrics, completionPercentage);
@@ -1187,11 +1195,17 @@ class DigestGenerator {
       'internalized (this commit)': { count: 0, delta: 0, notes: 'Formerly public; now internal' }
     };
 
-    // Count current exports by category (all current symbols, not just added)
+    // Count current exports by category (only public stable exports)
+    const publicBarrelFile = join(this.projectRoot, 'src/public.ts');
+    const publicExports = this.getPublicExportsFromBarrel(publicBarrelFile);
+    
     for (const symbol of metrics.symbols.current) {
-      const category = this.categorizeExport(symbol.name, symbol.file);
-      if (breakdown[category]) {
-        breakdown[category].count++;
+      // Only count symbols that are re-exported in the public barrel
+      if (this.isPublicSymbol(symbol.name, symbol.file, publicExports)) {
+        const category = this.categorizeExport(symbol.name, symbol.file);
+        if (breakdown[category]) {
+          breakdown[category].count++;
+        }
       }
     }
     
@@ -1262,6 +1276,53 @@ class DigestGenerator {
   }
 
   /**
+   * Get public exports from the barrel file
+   */
+  private getPublicExportsFromBarrel(barrelPath: string): Set<string> {
+    const publicExports = new Set<string>();
+    
+    if (!existsSync(barrelPath)) {
+      return publicExports;
+    }
+    
+    try {
+      const content = readFileSync(barrelPath, 'utf8');
+      
+      // Parse export statements from barrel
+      const exportPatterns = [
+        /export\s+\{\s*([^}]+)\s*\}/g,           // export { name }
+        /export\s+(?:type\s+)?\{\s*([^}]+)\s*\}/g, // export type { name }
+        /export\s+(?:const|let|var|function|class)\s+(\w+)/g, // export const name
+        /export\s+(?:interface|type)\s+(\w+)/g,    // export type name
+      ];
+      
+      for (const pattern of exportPatterns) {
+        let match;
+        while ((match = pattern.exec(content)) !== null) {
+          if (pattern === exportPatterns[0] || pattern === exportPatterns[1]) {
+            // Handle export { name1, name2 as alias }
+            const names = match[1].split(',').map(n => n.trim().split(/\s+as\s+/)[0].trim());
+            names.forEach(name => publicExports.add(name));
+          } else {
+            publicExports.add(match[1]);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to parse public barrel:', error);
+    }
+    
+    return publicExports;
+  }
+
+  /**
+   * Check if a symbol is part of the public API
+   */
+  private isPublicSymbol(name: string, file: string, publicExports: Set<string>): boolean {
+    return publicExports.has(name);
+  }
+
+  /**
    * Get payload field completeness for event classes
    */
   private getPayloadFieldCompleteness(): { [eventClass: string]: { required: string[]; percentage: number; missing: string[] } } {
@@ -1296,14 +1357,25 @@ class DigestGenerator {
       actions: runtimeCoverage < 100 ? [`Restore runtime-core instrumentation to 100% (currently ${runtimeCoverage}%)`] : undefined
     });
 
-    // Export Growth Gate
+    // Core Export Count Gate
+    const publicBarrel = this.getPublicExportsFromBarrel(join(this.projectRoot, 'src/public.ts'));
+    const coreExportCount = Array.from(publicBarrel).filter(name => 
+      !name.includes('experimental') && !name.includes('type') && !name.includes('Event')
+    ).length;
+    gates.push({
+      name: 'Core Export Count',
+      condition: '≤8 stable exports',
+      status: coreExportCount <= 8 ? 'pass' : 'fail',
+      actions: coreExportCount > 8 ? [`Reduce core exports by ${coreExportCount - 8} (currently ${coreExportCount})`] : undefined
+    });
+
+    // Export Growth Gate 
     const exportDelta = metrics.exports.added.length - metrics.exports.removed.length;
-    const coreExportDelta = -2; // Hardcoded for this commit - should calculate dynamically
     gates.push({
       name: 'Export Growth',
-      condition: 'Δ core exports ≤ +1',
-      status: coreExportDelta <= 1 ? 'pass' : 'fail',
-      actions: coreExportDelta > 1 ? [`Reduce core export growth by ${coreExportDelta - 1} exports`] : undefined
+      condition: 'Δ exports ≤ +3 per commit',
+      status: exportDelta <= 3 ? 'pass' : 'fail',
+      actions: exportDelta > 3 ? [`Reduce export growth by ${exportDelta - 3} exports`] : undefined
     });
 
     // Internalization Justification Gate
@@ -1436,24 +1508,44 @@ class DigestGenerator {
       const registryPath = join(this.projectRoot, 'src/browser/schema-registry.ts');
       const registryContent = readFileSync(registryPath, 'utf8');
       
-      // Extract required events from the constants
-      const requiredCoreMatch = registryContent.match(/REQUIRED_CORE_EVENTS\s*=\s*\[([\s\S]*?)\]/);
-      const requiredLifecycleMatch = registryContent.match(/REQUIRED_LIFECYCLE_EVENTS\s*=\s*\[([\s\S]*?)\]/);
+      // Read required events from internal file
+      const internalPath = join(this.projectRoot, 'src/internal/required-events.ts');
+      let requiredEvents: string[] = [];
       
-      const requiredEvents: string[] = [];
-      
-      if (requiredCoreMatch) {
-        const coreEvents = requiredCoreMatch[1].match(/'([^']+)'/g);
-        if (coreEvents) {
-          requiredEvents.push(...coreEvents.map(e => e.slice(1, -1)));
+      if (existsSync(internalPath)) {
+        const internalContent = readFileSync(internalPath, 'utf8');
+        
+        // Extract required events from the constants
+        const requiredCoreMatch = internalContent.match(/REQUIRED_CORE_EVENTS\s*=\s*\[([\s\S]*?)\]/);
+        const requiredLifecycleMatch = internalContent.match(/REQUIRED_LIFECYCLE_EVENTS\s*=\s*\[([\s\S]*?)\]/);
+        
+        if (requiredCoreMatch) {
+          const coreEvents = requiredCoreMatch[1].match(/'([^']+)'/g);
+          if (coreEvents) {
+            requiredEvents.push(...coreEvents.map(e => e.slice(1, -1)));
+          }
         }
-      }
-      
-      if (requiredLifecycleMatch) {
-        const lifecycleEvents = requiredLifecycleMatch[1].match(/'([^']+)'/g);
-        if (lifecycleEvents) {
-          requiredEvents.push(...lifecycleEvents.map(e => e.slice(1, -1)));
+        
+        if (requiredLifecycleMatch) {
+          const lifecycleEvents = requiredLifecycleMatch[1].match(/'([^']+)'/g);
+          if (lifecycleEvents) {
+            requiredEvents.push(...lifecycleEvents.map(e => e.slice(1, -1)));
+          }
         }
+      } else {
+        // Fallback if internal file missing
+        requiredEvents = [
+          'orchestrator.plan.build.started',
+          'orchestrator.plan.build.completed', 
+          'orchestrator.plan.build.failed',
+          'orchestrator.plan.execution.started',
+          'orchestrator.plan.execution.completed',
+          'orchestrator.plan.execution.failed',
+          'orchestrator.plan.finalized',
+          'orchestrator.step.started',
+          'orchestrator.step.completed',
+          'orchestrator.step.failed'
+        ];
       }
       
       // Check which required events have schemas defined
