@@ -10,7 +10,7 @@ import { SSEEndpoint, type SSEEndpointConfig, type SSERequest, type SSEResponse 
 import { safeEmit } from '../schema-registry.js';
 
 // Mock registerLogTap for now - will be properly imported when internal path is resolved
-const registerLogTap = (_callback: (event: JitterbugEvent) => void) => {
+const registerLogTap = (_callback: (event: JitterbugEvent) => void): (() => void) => {
   // TODO: Properly integrate with log capture system
   return () => {}; // Unsubscribe function
 };
@@ -21,7 +21,7 @@ interface ClientLogEnvelope {
   level: string;      // log level
   branch?: string;    // branch identifier
   msg: string;        // message
-  data?: any;         // payload data
+  data?: unknown;     // payload data
   id?: string;        // client-generated ID for dedupe
   seq?: number;       // per-connection sequence
 }
@@ -46,10 +46,10 @@ type SSETransportController = {
   stop(): void;
   isRunning(): boolean;
   handleRequest(request: SSERequest): SSEResponse;
-  getDiagnostics(): any;
+  getDiagnostics(): unknown;
   getOptions(): Readonly<Required<SSETransportOptions>>;
   updateOptions(options: Partial<SSETransportOptions>): void;
-  send?(level: string, message: string, data?: any): void; // P2: client ingestion
+  send?(level: string, message: string, data?: unknown): void; // P2: client ingestion
 };
 
 const DEFAULT_OPTIONS: Required<SSETransportOptions> = {
@@ -189,7 +189,7 @@ class SSETransport {
     return this.endpoint.handleRequest(request);
   }
 
-  getDiagnostics() {
+  getDiagnostics(): unknown {
     if (!this.endpoint) {
       return {
         transport: {
@@ -236,7 +236,7 @@ class SSETransport {
   }
 
   // P2: Client ingestion - send log entry to server
-  send(level: string, message: string, data?: any): void {
+  send(level: string, message: string, data?: unknown): void {
     if (!this.running) {
       return; // Silently ignore if transport not running
     }
@@ -273,7 +273,7 @@ class SSETransport {
 
   // P2: Set up beacon fallback for page hide events
   private setupBeaconFallback(): void {
-    this.pageHideListener = () => {
+    this.pageHideListener = (): void => {
       if (this.outboundBuffer.length > 0) {
         this.flushOutbound(true, true); // force flush with beacon
       }
@@ -413,7 +413,7 @@ function connectSSE(
     getDiagnostics: () => activeTransport!.getDiagnostics(),
     getOptions: () => activeTransport!.getOptions(),
     updateOptions: (opts: Partial<SSETransportOptions>) => activeTransport!.updateOptions(opts),
-    send: (level: string, message: string, data?: any) => activeTransport!.send(level, message, data)
+    send: (level: string, message: string, data?: unknown) => activeTransport!.send(level, message, data)
   };
 }
 
@@ -427,18 +427,27 @@ function isSSESupported(): boolean {
 /**
  * Get current SSE capabilities and feature flags
  */
-function getSSECapabilities() {
+function getSSECapabilities(): {
+  filters: { branches: boolean; levels: boolean };
+  ingestion: boolean;
+  resume: boolean;
+  batching: boolean;
+  heartbeat: boolean;
+  auth: boolean;
+  version: number;
+  supported: boolean;
+} {
   return {
     filters: { 
-      branches: false, // P3 - not yet implemented
-      levels: false    // P3 - not yet implemented
+      branches: true,  // P3 - ✅ implemented (query param filtering)
+      levels: true     // P3 - ✅ implemented (query param filtering)
     },
     ingestion: true,   // P2 - ✅ implemented (controller.send)
     resume: false,     // P5 - not yet implemented
     batching: true,    // P2 - ✅ outbound buffering implemented
     heartbeat: false,  // P4 - not yet implemented
     auth: false,       // P6 - not yet implemented
-    version: 1,
+    version: 2,        // Bumped for P3 filter feature
     supported: isSSESupported()
   } as const;
 }
@@ -446,7 +455,15 @@ function getSSECapabilities() {
 /**
  * Get SSE help and usage information
  */
-function getSSEHelp() {
+function getSSEHelp(): {
+  description: string;
+  usage: Record<string, string>;
+  endpoint: Record<string, string>;
+  examples: Record<string, string>;
+  filtering: Record<string, string>;
+  reserved: Record<string, string>;
+  limitations: Record<string, string>;
+} {
   return {
     description: 'Server-Sent Events transport for real-time log streaming',
     usage: {
@@ -469,17 +486,22 @@ function getSSEHelp() {
       sendLogs: 'controller.send("info", "message", data) // P2: client → server (future)',
       stop: 'controller.stop() // disconnect'
     },
+    filtering: {
+      description: 'Server-side event filtering (P3 - ✅ Available)',
+      byBranches: 'debug.sse.connect() + URL: /__jitterbug/sse?branches=core,ui',
+      byLevels: 'debug.sse.connect() + URL: /__jitterbug/sse?levels=error,warn',
+      combined: 'Both: /__jitterbug/sse?branches=core&levels=error,info',
+      behavior: 'Empty filter = pass-through, unknown values ignored gracefully'
+    },
     reserved: {
-      filters: 'P3: { branches: string[], levels: LogLevel[] } - selective downlink',
       auth: 'P6: { token?: string, getToken?: () => Promise<string> } - authentication',
-      ingestion: 'P2: controller.send() - client log ingestion',
       resume: 'P5: connection resume with lastEventId'
     },
     limitations: {
-      phase: 'P1.5 - Basic connectivity + runtime introspection',
-      filters: 'Branch/level filtering not yet available (P3)',
-      ingestion: 'Client → server sending not yet available (P2)',
-      resume: 'Connection resume not yet available (P5)'
+      phase: 'P3 - Bidirectional streaming with server-side filtering',
+      heartbeat: 'Automatic reconnection not yet available (P4)',
+      resume: 'Connection resume not yet available (P5)',
+      clientFilters: 'Client-side filtering deferred (use server filters instead)'
     }
   } as const;
 }
@@ -489,5 +511,5 @@ export { connectSSE, isSSESupported, getSSECapabilities, getSSEHelp };
 
 // Test-only exports (not in public surface)
 if (process.env.NODE_ENV === 'test') {
-  (globalThis as any).__JITTERBUG_SSE_TEST__ = { resetSSETransport };
+  (globalThis as Record<string, unknown>).__JITTERBUG_SSE_TEST__ = { resetSSETransport };
 }

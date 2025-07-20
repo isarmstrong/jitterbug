@@ -163,7 +163,7 @@ class SSEEndpoint {
   /**
    * Broadcast log event to all connected clients
    */
-  broadcastLog(logEvent: any): number {
+  broadcastLog(logEvent: unknown): number {
     const message: BroadcastMessage = {
       type: 'log',
       data: logEvent,

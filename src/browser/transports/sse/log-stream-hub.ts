@@ -29,7 +29,7 @@ interface SSEClient {
 
 interface BroadcastMessage {
   type: 'log' | 'heartbeat' | 'ready';
-  data: any;
+  data: unknown;
   timestamp: number;
 }
 
@@ -65,10 +65,10 @@ class LogStreamHub {
     let controller: ReadableStreamDefaultController<Uint8Array>;
     
     const stream = new ReadableStream<Uint8Array>({
-      start(ctrl) {
+      start(ctrl): void {
         controller = ctrl;
       },
-      cancel: () => {
+      cancel: (): void => {
         // Client disconnected - will be cleaned up by hub
       }
     });
