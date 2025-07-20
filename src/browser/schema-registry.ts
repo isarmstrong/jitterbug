@@ -1,5 +1,8 @@
 /**
  * Event Schema Registry for typed event validation
+ * 
+ * @internal - DO NOT EXPORT FROM public.ts  
+ * Schema details are internal validation implementation.
  */
 
 // Import types for future use in payload validation
@@ -151,6 +154,136 @@ export const eventSchemas = {
     },
     level: 'info' as const,
     description: 'Emitted when debugger transitions from bootstrap to ready'
+  },
+
+  // Core orchestrator instrumentation events
+  'orchestrator.core.initialization.started': {
+    validate: (_payload: unknown) => ({}),
+    level: 'info' as const,
+    description: 'Core orchestrator initialization begins'
+  },
+
+  'orchestrator.core.initialization.completed': {
+    validate: (payload: unknown): { durationMs: number; rulesCount: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        durationMs: validateNumber(p.durationMs, 'durationMs'),
+        rulesCount: validateNumber(p.rulesCount, 'rulesCount')
+      };
+    },
+    level: 'info' as const,
+    description: 'Core orchestrator initialization completes successfully'
+  },
+
+  'orchestrator.core.initialization.failed': {
+    validate: (payload: unknown): { error: string; durationMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        error: validateString(p.error, 'error'),
+        durationMs: validateNumber(p.durationMs, 'durationMs')
+      };
+    },
+    level: 'error' as const,
+    description: 'Core orchestrator initialization fails'
+  },
+
+  'orchestrator.log.processing.started': {
+    validate: (payload: unknown): { logLevel: string; logSource: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        logLevel: validateString(p.logLevel, 'logLevel'),
+        logSource: validateString(p.logSource, 'logSource')
+      };
+    },
+    level: 'debug' as const,
+    description: 'Log processing begins'
+  },
+
+  'orchestrator.log.processing.completed': {
+    validate: (payload: unknown): { durationMs: number; targetBranch: string; logLevel: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        durationMs: validateNumber(p.durationMs, 'durationMs'),
+        targetBranch: validateString(p.targetBranch, 'targetBranch'),
+        logLevel: validateString(p.logLevel, 'logLevel')
+      };
+    },
+    level: 'debug' as const,
+    description: 'Log processing completes successfully'
+  },
+
+  'orchestrator.log.processing.failed': {
+    validate: (payload: unknown): { durationMs: number; error: string; logLevel: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        durationMs: validateNumber(p.durationMs, 'durationMs'),
+        error: validateString(p.error, 'error'),
+        logLevel: validateString(p.logLevel, 'logLevel')
+      };
+    },
+    level: 'error' as const,
+    description: 'Log processing fails'
+  },
+
+  'orchestrator.branch.registration.started': {
+    validate: (payload: unknown): { branchName: string; hasConfig: boolean } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        branchName: validateString(p.branchName, 'branchName'),
+        hasConfig: typeof p.hasConfig === 'boolean' ? p.hasConfig : false
+      };
+    },
+    level: 'info' as const,
+    description: 'Branch registration begins'
+  },
+
+  'orchestrator.branch.registration.completed': {
+    validate: (payload: unknown): { branchName: string; durationMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        branchName: validateString(p.branchName, 'branchName'),
+        durationMs: validateNumber(p.durationMs, 'durationMs')
+      };
+    },
+    level: 'info' as const,
+    description: 'Branch registration completes successfully'
+  },
+
+  'orchestrator.branch.registration.failed': {
+    validate: (payload: unknown): { branchName: string; error: string; durationMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        branchName: validateString(p.branchName, 'branchName'),
+        error: validateString(p.error, 'error'),
+        durationMs: validateNumber(p.durationMs, 'durationMs')
+      };
+    },
+    level: 'error' as const,
+    description: 'Branch registration fails'
   }
 } as const;
 

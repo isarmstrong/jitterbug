@@ -1,5 +1,8 @@
 /**
  * Branded types for type-safe event payloads
+ * 
+ * @internal - DO NOT EXPORT FROM public.ts
+ * These are implementation details for internal validation only.
  */
 
 // Branded primitive types

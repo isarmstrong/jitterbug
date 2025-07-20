@@ -1,46 +1,30 @@
 /**
- * Public API Barrel - Single Source of Truth for Browser Module Exports
+ * Public API Barrel - Curated Browser Console API Surface
  * 
- * This file controls the public surface area of the browser console API.
- * Only exports listed here are considered public and stable.
+ * POLICY: Only exports listed here are considered public and stable.
+ * All other exports are internal implementation details.
+ * 
+ * Target: ≤10 public exports total
  */
 
-// Single authoritative initialization function
+// Primary integration entry point
 export { initializeJitterbug } from './bootstrap.js';
 
-// Utility functions for programmatic use
+// Utility functions for programmatic use (minimal set)
 export { ensureJitterbugReady, emitJitterbugEvent } from './utils.js';
 
-// Type definitions needed by external consumers
+// Essential type definitions for TypeScript consumers
 export type {
   JitterbugEvent,
   JitterbugGlobal,
   JitterbugDiagnostics,
   EmitOptions,
-  EventFilter,
-  HelpEntry
+  EventFilter
 } from './types.js';
 
-// Branded types for type-safe payloads
-export type {
-  StepId,
-  PlanHash,
-  BranchName,
-  EventId,
-  QuarantinedPayload
-} from './branded-types.js';
-
-// Schema validation exports
-export type {
-  EventType,
-  PayloadOf,
-  StepStartedPayload,
-  StepCompletedPayload,
-  ErrorPayload,
-  DebuggerReadyPayload
-} from './schema-registry.js';
-
-export {
-  validateEventPayload,
-  getQuarantinedCount
-} from './schema-registry.js';
+// Internal types NOT exported:
+// - All branded types (PlanHash, StepId, etc.) - internal only
+// - Schema registry types - internal validation details  
+// - Quarantine utilities - internal error handling
+// - Validators - use schema validation instead
+// - HelpEntry - internal help system detail

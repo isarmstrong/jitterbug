@@ -21,6 +21,7 @@ import { EventBus, NamespacedEventBus } from './event-bus.js';
 import { ConfigurationManager } from './config-manager.js';
 import type { HealthMetrics } from './config-manager.js';
 import { BaseOrchestratorError } from './errors.js';
+import { emitJitterbugEvent } from '../browser/utils.js';
 
 export class OrchestratorError extends BaseOrchestratorError {
   public readonly branchName?: BranchName;
@@ -76,7 +77,14 @@ export class CoreOrchestrator {
    * Initialize the orchestrator
    */
   async initialize(): Promise<void> {
+    const startTime = Date.now();
+    emitJitterbugEvent('orchestrator.core.initialization.started', {});
+
     if (this.isInitialized) {
+      emitJitterbugEvent('orchestrator.core.initialization.failed', {
+        error: 'Already initialized',
+        durationMs: Date.now() - startTime
+      });
       throw new OrchestratorError(
         'Orchestrator is already initialized',
         'ALREADY_INITIALIZED'
@@ -100,7 +108,16 @@ export class CoreOrchestrator {
         data: { config: this.configManager.getConfig() } as Record<string, unknown>,
       });
 
+      emitJitterbugEvent('orchestrator.core.initialization.completed', {
+        durationMs: Date.now() - startTime,
+        rulesCount: routingRules.length
+      });
+
     } catch (error) {
+      emitJitterbugEvent('orchestrator.core.initialization.failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        durationMs: Date.now() - startTime
+      });
       throw new OrchestratorError(
         `Failed to initialize orchestrator: ${error instanceof Error ? error.message : 'Unknown error'}`,
         'INITIALIZATION_FAILED'
@@ -153,13 +170,30 @@ export class CoreOrchestrator {
   ): Promise<void> {
     this.ensureInitialized();
 
+    const startTime = Date.now();
+    emitJitterbugEvent('orchestrator.branch.registration.started', {
+      branchName: branch.name,
+      hasConfig: !!config
+    });
+
     try {
       await this.branchRegistry.registerBranch(branch, config);
       
       // Initialize branch stats
       this.stats.branchStats[branch.name] = { logs: 0, errors: 0 };
+
+      emitJitterbugEvent('orchestrator.branch.registration.completed', {
+        branchName: branch.name,
+        durationMs: Date.now() - startTime
+      });
       
     } catch (error) {
+      emitJitterbugEvent('orchestrator.branch.registration.failed', {
+        branchName: branch.name,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        durationMs: Date.now() - startTime
+      });
+
       throw new OrchestratorError(
         `Failed to register branch ${branch.name}: ${error instanceof Error ? error.message : 'Unknown error'}`,
         'BRANCH_REGISTRATION_FAILED',
@@ -204,6 +238,10 @@ export class CoreOrchestrator {
 
     this.stats.totalLogs++;
     const startTime = Date.now();
+    emitJitterbugEvent('orchestrator.log.processing.started', {
+      logLevel: entry.level,
+      logSource: entry.metadata?.source || 'unknown'
+    });
 
     try {
       // Get available branches
@@ -240,9 +278,21 @@ export class CoreOrchestrator {
       this.stats.logsProcessed++;
       this.stats.branchStats[decision.targetBranch].logs++;
 
+      emitJitterbugEvent('orchestrator.log.processing.completed', {
+        durationMs: responseTime,
+        targetBranch: decision.targetBranch,
+        logLevel: entry.level
+      });
+
     } catch (error) {
       this.stats.logsFailed++;
       this.configManager.recordRoutingOperation(false);
+
+      emitJitterbugEvent('orchestrator.log.processing.failed', {
+        durationMs: Date.now() - startTime,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        logLevel: entry.level
+      });
       
       // Try fallback processing if graceful degradation is enabled
       if (this.configManager.get('errorHandling')?.enableGracefulDegradation) {
