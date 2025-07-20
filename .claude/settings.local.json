@@ -44,7 +44,8 @@
       "Bash(pnpm digest:*)",
       "Bash(pnpm test:*)",
       "Bash(npx @isarmstrong/digest@latest:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(pnpm tsc:*)"
     ],
     "deny": []
   },
