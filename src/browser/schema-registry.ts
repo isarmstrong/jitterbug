@@ -364,6 +364,176 @@ export const eventSchemas = {
     },
     level: 'error' as const,
     description: 'Core orchestrator shutdown fails'
+  },
+
+  // Runtime-core instrumentation events
+  'orchestrator.plan.build.started': {
+    validate: (payload: unknown): { inputHash?: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        inputHash: validateOptionalString(p.inputHash, 'inputHash')
+      };
+    },
+    level: 'info' as const,
+    description: 'Execution plan build begins'
+  },
+
+  'orchestrator.plan.build.completed': {
+    validate: (payload: unknown): { planHash: string; stepCount: number; elapsedMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        planHash: validateString(p.planHash, 'planHash'),
+        stepCount: validateNumber(p.stepCount, 'stepCount'),
+        elapsedMs: validateNumber(p.elapsedMs, 'elapsedMs')
+      };
+    },
+    level: 'info' as const,
+    description: 'Execution plan build completes successfully'
+  },
+
+  'orchestrator.plan.build.failed': {
+    validate: (payload: unknown): { errorCode: string; message?: string; elapsedMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        errorCode: validateString(p.errorCode, 'errorCode'),
+        message: validateOptionalString(p.message, 'message'),
+        elapsedMs: validateNumber(p.elapsedMs, 'elapsedMs')
+      };
+    },
+    level: 'error' as const,
+    description: 'Execution plan build fails'
+  },
+
+  'orchestrator.plan.execution.started': {
+    validate: (payload: unknown): { planHash: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        planHash: validateString(p.planHash, 'planHash')
+      };
+    },
+    level: 'info' as const,
+    description: 'Plan execution begins'
+  },
+
+  'orchestrator.plan.execution.completed': {
+    validate: (payload: unknown): { planHash: string; totalSteps: number; succeeded: number; failed: number; elapsedMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        planHash: validateString(p.planHash, 'planHash'),
+        totalSteps: validateNumber(p.totalSteps, 'totalSteps'),
+        succeeded: validateNumber(p.succeeded, 'succeeded'),
+        failed: validateNumber(p.failed, 'failed'),
+        elapsedMs: validateNumber(p.elapsedMs, 'elapsedMs')
+      };
+    },
+    level: 'info' as const,
+    description: 'Plan execution completes'
+  },
+
+  'orchestrator.plan.execution.failed': {
+    validate: (payload: unknown): { planHash: string; errorCode: string; message?: string; elapsedMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        planHash: validateString(p.planHash, 'planHash'),
+        errorCode: validateString(p.errorCode, 'errorCode'),
+        message: validateOptionalString(p.message, 'message'),
+        elapsedMs: validateNumber(p.elapsedMs, 'elapsedMs')
+      };
+    },
+    level: 'error' as const,
+    description: 'Plan execution fails'
+  },
+
+  'orchestrator.step.dispatch.started': {
+    validate: (payload: unknown): { stepId: string; adapter: string; attempt: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        stepId: validateString(p.stepId, 'stepId'),
+        adapter: validateString(p.adapter, 'adapter'),
+        attempt: validateNumber(p.attempt, 'attempt')
+      };
+    },
+    level: 'debug' as const,
+    description: 'Step dispatch begins'
+  },
+
+  'orchestrator.step.dispatch.completed': {
+    validate: (payload: unknown): { stepId: string; adapter: string; attempt: number; elapsedMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        stepId: validateString(p.stepId, 'stepId'),
+        adapter: validateString(p.adapter, 'adapter'),
+        attempt: validateNumber(p.attempt, 'attempt'),
+        elapsedMs: validateNumber(p.elapsedMs, 'elapsedMs')
+      };
+    },
+    level: 'debug' as const,
+    description: 'Step dispatch completes successfully'
+  },
+
+  'orchestrator.step.dispatch.failed': {
+    validate: (payload: unknown): { stepId: string; adapter: string; attempt: number; errorCode: string; message?: string; elapsedMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        stepId: validateString(p.stepId, 'stepId'),
+        adapter: validateString(p.adapter, 'adapter'),
+        attempt: validateNumber(p.attempt, 'attempt'),
+        errorCode: validateString(p.errorCode, 'errorCode'),
+        message: validateOptionalString(p.message, 'message'),
+        elapsedMs: validateNumber(p.elapsedMs, 'elapsedMs')
+      };
+    },
+    level: 'error' as const,
+    description: 'Step dispatch fails'
+  },
+
+  'orchestrator.plan.finalized': {
+    validate: (payload: unknown): { planHash: string; status: string; totalSteps: number; elapsedMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      const validStatuses = ['success', 'partial', 'failed'];
+      const status = validateString(p.status, 'status');
+      if (!validStatuses.includes(status)) {
+        throw new TypeError(`status must be one of: ${validStatuses.join(', ')}`);
+      }
+      return {
+        planHash: validateString(p.planHash, 'planHash'),
+        status,
+        totalSteps: validateNumber(p.totalSteps, 'totalSteps'),
+        elapsedMs: validateNumber(p.elapsedMs, 'elapsedMs')
+      };
+    },
+    level: 'info' as const,
+    description: 'Plan finalization completes'
   }
 } as const;
 

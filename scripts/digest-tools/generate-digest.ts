@@ -482,10 +482,10 @@ class DigestGenerator {
     
     digest += '\n';
 
-    // Risk Flags with proper heuristics
+    // Risk Flags with proper heuristics + Coverage gating
     digest += `## Risk Heuristics\n`;
     
-    // Define and evaluate heuristics
+    // Define and evaluate heuristics including coverage gates
     const heuristics = {
       largeCommit: Math.abs(metrics.lines.net) > 500,
       surfaceInflation: metrics.exports.added.length > 10,
@@ -494,7 +494,11 @@ class DigestGenerator {
       typeRegression: metrics.diagnostics.tsErrors > 0,
       lintRegression: metrics.diagnostics.eslintErrors > 0,
       graphCycles: metrics.dependencies.cycles.length > 0,
-      missingExports: metrics.exports.added.some(exp => exp.includes('unmatched-export'))
+      missingExports: metrics.exports.added.some(exp => exp.includes('unmatched-export')),
+      // Coverage gates
+      runtimeCoreGate: metrics.events.scopes['runtime-core'].coverage < 0.6,
+      debuggerLifecycleGate: metrics.events.scopes['debugger-lifecycle'].coverage < 0.9,
+      overallCoverageGate: metrics.events.overall < 0.75
     };
     
     const triggeredHeuristics = Object.entries(heuristics).filter(([_, triggered]) => triggered);
@@ -504,7 +508,9 @@ class DigestGenerator {
       digest += `- Commit LOC ≤ 500? ✅ (${metrics.lines.net >= 0 ? '+' : ''}${metrics.lines.net})\n`;
       digest += `- Public export growth ≤ 10? ✅ (+${metrics.exports.added.length})\n`;
       digest += `- Type errors = 0? ✅ (${metrics.diagnostics.tsErrors})\n`;
-      digest += `- New cycles = 0? ✅ (${metrics.dependencies.cycles.length})\n\n`;
+      digest += `- New cycles = 0? ✅ (${metrics.dependencies.cycles.length})\n`;
+      digest += `- Runtime-core coverage ≥ 60%? ✅ (${Math.round(metrics.events.scopes['runtime-core'].coverage * 100)}%)\n`;
+      digest += `- Debugger-lifecycle coverage ≥ 90%? ✅ (${Math.round(metrics.events.scopes['debugger-lifecycle'].coverage * 100)}%)\n\n`;
     } else {
       digest += `⚠️  **Risk thresholds exceeded:**\n`;
       
@@ -534,6 +540,23 @@ class DigestGenerator {
       }
       if (heuristics.missingExports) {
         digest += `- **Export enumeration incomplete:** Some exports unclassified\n`;
+      }
+      
+      // Coverage gate violations
+      if (heuristics.runtimeCoreGate) {
+        const coverage = Math.round(metrics.events.scopes['runtime-core'].coverage * 100);
+        const missing = metrics.events.scopes['runtime-core'].functions.filter(fn => 
+          !metrics.events.scopes['runtime-core'].instrumented.includes(fn)
+        );
+        digest += `- **Runtime-core coverage gate:** ${coverage}% < 60% threshold. Missing: ${missing.join(', ')}\n`;
+      }
+      if (heuristics.debuggerLifecycleGate) {
+        const coverage = Math.round(metrics.events.scopes['debugger-lifecycle'].coverage * 100);
+        digest += `- **Debugger-lifecycle coverage gate:** ${coverage}% < 90% threshold\n`;
+      }
+      if (heuristics.overallCoverageGate) {
+        const coverage = Math.round(metrics.events.overall * 100);
+        digest += `- **Overall coverage gate:** ${coverage}% < 75% threshold\n`;
       }
       
       digest += '\n';
@@ -986,6 +1009,8 @@ class DigestGenerator {
         cwd: this.projectRoot,
         encoding: 'utf8',
       }).trim().split('\n').filter(Boolean);
+      
+      console.log('🔍 Scanning files:', orchestratorFiles);
 
       // Scan each scope
       for (const [scopeName, scopeFunctions] of Object.entries(scopes)) {
@@ -996,8 +1021,9 @@ class DigestGenerator {
             const content = readFileSync(join(this.projectRoot, file), 'utf8');
             
             for (const fnName of scopeFunctions) {
-              // Ultra-simple detection: if file contains both function name and emitJitterbugEvent
-              if (content.includes(fnName) && content.includes('emitJitterbugEvent')) {
+              // Enhanced detection: function name + (emitJitterbugEvent OR withTiming)
+              const hasInstrumentation = content.includes('emitJitterbugEvent') || content.includes('withTiming');
+              if (content.includes(fnName) && hasInstrumentation) {
                 const functionDefRegex = new RegExp(`(async\\s+)?${fnName}\\s*\\(`);
                 if (functionDefRegex.test(content)) {
                   if (!instrumentedFunctions.includes(fnName)) {
