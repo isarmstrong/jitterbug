@@ -756,4 +756,46 @@ describe('SSETransport Integration', () => {
       expect(() => transport.send?.('error', 'error message', { extra: 'data' })).not.toThrow();
     });
   });
+
+  describe('P4 Live Filter Updates', () => {
+    it('should provide setFilters and getCurrentFilters methods', () => {
+      transport = debug.sse.connect();
+      
+      expect(typeof transport.setFilters).toBe('function');
+      expect(typeof transport.getCurrentFilters).toBe('function');
+    });
+
+    it('should update filters without throwing', () => {
+      transport = debug.sse.connect();
+      
+      expect(() => transport.setFilters?.({ branches: ['core'] })).not.toThrow();
+      expect(() => transport.setFilters?.({ levels: ['error', 'warn'] })).not.toThrow();
+      expect(() => transport.setFilters?.({ branches: ['ui'], levels: ['info'] })).not.toThrow();
+    });
+
+    it('should handle filter updates when not running', () => {
+      transport = debug.sse.connect({ autoStart: false });
+      
+      // Should not throw when transport is stopped
+      expect(() => transport.setFilters?.({ branches: ['core'] })).not.toThrow();
+    });
+
+    it('should return current filters', () => {
+      transport = debug.sse.connect();
+      
+      const filters = transport.getCurrentFilters?.();
+      expect(filters).toBeDefined();
+      expect(typeof filters).toBe('object');
+    });
+
+    it('should skip unchanged filter updates', () => {
+      transport = debug.sse.connect();
+      
+      // Set initial filters
+      transport.setFilters?.({ branches: ['core'] });
+      
+      // Setting same filters should not cause issues
+      expect(() => transport.setFilters?.({ branches: ['core'] })).not.toThrow();
+    });
+  });
 });

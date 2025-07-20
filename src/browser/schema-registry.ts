@@ -36,6 +36,18 @@ function validateOptionalString(value: unknown, field: string): string | undefin
   return validateString(value, field);
 }
 
+function validateStringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value)) {
+    throw new TypeError(`${field} must be an array`);
+  }
+  return value.map((item, index) => {
+    if (typeof item !== 'string') {
+      throw new TypeError(`${field}[${index}] must be a string`);
+    }
+    return item;
+  });
+}
+
 // Payload type definitions
 export interface StepStartedPayload {
   stepId: string;
@@ -1039,6 +1051,25 @@ export const eventSchemas = {
     },
     level: 'warn' as const,
     description: 'SSE ingestion request failed'
+  },
+
+  'orchestrator.sse.filters.updated': {
+    validate: (payload: unknown): { filters: { branches?: string[]; levels?: string[] }; timestamp: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      const filters = p.filters as Record<string, unknown>;
+      return {
+        filters: {
+          branches: filters?.branches ? validateStringArray(filters.branches, 'filters.branches') : undefined,
+          levels: filters?.levels ? validateStringArray(filters.levels, 'filters.levels') : undefined
+        },
+        timestamp: validateNumber(p.timestamp, 'timestamp')
+      };
+    },
+    level: 'debug' as const,
+    description: 'SSE filter configuration updated on client'
   }
 } as const;
 

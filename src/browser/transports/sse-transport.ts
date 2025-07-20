@@ -26,6 +26,21 @@ interface ClientLogEnvelope {
   seq?: number;       // per-connection sequence
 }
 
+// P4: Filter specification for live updates
+interface FilterSpec {
+  branches?: string[];
+  levels?: string[];
+}
+
+// P4: Control message envelope for filter updates
+interface ControlMessageEnvelope {
+  __ctrl: true;       // marker for control messages
+  type: 'SET_FILTERS';
+  filters: FilterSpec;
+  ts: number;         // timestamp
+  id?: string;        // message ID for tracking
+}
+
 
 interface SSETransportOptions {
   enabled?: boolean;
@@ -69,6 +84,8 @@ type SSETransportController = {
   getOptions(): Readonly<Required<SSETransportOptions>>;
   updateOptions(options: Partial<SSETransportOptions>): void;
   send?(level: string, message: string, data?: unknown): void; // P2: client ingestion
+  setFilters?(filters: Partial<FilterSpec>): void; // P4: live filter updates
+  getCurrentFilters?(): Readonly<FilterSpec>; // P4: read current filters
 };
 
 const DEFAULT_OPTIONS: Required<SSETransportOptions> = {
@@ -91,7 +108,7 @@ class SSETransport {
   private running = false;
   
   // P2: Outbound buffer for client ingestion
-  private outboundBuffer: ClientLogEnvelope[] = [];
+  private outboundBuffer: (ClientLogEnvelope | ControlMessageEnvelope)[] = [];
   private outboundSeq = 0;
   private flushTimer?: NodeJS.Timeout;
   private readonly MAX_BUFFER_SIZE = 200;
@@ -99,6 +116,10 @@ class SSETransport {
   private readonly FLUSH_SIZE_THRESHOLD = 5;
   private droppedOutbound = 0;
   private pageHideListener?: () => void;
+  
+  // P4: Live filter state
+  private currentFilters: FilterSpec = {};
+  private filterChangeListeners: ((filters: Readonly<FilterSpec>) => void)[] = [];
 
   constructor(private options: Required<SSETransportOptions>) {}
 
@@ -289,6 +310,80 @@ class SSETransport {
     }
   }
 
+  // P4: Live filter updates - set new filters without reconnecting
+  setFilters(partialFilters: Partial<FilterSpec>): void {
+    const nextFilters: FilterSpec = { ...this.currentFilters, ...partialFilters };
+    
+    // Early exit if nothing changed
+    if (JSON.stringify(nextFilters) === JSON.stringify(this.currentFilters)) {
+      return;
+    }
+
+    // Update local state immediately
+    this.currentFilters = nextFilters;
+
+    if (!this.running) {
+      return; // Silently ignore if transport not running
+    }
+
+    // Queue control message to server
+    const controlMessage: ControlMessageEnvelope = {
+      __ctrl: true,
+      type: 'SET_FILTERS',
+      filters: nextFilters,
+      ts: Date.now(),
+      id: crypto.randomUUID()
+    };
+
+    // Add to outbound buffer (prioritize control messages)
+    if (this.outboundBuffer.length >= this.MAX_BUFFER_SIZE) {
+      // Drop oldest non-control entries first
+      const firstNonControlIdx = this.outboundBuffer.findIndex(entry => !('__ctrl' in entry));
+      if (firstNonControlIdx !== -1) {
+        this.outboundBuffer.splice(firstNonControlIdx, 1);
+        this.droppedOutbound++;
+      } else {
+        // All entries are control messages, drop oldest
+        this.outboundBuffer.shift();
+      }
+    }
+
+    this.outboundBuffer.push(controlMessage);
+
+    // Trigger immediate flush for control messages
+    this.flushOutbound();
+
+    // Notify listeners of filter change
+    this.filterChangeListeners.forEach(listener => {
+      try {
+        listener(this.currentFilters);
+      } catch (error) {
+        console.warn('Filter change listener error:', error);
+      }
+    });
+
+    // Emit telemetry
+    safeEmit('orchestrator.sse.filters.updated', {
+      filters: nextFilters,
+      timestamp: Date.now()
+    }, { level: 'debug' });
+  }
+
+  // P4: Get current filter state (read-only)
+  getCurrentFilters(): Readonly<FilterSpec> {
+    return { ...this.currentFilters };
+  }
+
+  // P4: Subscribe to filter changes
+  onFiltersChanged(callback: (filters: Readonly<FilterSpec>) => void): () => void {
+    this.filterChangeListeners.push(callback);
+    return () => {
+      const index = this.filterChangeListeners.indexOf(callback);
+      if (index !== -1) {
+        this.filterChangeListeners.splice(index, 1);
+      }
+    };
+  }
 
   // P2: Set up beacon fallback for page hide events
   private setupBeaconFallback(): void {
@@ -432,7 +527,9 @@ function connectSSE(
     getDiagnostics: () => activeTransport!.getDiagnostics(),
     getOptions: () => activeTransport!.getOptions(),
     updateOptions: (opts: Partial<SSETransportOptions>) => activeTransport!.updateOptions(opts),
-    send: (level: string, message: string, data?: unknown) => activeTransport!.send(level, message, data)
+    send: (level: string, message: string, data?: unknown) => activeTransport!.send(level, message, data),
+    setFilters: (filters: Partial<FilterSpec>) => activeTransport!.setFilters(filters),
+    getCurrentFilters: () => activeTransport!.getCurrentFilters()
   };
 }
 
