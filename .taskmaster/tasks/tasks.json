@@ -130,8 +130,8 @@
               "3.2",
               "3.3"
             ],
-            "details": "Implement jitterbug.saveConfig() to serialize current debugging state including enabled branches, log levels, and custom settings to localStorage with proper error handling for quota exceeded scenarios. Create jitterbug.loadConfig() to restore saved configuration with validation and migration support for older config versions. Build jitterbug.resetConfig() to clear saved settings and restore defaults. Implement automatic config loading during initialization to restore user preferences across page reloads. Add config versioning to handle schema changes gracefully. Include methods like exportConfig() and importConfig(data) for sharing configurations.",
-            "status": "in-progress",
+            "details": "Implement jitterbug.saveConfig() to serialize current debugging state including enabled branches, log levels, and custom settings to localStorage with proper error handling for quota exceeded scenarios. Create jitterbug.loadConfig() to restore saved configuration with validation and migration support for older config versions. Build jitterbug.resetConfig() to clear saved settings and restore defaults. Implement automatic config loading during initialization to restore user preferences across page reloads. Add config versioning to handle schema changes gracefully. Include methods like exportConfig() and importConfig(data) for sharing configurations.\n<info added on 2025-07-20T07:40:37.285Z>\nTop-level configuration methods added to window.jitterbug interface: saveConfig(), loadConfig(), and resetConfig() implemented as delegation wrappers around existing configPersistence module. Updated help system documentation to mark configuration persistence features as implemented rather than \"Future\" functionality.\n</info added on 2025-07-20T07:40:37.285Z>",
+            "status": "done",
             "testStrategy": "Test saveConfig stores complete state in localStorage with correct serialization. Verify loadConfig restores all settings including branch states and log levels. Test automatic restoration on page reload maintains user preferences. Validate config migration handles version differences correctly."
           },
           {
@@ -237,7 +237,7 @@
     ],
     "metadata": {
       "created": "2025-07-19T22:50:56.179Z",
-      "updated": "2025-07-20T07:19:14.847Z",
+      "updated": "2025-07-20T07:42:34.762Z",
       "description": "Clean rewrite of Jitterbug with orchestrator pattern"
     }
   }

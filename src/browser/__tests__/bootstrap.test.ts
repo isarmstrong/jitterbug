@@ -185,4 +185,40 @@ describe('Jitterbug Bootstrap', () => {
     const limitedEvents = api.getEvents({ limit: 2 });
     expect(limitedEvents.length).toBe(2);
   });
+
+  it('should provide configuration persistence methods (Task 3.4)', () => {
+    initializeJitterbug(mockWindow);
+    const api: JitterbugGlobal = mockWindow.jitterbug;
+    
+    // Check that config methods exist
+    expect(typeof api.saveConfig).toBe('function');
+    expect(typeof api.loadConfig).toBe('function');
+    expect(typeof api.resetConfig).toBe('function');
+    
+    // Test help topics are available
+    const saveHelp = api.help('saveConfig');
+    expect(saveHelp).toContain('Save current configuration');
+    expect(saveHelp).toContain('saveConfig()');
+    
+    const loadHelp = api.help('loadConfig');
+    expect(loadHelp).toContain('Load configuration');
+    expect(loadHelp).toContain('loadConfig()');
+    
+    const resetHelp = api.help('resetConfig');
+    expect(resetHelp).toContain('Reset configuration');
+    expect(resetHelp).toContain('resetConfig()');
+    
+    // Test that methods return expected structure
+    const loadResult = api.loadConfig();
+    expect(loadResult).toHaveProperty('status');
+    expect(loadResult).toHaveProperty('config');
+    
+    const resetResult = api.resetConfig();
+    expect(resetResult).toHaveProperty('status');
+    expect(resetResult).toHaveProperty('config');
+    
+    // Test that saveConfig returns a Promise
+    const saveResult = api.saveConfig();
+    expect(saveResult).toBeInstanceOf(Promise);
+  });
 });

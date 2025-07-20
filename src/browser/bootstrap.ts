@@ -195,6 +195,31 @@ const HELP_REGISTRY: HelpEntry[] = [
     category: 'debug',
     example: 'jitterbug.debug.setLevel(jitterbug.debug.levels.DEBUG)'
   },
+  // Configuration persistence help entries (Task 3.4)
+  {
+    name: 'saveConfig',
+    summary: 'Save current configuration to localStorage',
+    signature: 'saveConfig(): Promise<{ ok: boolean; bytes?: number; error?: string; skipped?: boolean; }>',
+    since: '0.2',
+    category: 'config',
+    example: 'jitterbug.saveConfig().then(result => console.log(result))'
+  },
+  {
+    name: 'loadConfig',
+    summary: 'Load configuration from localStorage',
+    signature: 'loadConfig(): { status: string; config: object; errors?: string[]; }',
+    since: '0.2',
+    category: 'config',
+    example: 'const config = jitterbug.loadConfig()'
+  },
+  {
+    name: 'resetConfig',
+    summary: 'Reset configuration to defaults and clear localStorage',
+    signature: 'resetConfig(): { status: string; config: object; }',
+    since: '0.2',
+    category: 'config',
+    example: 'jitterbug.resetConfig()'
+  },
   // Log Inspector help entries (Task 3.5 Phase 1)
   {
     name: 'logInspector',
@@ -384,8 +409,9 @@ export function initializeJitterbug(global: Window = window): void {
         '  Debug: debug.enable(), debug.disable(), debug.isEnabled(), debug.setLevel(n), debug.getLevel(), debug.levels',
         '  Logs: logInspector.query() - experimental log inspection',
         '  System: ready(), diagnostics(), help(topic)',
-        'Future: saveConfig(), exportLogs()',
-        'Use help("logInspector") for details.'
+        '  Config: saveConfig(), loadConfig(), resetConfig() - localStorage persistence',
+        'Future: exportLogs()',
+        'Use help("saveConfig") or help("logInspector") for details.'
       ].join('\n');
     }
 
@@ -451,6 +477,19 @@ export function initializeJitterbug(global: Window = window): void {
     return experimentalBranches.delete(name);
   }
 
+  // Configuration persistence methods (Task 3.4)
+  function saveConfig(): Promise<{ ok: boolean; bytes?: number; error?: string; skipped?: boolean; }> {
+    return configPersistence.save();
+  }
+
+  function loadConfig() {
+    return configPersistence.load();
+  }
+
+  function resetConfig() {
+    return configPersistence.reset();
+  }
+
   // Early error capture setup
   const origOnError = global.onerror;
   global.onerror = function(msg: any, url?: any, line?: any, col?: any, err?: any) {
@@ -512,6 +551,10 @@ export function initializeJitterbug(global: Window = window): void {
     enableBranch,
     disableBranch,
     deleteBranch,
+    // Configuration persistence methods (Task 3.4) @experimental
+    saveConfig,
+    loadConfig,
+    resetConfig,
     // Debug control methods (Task 3.3) @experimental
     debug: {
       ...experimentalDebug
