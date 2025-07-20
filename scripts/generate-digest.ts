@@ -168,7 +168,6 @@ class DigestGenerator {
   }
 
   private async getExportChanges(): Promise<{ added: string[]; removed: string[]; modified: string[] }> {
-    // Simplified implementation - could be enhanced with TypeScript AST parsing
     try {
       const changedFiles = execSync(`git diff --name-only ${this.since}..HEAD -- "*.ts" "*.tsx"`, {
         cwd: this.projectRoot,
@@ -180,22 +179,34 @@ class DigestGenerator {
       const modified: string[] = [];
 
       for (const file of changedFiles) {
-        const diff = execSync(`git diff ${this.since}..HEAD -- "${file}"`, {
-          cwd: this.projectRoot,
-          encoding: 'utf8',
-        });
-
-        // Simple regex to find export changes
-        const exportRegex = /^[+-]\s*export\s+.*$/gm;
-        const matches = diff.match(exportRegex) || [];
-
-        for (const match of matches) {
-          const exportName = this.extractExportName(match);
-          if (match.startsWith('+')) {
-            added.push(`${file}:${exportName}`);
-          } else if (match.startsWith('-')) {
-            removed.push(`${file}:${exportName}`);
+        try {
+          // Get current file exports
+          const currentExports = this.extractFileExports(file, 'HEAD');
+          // Get previous file exports
+          const previousExports = this.extractFileExports(file, this.since);
+          
+          // Compare export sets
+          const currentSet = new Set(currentExports);
+          const previousSet = new Set(previousExports);
+          
+          // Find added exports
+          for (const exp of currentExports) {
+            if (!previousSet.has(exp)) {
+              added.push(`${file}:${exp}`);
+            }
           }
+          
+          // Find removed exports
+          for (const exp of previousExports) {
+            if (!currentSet.has(exp)) {
+              removed.push(`${file}:${exp}`);
+            }
+          }
+        } catch (error) {
+          // Fallback to git diff method for this file
+          const fallbackResult = this.getExportChangesFromDiff(file);
+          added.push(...fallbackResult.added.map(exp => `${file}:${exp}`));
+          removed.push(...fallbackResult.removed.map(exp => `${file}:${exp}`));
         }
       }
 
@@ -205,11 +216,111 @@ class DigestGenerator {
     }
   }
 
+  private extractFileExports(file: string, ref: string): string[] {
+    try {
+      const content = execSync(`git show ${ref}:${file}`, {
+        cwd: this.projectRoot,
+        encoding: 'utf8',
+      });
+      
+      return this.parseExportsFromContent(content);
+    } catch {
+      return [];
+    }
+  }
+
+  private parseExportsFromContent(content: string): string[] {
+    const exports: string[] = [];
+    const lines = content.split('\n');
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('export')) continue;
+      
+      // Extract export names using improved patterns
+      const patterns = [
+        /^export\s+(?:const|let|var)\s+(\w+)/,              // export const name
+        /^export\s+(?:function|class)\s+(\w+)/,            // export function/class name  
+        /^export\s+(?:interface|type)\s+(\w+)/,            // export interface/type name
+        /^export\s+\{\s*([^}]+)\s*\}/,                     // export { name1, name2 }
+        /^export\s+default\s+(?:class|function)?\s*(\w+)?/, // export default
+        /^export\s+\*\s+from/,                             // export * from
+      ];
+      
+      for (const pattern of patterns) {
+        const match = trimmed.match(pattern);
+        if (match) {
+          if (pattern === patterns[3]) { // export { ... }
+            const names = match[1].split(',').map(n => n.trim().split(/\s+as\s+/)[0].trim());
+            exports.push(...names);
+          } else if (pattern === patterns[4]) { // export default
+            exports.push(match[1] || 'default');
+          } else if (pattern === patterns[5]) { // export * from
+            exports.push('star-export');
+          } else if (match[1]) {
+            exports.push(match[1]);
+          }
+          break;
+        }
+      }
+    }
+    
+    return exports.filter(Boolean);
+  }
+
+  private getExportChangesFromDiff(file: string): { added: string[]; removed: string[] } {
+    try {
+      const diff = execSync(`git diff ${this.since}..HEAD -- "${file}"`, {
+        cwd: this.projectRoot,
+        encoding: 'utf8',
+      });
+
+      const added: string[] = [];
+      const removed: string[] = [];
+      const exportRegex = /^[+-]\s*export\s+.*$/gm;
+      const matches = diff.match(exportRegex) || [];
+
+      for (const match of matches) {
+        const exportName = this.extractExportName(match);
+        if (match.startsWith('+')) {
+          added.push(exportName);
+        } else if (match.startsWith('-')) {
+          removed.push(exportName);
+        }
+      }
+
+      return { added, removed };
+    } catch {
+      return { added: [], removed: [] };
+    }
+  }
+
   private extractExportName(line: string): string {
-    // Extract export name from git diff line
+    // Extract export name from git diff line with better pattern matching
     const cleaned = line.replace(/^[+-]\s*/, '');
-    const match = cleaned.match(/export\s+(?:const|function|class|interface|type)\s+(\w+)/);
-    return match ? match[1] : 'unknown';
+    
+    // Match various export patterns
+    const patterns = [
+      /export\s+(?:const|let|var)\s+(\w+)/,           // export const name
+      /export\s+(?:function|class)\s+(\w+)/,         // export function/class name
+      /export\s+(?:interface|type)\s+(\w+)/,         // export interface/type name
+      /export\s+\{[^}]*(\w+)(?:\s+as\s+\w+)?[^}]*\}/, // export { name }
+      /export\s+\*\s+from/,                          // export * from
+      /export\s+default/,                            // export default
+    ];
+    
+    for (const pattern of patterns) {
+      const match = cleaned.match(pattern);
+      if (match) {
+        if (pattern === patterns[4]) return 'star-export';
+        if (pattern === patterns[5]) return 'default';
+        return match[1] || 'complex-export';
+      }
+    }
+    
+    // Fallback: try to extract any identifier after 'export'
+    const fallbackMatch = cleaned.match(/export.*?(\w+)/);
+    return fallbackMatch ? fallbackMatch[1] : 'unmatched-export';
   }
 
   private async getDependencyInfo(): Promise<{ cycles: string[]; graphHash: string }> {
@@ -343,11 +454,16 @@ class DigestGenerator {
     
     digest += '\n';
 
-    // Risk Flags
+    // Risk Flags with proper heuristics
     digest += `## Risk Flags\n`;
-    const hasRisks = metrics.dependencies.cycles.length > 0 || 
-                    metrics.diagnostics.tsErrors > 0 || 
-                    metrics.files.changed > 10;
+    const hasArchitecturalRisks = metrics.dependencies.cycles.length > 0 || 
+                                 metrics.diagnostics.tsErrors > 0;
+    const hasScaleRisks = metrics.files.changed > 10 ||
+                         Math.abs(metrics.lines.net) > 500 ||
+                         metrics.exports.added.length > 10;
+    const hasGovernanceRisks = metrics.exports.added.length > 5 && metrics.files.changed < 3; // Surface inflation
+    
+    const hasRisks = hasArchitecturalRisks || hasScaleRisks || hasGovernanceRisks;
     
     if (!hasRisks) {
       digest += `✅ No significant risks detected\n\n`;
@@ -367,13 +483,57 @@ class DigestGenerator {
         digest += `- **⚠️ Large changeset:** ${metrics.files.changed} files modified\n`;
       }
       
+      if (Math.abs(metrics.lines.net) > 500) {
+        digest += `- **⚠️ High LOC delta:** ${metrics.lines.net >= 0 ? '+' : ''}${metrics.lines.net} lines (foundation/refactor?)\n`;
+      }
+      
+      if (metrics.exports.added.length > 10) {
+        digest += `- **⚠️ API surface inflation:** +${metrics.exports.added.length} exports in single commit\n`;
+      }
+      
+      if (hasGovernanceRisks) {
+        digest += `- **⚠️ Concentrated export growth:** ${metrics.exports.added.length} exports across ${metrics.files.changed} files\n`;
+      }
+      
       digest += '\n';
     }
 
-    // Export Changes
+    // API Surface Drift Table
     if (metrics.exports.added.length > 0 || metrics.exports.removed.length > 0) {
-      digest += `## Export Changes\n`;
+      digest += `## API Surface Drift\n`;
       
+      // Summary counts
+      digest += `**Impact:** +${metrics.exports.added.length} / -${metrics.exports.removed.length} exports\n\n`;
+      
+      // Detailed drift table
+      if (metrics.exports.added.length > 0 || metrics.exports.removed.length > 0) {
+        digest += `| Symbol | Status | File | Change Type |\n`;
+        digest += `|--------|--------|------|-------------|\n`;
+        
+        // Show removed exports first (breaking changes)
+        metrics.exports.removed.slice(0, 5).forEach(exp => {
+          const [file, name] = exp.split(':');
+          digest += `| \`${name}\` | removed | ${file} | Breaking |\n`;
+        });
+        
+        // Show added exports
+        metrics.exports.added.slice(0, 10).forEach(exp => {
+          const [file, name] = exp.split(':');
+          digest += `| \`${name}\` | added | ${file} | Additive |\n`;
+        });
+        
+        const totalShown = Math.min(5, metrics.exports.removed.length) + Math.min(10, metrics.exports.added.length);
+        const totalChanges = metrics.exports.added.length + metrics.exports.removed.length;
+        
+        if (totalChanges > totalShown) {
+          digest += `| ... | ... | ... | +${totalChanges - totalShown} more changes |\n`;
+        }
+        
+        digest += '\n';
+      }
+      
+      // Legacy format for compatibility
+      digest += `## Export Changes\n`;
       if (metrics.exports.added.length > 0) {
         digest += `**Added (${metrics.exports.added.length}):**\n`;
         metrics.exports.added.slice(0, 5).forEach(exp => {
