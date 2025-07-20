@@ -102,9 +102,9 @@ export interface JitterbugGlobal {
   };
 
   /** Configuration persistence methods @experimental */
-  saveConfig(): Promise<{ ok: boolean; bytes?: number; error?: string; skipped?: boolean; }>;
-  loadConfig(): { status: string; config: object; errors?: string[]; };
-  resetConfig(): { status: string; config: object; };
+  saveConfig(): Promise<import('./public-types.js').ConfigSaveResult>;
+  loadConfig(): import('./public-types.js').ConfigLoadResult;
+  resetConfig(): import('./public-types.js').ConfigLoadResult;
 
   /** Symbol: internal (not enumerable) to guard private state (optional). */
   [INTERNAL]?: never;

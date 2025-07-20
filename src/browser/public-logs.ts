@@ -6,11 +6,20 @@
  */
 
 import { queryLogs } from './logs/internal/attach.js';
+import type { LogInspectorCapabilities } from './public-types.js';
 
 const coerceLimit = (n?: number): number | undefined =>
   !n ? undefined : Math.min(Math.max(n, 1), 5000);
 
+/**
+ * @experimental Log inspection query interface
+ * Subject to API changes during Task 3.5 development
+ */
 export const logInspector = {
+  /** 
+   * Query logs with optional filtering and pagination
+   * @experimental 
+   */
   query(opts: { sinceSeq?: number; limit?: number; level?: string; branch?: string } = {}) {
     const { sinceSeq, limit, branch, level } = opts;
     const raw = queryLogs(sinceSeq);
@@ -45,6 +54,20 @@ export const logInspector = {
         lastSeq: raw.stats.lastSeq
       },
       nextSeq: raw.nextSeq
+    };
+  },
+
+  /**
+   * Get current log inspector capabilities
+   * @experimental Forward-compatibility discovery
+   */
+  capabilities(): LogInspectorCapabilities {
+    const raw = queryLogs();
+    return {
+      filters: ['branch', 'level', 'time', 'type'],
+      exports: ['json', 'ndjson'], // Future Phase 3
+      maxLimit: 5000,
+      bufferCapacity: raw.stats.capacity
     };
   }
 };

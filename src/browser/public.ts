@@ -17,13 +17,21 @@ export { ensureJitterbugReady, emitJitterbugEvent } from './utils.js';
 /** @experimental Configuration persistence API - subject to schema changes */
 export { configPersistence } from './config-persistence.js';
 
-// Experimental emission utilities
+// Experimental emission utilities  
 /** @experimental Low-level emission utility - prefer using jitterbug.emit() */
 export { safeEmit as experimentalSafeEmit } from './schema-registry.js';
 
-// Task 3.5 - Log Inspection Phase 1 (@experimental)
+// Task 3.5 - Log Inspection Phase 1
 /** @experimental Log inspection query interface - subject to API changes */
 export { logInspector } from './public-logs.js';
+
+// Public type facades (surface control)
+export type {
+  DebugConfigPublic,
+  ConfigLoadResult, 
+  ConfigSaveResult,
+  LogInspectorCapabilities
+} from './public-types.js';
 
 // Essential type definitions for TypeScript consumers
 export type {

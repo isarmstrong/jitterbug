@@ -251,6 +251,27 @@ describe('Log Inspector (Phase 1)', () => {
     });
   });
 
+  describe('Capabilities Discovery (Micro-Hardening)', () => {
+    it('should provide capabilities discovery interface', () => {
+      const capabilities = logInspector.capabilities();
+      
+      expect(capabilities).toHaveProperty('filters');
+      expect(capabilities).toHaveProperty('exports');
+      expect(capabilities).toHaveProperty('maxLimit');
+      expect(capabilities).toHaveProperty('bufferCapacity');
+      
+      expect(Array.isArray(capabilities.filters)).toBe(true);
+      expect(capabilities.filters).toContain('branch');
+      expect(capabilities.filters).toContain('level');
+      
+      expect(typeof capabilities.maxLimit).toBe('number');
+      expect(capabilities.maxLimit).toBeGreaterThan(0);
+      
+      expect(typeof capabilities.bufferCapacity).toBe('number');
+      expect(capabilities.bufferCapacity).toBeGreaterThan(0);
+    });
+  });
+
   describe('Event Capture Integration', () => {
     it.skip('should capture events via safeEmit', () => {
       const before = logInspector.query();
