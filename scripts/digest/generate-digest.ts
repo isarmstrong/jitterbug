@@ -669,6 +669,42 @@ class DigestGenerator {
     }
     digest += '\n';
 
+    // Event Schema Completeness Matrix
+    digest += `## Event Schema Completeness\n`;
+    const schemaMatrix = this.getSchemaCompletenessMatrix();
+    digest += `| Event | Required Fields Present? | Missing |\n`;
+    digest += `|-------|--------------------------|---------||\n`;
+    
+    for (const [event, isComplete] of Object.entries(schemaMatrix)) {
+      const status_icon = isComplete ? '✅' : '⚠️';
+      const missing = isComplete ? '—' : 'Schema validation needed';
+      digest += `| \`${event}\` | ${status_icon} | ${missing} |\n`;
+    }
+    
+    const totalEvents = Object.keys(schemaMatrix).length;
+    const completeEvents = Object.values(schemaMatrix).filter(s => s === true).length;
+    const completionPercentage = totalEvents > 0 ? Math.round((completeEvents / totalEvents) * 100) : 0;
+    
+    digest += `\n**Schema Completeness:** ${completeEvents}/${totalEvents} (${completionPercentage}%)\n\n`;
+
+    // Coverage Non-Regression Check
+    const previousCoverage = this.getPreviousCoverage();
+    if (previousCoverage) {
+      const runtimeRegression = metrics.events.scopes['runtime-core'].coverage < previousCoverage.runtimeCore;
+      const lifecycleRegression = metrics.events.scopes['debugger-lifecycle'].coverage < previousCoverage.debuggerLifecycle;
+      
+      if (runtimeRegression || lifecycleRegression) {
+        digest += `## ⚠️ Coverage Regression Detected\n`;
+        if (runtimeRegression) {
+          digest += `- **Runtime-core:** ${Math.round(previousCoverage.runtimeCore * 100)}% → ${Math.round(metrics.events.scopes['runtime-core'].coverage * 100)}%\n`;
+        }
+        if (lifecycleRegression) {
+          digest += `- **Debugger-lifecycle:** ${Math.round(previousCoverage.debuggerLifecycle * 100)}% → ${Math.round(metrics.events.scopes['debugger-lifecycle'].coverage * 100)}%\n`;
+        }
+        digest += `\n`;
+      }
+    }
+
 
     // Graph Delta
     digest += `## Graph Delta\n`;
@@ -1065,6 +1101,100 @@ class DigestGenerator {
       };
     }
   }
+
+  /**
+   * Get schema completeness matrix for event coverage validation
+   */
+  private getSchemaCompletenessMatrix(): { [eventType: string]: boolean } {
+    const matrix: { [eventType: string]: boolean } = {};
+    
+    try {
+      // Read schema registry to get expected event types
+      const registryPath = join(this.projectRoot, 'src/browser/schema-registry.ts');
+      const registryContent = readFileSync(registryPath, 'utf8');
+      
+      // Extract event type keys from the registry
+      const eventTypeRegex = /'([^']+)':\s*{/g;
+      let match;
+      while ((match = eventTypeRegex.exec(registryContent)) !== null) {
+        const eventType = match[1];
+        
+        // Check if this event type is actually used in instrumentation
+        try {
+          const usagePattern = new RegExp(`emitJitterbugEvent\\s*\\(\\s*['"\`]${eventType}['"\`]`, 'g');
+          const srcFiles = execSync(
+            `find ${this.projectRoot}/src -name "*.ts" -not -path "*/test/*" -not -path "*/*.test.ts"`,
+            { cwd: this.projectRoot, encoding: 'utf8' }
+          ).trim().split('\n');
+          
+          let isUsed = false;
+          for (const file of srcFiles) {
+            const content = readFileSync(file, 'utf8');
+            if (usagePattern.test(content)) {
+              isUsed = true;
+              break;
+            }
+          }
+          
+          matrix[eventType] = isUsed;
+        } catch {
+          matrix[eventType] = false;
+        }
+      }
+    } catch {
+      // Fallback - minimal expected events
+      const expectedEvents = [
+        'orchestrator.core.initialization.started',
+        'orchestrator.core.initialization.completed',
+        'orchestrator.plan.build.started',
+        'orchestrator.plan.build.completed',
+        'orchestrator.step.dispatch.started',
+        'orchestrator.step.dispatch.completed'
+      ];
+      
+      expectedEvents.forEach(event => {
+        matrix[event] = false; // Conservative default
+      });
+    }
+    
+    return matrix;
+  }
+
+  /**
+   * Get previous coverage data for non-regression checking
+   */
+  private getPreviousCoverage(): { [scope: string]: number } {
+    try {
+      // Look for the most recent digest file
+      const digestDir = join(this.projectRoot, 'scripts/digest/reports');
+      const digestFiles = execSync(`find ${digestDir} -name "digest-*.md" | head -5`, { 
+        cwd: this.projectRoot, 
+        encoding: 'utf8' 
+      }).trim().split('\n').filter(Boolean);
+      
+      if (digestFiles.length === 0) {
+        return { 'runtime-core': 0, 'debugger-lifecycle': 0 };
+      }
+      
+      // Read the most recent digest file
+      const latestDigest = readFileSync(digestFiles[0], 'utf8');
+      
+      // Extract coverage percentages
+      const coveragePattern = /\| ([^|]+) \| \d+ \/ \d+ \| (\d+)% /g;
+      const coverage: { [scope: string]: number } = {};
+      
+      let match;
+      while ((match = coveragePattern.exec(latestDigest)) !== null) {
+        const scope = match[1].trim();
+        const percent = parseInt(match[2], 10);
+        coverage[scope] = percent;
+      }
+      
+      return coverage;
+    } catch {
+      return { 'runtime-core': 0, 'debugger-lifecycle': 0 };
+    }
+  }
 }
 
 // CLI Interface
@@ -1083,7 +1213,7 @@ async function main() {
     // Default to digest folder with git hash (no merge conflicts!)
     const gitInfo = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
     const shortHash = gitInfo.slice(0, 7);
-    const defaultOutput = customOutput || join(process.cwd(), 'scripts', 'digest', `digest-${shortHash}.md`);
+    const defaultOutput = customOutput || join(process.cwd(), 'scripts', 'digest', 'reports', `digest-${shortHash}.md`);
     
     writeFileSync(defaultOutput, digest);
     console.log(`✅ Digest written to ${defaultOutput}`);

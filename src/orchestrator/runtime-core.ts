@@ -5,11 +5,12 @@
 
 import { withTiming } from './instrumentation.js';
 
-// Branded types for type safety
-export type PlanHash = string & { readonly __brand: 'PlanHash' };
-export type StepId = string & { readonly __brand: 'StepId' };
+// Branded types for type safety (internal)
+type PlanHash = string & { readonly __brand: 'PlanHash' };
+type StepId = string & { readonly __brand: 'StepId' };
 
-export interface ExecutionPlan {
+// Internal interfaces for runtime execution
+interface ExecutionPlan {
   hash: PlanHash;
   steps: ExecutionStep[];
   metadata: {
@@ -19,7 +20,7 @@ export interface ExecutionPlan {
   };
 }
 
-export interface ExecutionStep {
+interface ExecutionStep {
   id: StepId;
   adapter: string;
   dependencies: StepId[];
@@ -27,7 +28,7 @@ export interface ExecutionStep {
   metadata: Record<string, unknown>;
 }
 
-export interface PlanExecutionResult {
+interface PlanExecutionResult {
   planHash: PlanHash;
   totalSteps: number;
   succeeded: number;
@@ -35,13 +36,28 @@ export interface PlanExecutionResult {
   results: Record<string, unknown>;
 }
 
-export interface StepExecutionResult {
+interface StepExecutionResult {
   stepId: StepId;
   adapter: string;
   attempt: number;
   success: boolean;
   result?: unknown;
   error?: Error;
+}
+
+// Read-only view types for stable public API
+export interface ExecutionPlanView {
+  readonly hash: string;
+  readonly stepCount: number;
+  readonly createdAt: number;
+  readonly inputHash?: string;
+}
+
+export interface ExecutionStepView {
+  readonly id: string;
+  readonly adapter: string;
+  readonly dependencyCount: number;
+  readonly retryCount: number;
 }
 
 /**

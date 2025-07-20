@@ -24,72 +24,60 @@ function classifyError(error: unknown): string {
 }
 
 /**
- * Timing wrapper for instrumented operations
+ * Unified timing wrapper for instrumented operations
+ * Handles both sync and async functions automatically
  * Emits started, completed/failed events with timing and error classification
  */
-export async function withTiming<T>(
+export function withTiming<T>(
   typeBase: string,
   context: Record<string, unknown>,
-  fn: () => Promise<T>
-): Promise<T> {
+  fn: () => T | Promise<T>
+): T extends Promise<infer U> ? Promise<U> : Promise<T> {
   // Emit started event
   emitJitterbugEvent(`${typeBase}.started`, context);
   
   const start = performance.now();
-  try {
-    const result = await fn();
-    
-    // Emit completed event with timing
-    emitJitterbugEvent(`${typeBase}.completed`, {
-      ...context,
-      elapsedMs: Math.round(performance.now() - start)
-    });
-    
-    return result;
-  } catch (err: unknown) {
-    // Emit failed event with timing and error classification
-    emitJitterbugEvent(`${typeBase}.failed`, {
-      ...context,
-      elapsedMs: Math.round(performance.now() - start),
-      errorCode: classifyError(err),
-      message: err instanceof Error ? err.message : String(err)
-    });
-    
-    throw err;
-  }
-}
-
-/**
- * Synchronous timing wrapper for non-async operations
- */
-export function withTimingSync<T>(
-  typeBase: string,
-  context: Record<string, unknown>,
-  fn: () => T
-): T {
-  // Emit started event
-  emitJitterbugEvent(`${typeBase}.started`, context);
   
-  const start = performance.now();
   try {
     const result = fn();
     
-    // Emit completed event with timing
-    emitJitterbugEvent(`${typeBase}.completed`, {
-      ...context,
-      elapsedMs: Math.round(performance.now() - start)
-    });
-    
-    return result;
+    // Handle both sync and async results
+    if (result instanceof Promise) {
+      return result
+        .then((value) => {
+          // Emit completed event with timing
+          emitJitterbugEvent(`${typeBase}.completed`, {
+            ...context,
+            elapsedMs: Math.round(performance.now() - start)
+          });
+          return value;
+        })
+        .catch((err: unknown) => {
+          // Emit failed event with timing and error classification
+          emitJitterbugEvent(`${typeBase}.failed`, {
+            ...context,
+            elapsedMs: Math.round(performance.now() - start),
+            errorCode: classifyError(err),
+            message: err instanceof Error ? err.message : String(err)
+          });
+          throw err;
+        }) as any;
+    } else {
+      // Synchronous path
+      emitJitterbugEvent(`${typeBase}.completed`, {
+        ...context,
+        elapsedMs: Math.round(performance.now() - start)
+      });
+      return Promise.resolve(result) as any;
+    }
   } catch (err: unknown) {
-    // Emit failed event with timing and error classification
+    // Synchronous error path
     emitJitterbugEvent(`${typeBase}.failed`, {
       ...context,
       elapsedMs: Math.round(performance.now() - start),
       errorCode: classifyError(err),
       message: err instanceof Error ? err.message : String(err)
     });
-    
     throw err;
   }
 }
