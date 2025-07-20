@@ -101,10 +101,10 @@ export interface JitterbugGlobal {
     };
   };
 
-  /** (Future) Config methods reserved; show stubs in help for discoverability. */
-  saveConfig?(): void;
-  loadConfig?(): void;
-  resetConfig?(): void;
+  /** Configuration persistence methods @experimental */
+  saveConfig(): Promise<{ ok: boolean; bytes?: number; error?: string; skipped?: boolean; }>;
+  loadConfig(): { status: string; config: object; errors?: string[]; };
+  resetConfig(): { status: string; config: object; };
 
   /** Symbol: internal (not enumerable) to guard private state (optional). */
   [INTERNAL]?: never;
