@@ -652,7 +652,7 @@ class DigestGenerator {
     digest += `- **TODOs:** ${metrics.diagnostics.todos} items\n\n`;
 
     // Locked Decisions (Governance)
-    digest += `## 🔒 Locked Decisions (v0.2)\n`;
+    digest += `## 🔒 Locked Decisions (v1.0)\n`;
     digest += `| Decision | Value | Notes |\n`;
     digest += `|----------|-------|---------|\n`;
     digest += `| Hash Algorithm | xxhash64 (plan + domain signatures) | Fast, low collision; upgrade path documented |\n`;
@@ -660,7 +660,8 @@ class DigestGenerator {
     digest += `| Event Namespace | \`orchestrator.<entity>.<verb>\` | Examples: \`orchestrator.step.started\` |\n`;
     digest += `| Error Base Class | \`BaseOrchestratorError\` | All internal throws extend this |\n`;
     digest += `| Cycle Policy | Fail CI on any new cycle | Introduced cycles require explicit waiver |\n`;
-    digest += `| Adapter Registry | Static map with capability metadata | Future DI layer wraps map, not replace |\n\n`;
+    digest += `| Adapter Registry | Static map with capability metadata | Future DI layer wraps map, not replace |\n`;
+    digest += `| Public API Drift Tracking | Deferred (manual review) | Enable when core module count > 15 |\n\n`;
 
     // Machine Data
     digest += `<details><summary>Machine Data</summary>\n\n`;
