@@ -304,9 +304,9 @@ describe('SSE Capabilities and Help', () => {
           branches: false,
           levels: false
         },
-        ingestion: false,
+        ingestion: true,  // P2 ✅ implemented
         resume: false,
-        batching: false,
+        batching: true,   // P2 ✅ implemented
         heartbeat: false,
         auth: false,
         version: 1,
@@ -319,6 +319,15 @@ describe('SSE Capabilities and Help', () => {
       const isSupported = debug.sse.isSupported();
       
       expect(caps.supported).toBe(isSupported);
+    });
+
+    it('should reflect P2 implementations', () => {
+      const caps = debug.sse.capabilities();
+      
+      expect(caps.ingestion).toBe(true); // P2 implemented
+      expect(caps.batching).toBe(true);  // P2 implemented
+      expect(caps.filters.branches).toBe(false); // P3 not yet
+      expect(caps.filters.levels).toBe(false);   // P3 not yet
     });
   });
 
@@ -471,6 +480,29 @@ describe('SSETransport Integration', () => {
       expect(diagnostics.transport.enabled).toBe(true);
       expect(diagnostics.endpoint).toBeUndefined();
       expect(diagnostics.hub).toBeUndefined();
+    });
+  });
+
+  describe('P2 Client Ingestion', () => {
+    it('should provide send method', () => {
+      transport = debug.sse.connect();
+      
+      expect(typeof transport.send).toBe('function');
+    });
+
+    it('should handle send when not running', () => {
+      transport = debug.sse.connect({ autoStart: false });
+      
+      // Should not throw when transport is stopped
+      expect(() => transport.send('info', 'test message')).not.toThrow();
+    });
+
+    it('should accept send parameters', () => {
+      transport = debug.sse.connect();
+      
+      // Test various send signatures
+      expect(() => transport.send('info', 'message')).not.toThrow();
+      expect(() => transport.send('error', 'error message', { extra: 'data' })).not.toThrow();
     });
   });
 });

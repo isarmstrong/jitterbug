@@ -1006,6 +1006,38 @@ export const eventSchemas = {
     },
     level: 'info' as const,
     description: 'SSE transport stopped'
+  },
+
+  // P2 SSE ingestion telemetry events
+  'orchestrator.sse.ingest.flush': {
+    validate: (payload: unknown): { count: number; dropped: number; latencyMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        count: validateNumber(p.count, 'count'),
+        dropped: validateNumber(p.dropped, 'dropped'),
+        latencyMs: validateNumber(p.latencyMs, 'latencyMs')
+      };
+    },
+    level: 'debug' as const,
+    description: 'SSE outbound buffer flushed to server'
+  },
+
+  'orchestrator.sse.ingest.error': {
+    validate: (payload: unknown): { reason: string; retryInMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        reason: validateString(p.reason, 'reason'),
+        retryInMs: validateNumber(p.retryInMs, 'retryInMs')
+      };
+    },
+    level: 'warn' as const,
+    description: 'SSE ingestion request failed'
   }
 } as const;
 

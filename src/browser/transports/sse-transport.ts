@@ -15,10 +15,29 @@ const registerLogTap = (_callback: (event: JitterbugEvent) => void) => {
   return () => {}; // Unsubscribe function
 };
 
+// P2: Client log envelope for ingestion
+interface ClientLogEnvelope {
+  t: number;          // timestamp
+  level: string;      // log level
+  branch?: string;    // branch identifier
+  msg: string;        // message
+  data?: any;         // payload data
+  id?: string;        // client-generated ID for dedupe
+  seq?: number;       // per-connection sequence
+}
+
 interface SSETransportOptions {
   enabled?: boolean;
   autoStart?: boolean;
   endpoint?: SSEEndpointConfig;
+  filters?: {
+    branches?: string[];
+    levels?: string[];
+  };
+  auth?: {
+    token?: string;
+    getToken?: () => Promise<string>;
+  };
 }
 
 type SSETransportController = {
@@ -29,6 +48,7 @@ type SSETransportController = {
   getDiagnostics(): any;
   getOptions(): Readonly<Required<SSETransportOptions>>;
   updateOptions(options: Partial<SSETransportOptions>): void;
+  send?(level: string, message: string, data?: any): void; // P2: client ingestion
 };
 
 const DEFAULT_OPTIONS: Required<SSETransportOptions> = {
@@ -39,13 +59,25 @@ const DEFAULT_OPTIONS: Required<SSETransportOptions> = {
     cors: true,
     heartbeatMs: 30000,
     clientTimeoutMs: 60000
-  }
+  },
+  filters: {},
+  auth: {}
 };
 
 class SSETransport {
   private endpoint: SSEEndpoint | null = null;
   private tapUnsubscribe: (() => void) | null = null;
   private running = false;
+  
+  // P2: Outbound buffer for client ingestion
+  private outboundBuffer: ClientLogEnvelope[] = [];
+  private outboundSeq = 0;
+  private flushTimer?: NodeJS.Timeout;
+  private readonly MAX_BUFFER_SIZE = 200;
+  private readonly FLUSH_TIME_MS = 500;
+  private readonly FLUSH_SIZE_THRESHOLD = 5;
+  private droppedOutbound = 0;
+  private pageHideListener?: () => void;
 
   constructor(private options: Required<SSETransportOptions>) {}
 
@@ -76,6 +108,9 @@ class SSETransport {
 
       this.running = true;
 
+      // P2: Set up beacon fallback on page hide
+      this.setupBeaconFallback();
+
       // Emit start event
       safeEmit('orchestrator.sse.transport.started', {
         path: this.options.endpoint.path ?? '/__jitterbug/sse',
@@ -98,6 +133,9 @@ class SSETransport {
     const uptime = diagnostics?.hub.uptime ?? 0;
     const clientsDisconnected = diagnostics?.hub.activeClients ?? 0;
 
+    // P2: Flush any remaining outbound entries before stopping
+    this.flushOutbound(true); // force flush
+
     this.cleanup();
     this.running = false;
 
@@ -117,6 +155,19 @@ class SSETransport {
     if (this.endpoint) {
       this.endpoint.shutdown();
       this.endpoint = null;
+    }
+
+    // P2: Clean up flush timer
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = undefined;
+    }
+
+    // P2: Clean up beacon fallback listener
+    if (this.pageHideListener) {
+      document.removeEventListener('visibilitychange', this.pageHideListener);
+      window.removeEventListener('beforeunload', this.pageHideListener);
+      this.pageHideListener = undefined;
     }
   }
 
@@ -181,6 +232,136 @@ class SSETransport {
       this.start();
     }
   }
+
+  // P2: Client ingestion - send log entry to server
+  send(level: string, message: string, data?: any): void {
+    if (!this.running) {
+      return; // Silently ignore if transport not running
+    }
+
+    const envelope: ClientLogEnvelope = {
+      t: Date.now(),
+      level,
+      msg: message,
+      data,
+      seq: ++this.outboundSeq,
+      id: crypto.randomUUID() // For dedupe
+    };
+
+    // Add to buffer
+    if (this.outboundBuffer.length >= this.MAX_BUFFER_SIZE) {
+      // Drop oldest entries (backpressure)
+      this.outboundBuffer.shift();
+      this.droppedOutbound++;
+    }
+
+    this.outboundBuffer.push(envelope);
+
+    // Check flush triggers
+    if (this.outboundBuffer.length >= this.FLUSH_SIZE_THRESHOLD) {
+      this.flushOutbound();
+    } else if (!this.flushTimer) {
+      // Arm timer if this is first entry
+      this.flushTimer = setTimeout(() => {
+        this.flushOutbound();
+      }, this.FLUSH_TIME_MS);
+    }
+  }
+
+
+  // P2: Set up beacon fallback for page hide events
+  private setupBeaconFallback(): void {
+    this.pageHideListener = () => {
+      if (this.outboundBuffer.length > 0) {
+        this.flushOutbound(true, true); // force flush with beacon
+      }
+    };
+
+    // Listen for page visibility changes and beforeunload
+    document.addEventListener('visibilitychange', this.pageHideListener);
+    window.addEventListener('beforeunload', this.pageHideListener);
+  }
+
+  // P2: Enhanced flush with optional beacon fallback
+  private flushOutbound(force = false, useBeacon = false): void {
+    if (this.outboundBuffer.length === 0 && !force) {
+      return;
+    }
+
+    const entries = [...this.outboundBuffer];
+    const dropped = this.droppedOutbound;
+    this.outboundBuffer.length = 0; // Clear buffer
+    this.droppedOutbound = 0;
+
+    // Clear timer
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = undefined;
+    }
+
+    if (entries.length === 0) {
+      return;
+    }
+
+    const startTime = Date.now();
+    const endpoint = this.options.endpoint.path || '/__jitterbug/sse';
+
+    // Prepare payload
+    const flushPayload = {
+      entries,
+      metadata: {
+        sessionId: `sse-${Date.now()}`, // TODO: Proper session ID
+        timestamp: startTime,
+        dropped
+      }
+    };
+
+    if (useBeacon && 'sendBeacon' in navigator) {
+      // Try beacon for page unload scenarios
+      const blob = new Blob([JSON.stringify(flushPayload)], { type: 'application/json' });
+      const success = navigator.sendBeacon(endpoint, blob);
+      
+      if (success) {
+        // Beacon telemetry (can't measure latency)
+        safeEmit('orchestrator.sse.ingest.flush', {
+          count: entries.length,
+          dropped,
+          latencyMs: 0 // Unknown for beacon
+        }, { level: 'debug' });
+      }
+      return; // Beacon is fire-and-forget
+    }
+
+    // Regular fetch fallback
+    fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.options.endpoint.cors ? { 'Origin': window.location.origin } : {})
+      },
+      body: JSON.stringify(flushPayload)
+    }).then(response => {
+      const latencyMs = Date.now() - startTime;
+      
+      if (response.ok) {
+        safeEmit('orchestrator.sse.ingest.flush', {
+          count: entries.length,
+          dropped,
+          latencyMs
+        }, { level: 'debug' });
+      } else {
+        safeEmit('orchestrator.sse.ingest.error', {
+          reason: `http_${response.status}`,
+          retryInMs: 0
+        }, { level: 'warn' });
+      }
+    }).catch(error => {
+      safeEmit('orchestrator.sse.ingest.error', {
+        reason: `network_${error.name || 'unknown'}`,
+        retryInMs: 0
+      }, { level: 'warn' });
+    });
+  }
 }
 
 // Singleton transport instance
@@ -229,7 +410,8 @@ function connectSSE(
     handleRequest: (request: SSERequest) => activeTransport!.handleRequest(request),
     getDiagnostics: () => activeTransport!.getDiagnostics(),
     getOptions: () => activeTransport!.getOptions(),
-    updateOptions: (opts: Partial<SSETransportOptions>) => activeTransport!.updateOptions(opts)
+    updateOptions: (opts: Partial<SSETransportOptions>) => activeTransport!.updateOptions(opts),
+    send: (level: string, message: string, data?: any) => activeTransport!.send(level, message, data)
   };
 }
 
@@ -249,9 +431,9 @@ function getSSECapabilities() {
       branches: false, // P3 - not yet implemented
       levels: false    // P3 - not yet implemented
     },
-    ingestion: false,  // P2 - not yet implemented  
+    ingestion: true,   // P2 - ✅ implemented (controller.send)
     resume: false,     // P5 - not yet implemented
-    batching: false,   // P7 - not yet implemented
+    batching: true,    // P2 - ✅ outbound buffering implemented
     heartbeat: false,  // P4 - not yet implemented
     auth: false,       // P6 - not yet implemented
     version: 1,
@@ -274,18 +456,25 @@ function getSSEHelp() {
     },
     endpoint: {
       default: '/__jitterbug/sse',
-      method: 'GET',
+      method: 'GET (downlink), POST (uplink when available)',
       cors: 'Enabled by default',
       format: 'Server-Sent Events (text/event-stream)'
     },
     examples: {
-      basic: 'const sse = debug.sse.connect();',
-      customPath: 'const sse = debug.sse.connect({ endpoint: { path: "/logs/stream" } });',
-      checkStatus: 'sse.isRunning() // true if connected',
-      stop: 'sse.stop() // disconnect'
+      basic: 'const controller = debug.sse.connect();',
+      customPath: 'const controller = debug.sse.connect({ endpoint: { path: "/logs/stream" } });',
+      checkStatus: 'controller.isRunning() // true if connected',
+      sendLogs: 'controller.send("info", "message", data) // P2: client → server (future)',
+      stop: 'controller.stop() // disconnect'
+    },
+    reserved: {
+      filters: 'P3: { branches: string[], levels: LogLevel[] } - selective downlink',
+      auth: 'P6: { token?: string, getToken?: () => Promise<string> } - authentication',
+      ingestion: 'P2: controller.send() - client log ingestion',
+      resume: 'P5: connection resume with lastEventId'
     },
     limitations: {
-      phase: 'P1 - Basic connectivity only',
+      phase: 'P1.5 - Basic connectivity + runtime introspection',
       filters: 'Branch/level filtering not yet available (P3)',
       ingestion: 'Client → server sending not yet available (P2)',
       resume: 'Connection resume not yet available (P5)'
