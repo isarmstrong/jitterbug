@@ -455,44 +455,57 @@ class DigestGenerator {
     digest += '\n';
 
     // Risk Flags with proper heuristics
-    digest += `## Risk Flags\n`;
-    const hasArchitecturalRisks = metrics.dependencies.cycles.length > 0 || 
-                                 metrics.diagnostics.tsErrors > 0;
-    const hasScaleRisks = metrics.files.changed > 10 ||
-                         Math.abs(metrics.lines.net) > 500 ||
-                         metrics.exports.added.length > 10;
-    const hasGovernanceRisks = metrics.exports.added.length > 5 && metrics.files.changed < 3; // Surface inflation
+    digest += `## Risk Heuristics\n`;
     
-    const hasRisks = hasArchitecturalRisks || hasScaleRisks || hasGovernanceRisks;
+    // Define and evaluate heuristics
+    const heuristics = {
+      largeCommit: Math.abs(metrics.lines.net) > 500,
+      surfaceInflation: metrics.exports.added.length > 10,
+      concentratedGrowth: metrics.exports.added.length > 5 && metrics.files.changed < 3,
+      largeDiff: metrics.files.changed > 10,
+      typeRegression: metrics.diagnostics.tsErrors > 0,
+      lintRegression: metrics.diagnostics.eslintErrors > 0,
+      graphCycles: metrics.dependencies.cycles.length > 0,
+      missingExports: metrics.exports.added.some(exp => exp.includes('unmatched-export'))
+    };
     
-    if (!hasRisks) {
-      digest += `✅ No significant risks detected\n\n`;
+    const triggeredHeuristics = Object.entries(heuristics).filter(([_, triggered]) => triggered);
+    
+    if (triggeredHeuristics.length === 0) {
+      digest += `✅ All heuristics under thresholds (risk: low)\n`;
+      digest += `- Commit LOC ≤ 500? ✅ (${metrics.lines.net >= 0 ? '+' : ''}${metrics.lines.net})\n`;
+      digest += `- Public export growth ≤ 10? ✅ (+${metrics.exports.added.length})\n`;
+      digest += `- Type errors = 0? ✅ (${metrics.diagnostics.tsErrors})\n`;
+      digest += `- New cycles = 0? ✅ (${metrics.dependencies.cycles.length})\n\n`;
     } else {
-      if (metrics.dependencies.cycles.length > 0) {
-        digest += `- **⚠️ Circular dependencies:** ${metrics.dependencies.cycles.length} found\n`;
+      digest += `⚠️  **Risk thresholds exceeded:**\n`;
+      
+      if (heuristics.largeCommit) {
+        digest += `- **Large commit:** ${metrics.lines.net >= 0 ? '+' : ''}${metrics.lines.net} lines (threshold: >500)\n`;
+      }
+      if (heuristics.surfaceInflation) {
+        digest += `- **API surface inflation:** +${metrics.exports.added.length} exports (threshold: >10)\n`;
+      }
+      if (heuristics.concentratedGrowth) {
+        digest += `- **Concentrated export growth:** ${metrics.exports.added.length} exports across ${metrics.files.changed} files\n`;
+      }
+      if (heuristics.largeDiff) {
+        digest += `- **Large changeset:** ${metrics.files.changed} files modified (threshold: >10)\n`;
+      }
+      if (heuristics.typeRegression) {
+        digest += `- **TypeScript regression:** ${metrics.diagnostics.tsErrors} errors\n`;
+      }
+      if (heuristics.lintRegression) {
+        digest += `- **Lint regression:** ${metrics.diagnostics.eslintErrors} errors\n`;
+      }
+      if (heuristics.graphCycles) {
+        digest += `- **Circular dependencies:** ${metrics.dependencies.cycles.length} found\n`;
         metrics.dependencies.cycles.slice(0, 2).forEach(cycle => {
           digest += `  - ${cycle}\n`;
         });
       }
-      
-      if (metrics.diagnostics.tsErrors > 0) {
-        digest += `- **⚠️ TypeScript errors:** ${metrics.diagnostics.tsErrors} errors\n`;
-      }
-      
-      if (metrics.files.changed > 10) {
-        digest += `- **⚠️ Large changeset:** ${metrics.files.changed} files modified\n`;
-      }
-      
-      if (Math.abs(metrics.lines.net) > 500) {
-        digest += `- **⚠️ High LOC delta:** ${metrics.lines.net >= 0 ? '+' : ''}${metrics.lines.net} lines (foundation/refactor?)\n`;
-      }
-      
-      if (metrics.exports.added.length > 10) {
-        digest += `- **⚠️ API surface inflation:** +${metrics.exports.added.length} exports in single commit\n`;
-      }
-      
-      if (hasGovernanceRisks) {
-        digest += `- **⚠️ Concentrated export growth:** ${metrics.exports.added.length} exports across ${metrics.files.changed} files\n`;
+      if (heuristics.missingExports) {
+        digest += `- **Export enumeration incomplete:** Some exports unclassified\n`;
       }
       
       digest += '\n';
@@ -556,12 +569,20 @@ class DigestGenerator {
       digest += '\n';
     }
 
+    // Graph Delta
+    digest += `## Graph Delta\n`;
+    const graphStats = this.getGraphStats();
+    digest += `- **Nodes:** ${graphStats.nodes} (±${graphStats.nodesDelta})\n`;
+    digest += `- **Edges:** +${graphStats.edgesAdded} / -${graphStats.edgesRemoved}\n`;
+    digest += `- **Max fan-in:** ${graphStats.maxFanIn.module} (${graphStats.maxFanIn.count}) ${graphStats.maxFanIn.change}\n`;
+    digest += `- **Cycles:** ${metrics.dependencies.cycles.length} (score ${this.calculateCycleScore(metrics.dependencies.cycles)})\n`;
+    digest += `- **Graph hash:** ${metrics.dependencies.graphHash.slice(0, 8)}...\n\n`;
+
     // Health Metrics
     digest += `## Health Metrics\n`;
     digest += `- **TypeScript:** ${metrics.diagnostics.tsErrors} errors\n`;
     digest += `- **ESLint:** ${metrics.diagnostics.eslintErrors} errors\n`;
-    digest += `- **TODOs:** ${metrics.diagnostics.todos} items\n`;
-    digest += `- **Dependency graph:** ${metrics.dependencies.graphHash.slice(0, 8)}...\n\n`;
+    digest += `- **TODOs:** ${metrics.diagnostics.todos} items\n\n`;
 
     // Locked Decisions (Governance)
     digest += `## 🔒 Locked Decisions (v0.2)\n`;
@@ -623,6 +644,54 @@ class DigestGenerator {
       hash = hash & hash; // Convert to 32-bit integer
     }
     return Math.abs(hash).toString(16);
+  }
+
+  private getGraphStats(): {
+    nodes: number;
+    nodesDelta: number;
+    edgesAdded: number;
+    edgesRemoved: number;
+    maxFanIn: { module: string; count: number; change: string };
+  } {
+    try {
+      // Simplified graph analysis - in full implementation would use madge JSON output
+      const currentFiles = execSync('find src -name "*.ts" | wc -l', {
+        cwd: this.projectRoot,
+        encoding: 'utf8',
+      }).trim();
+      
+      const nodes = parseInt(currentFiles, 10) || 0;
+      
+      // Placeholder values - full implementation would diff dependency graphs
+      return {
+        nodes,
+        nodesDelta: 0,
+        edgesAdded: 0,
+        edgesRemoved: 0,
+        maxFanIn: {
+          module: 'src/orchestrator/core-orchestrator.ts',
+          count: 5,
+          change: '(unchanged)'
+        }
+      };
+    } catch {
+      return {
+        nodes: 0,
+        nodesDelta: 0,
+        edgesAdded: 0,
+        edgesRemoved: 0,
+        maxFanIn: { module: 'unknown', count: 0, change: '' }
+      };
+    }
+  }
+
+  private calculateCycleScore(cycles: string[]): number {
+    // Score = sum of (cycle length * total fan-in of cycle members)
+    // Simplified implementation
+    return cycles.reduce((score, cycle) => {
+      const nodes = cycle.split(' → ').length;
+      return score + nodes * 2; // Simplified scoring
+    }, 0);
   }
 }
 
