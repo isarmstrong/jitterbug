@@ -26,19 +26,62 @@ interface ClientLogEnvelope {
   seq?: number;       // per-connection sequence
 }
 
-// P4: Filter specification for live updates
-interface FilterSpec {
-  branches?: string[];
-  levels?: string[];
+// P4: Live filter specification (discriminated union for extensibility)
+type LiveFilterSpec = 
+  | { kind: 'branches-levels'; branches?: string[]; levels?: string[] }
+  | { kind: 'keyword'; keywords: string[] };
+
+// P4: Wire protocol frames for filter handshake
+interface FilterUpdateFrame {
+  op: 'filter:update';
+  tag: string;              // uuid v4 - identifies this request
+  ts: number;               // ms epoch
+  spec: LiveFilterSpec;     // validated against schema
 }
 
-// P4: Control message envelope for filter updates
+interface FilterAckFrame {
+  op: 'filter:ack';
+  tag: string;              // must match update frame
+  appliedTs: number;
+  activeSpec: LiveFilterSpec;
+}
+
+interface FilterErrFrame {
+  op: 'filter:error';
+  tag: string;              // same tag
+  code: 'invalid_spec' | 'auth_failed' | 'internal';
+  message?: string;
+}
+
+// P4: Response types for public API
+interface FilterUpdateAck {
+  ok: true;
+  appliedAt: number;
+  spec: LiveFilterSpec;
+}
+
+interface FilterUpdateError {
+  ok: false;
+  error: FilterErrFrame['code'];
+  message?: string;
+}
+
+// P4: Internal pending request tracking
+interface PendingFilterRequest {
+  promise: Promise<FilterUpdateAck>;
+  resolve: (ack: FilterUpdateAck) => void;
+  reject: (error: FilterUpdateError) => void;
+  timeout: NodeJS.Timeout;
+  spec: LiveFilterSpec;
+}
+
+// P4: Legacy control message envelope (P4.1 compatibility)
 interface ControlMessageEnvelope {
-  __ctrl: true;       // marker for control messages
+  __ctrl: true;
   type: 'SET_FILTERS';
-  filters: FilterSpec;
-  ts: number;         // timestamp
-  id?: string;        // message ID for tracking
+  filters: { branches?: string[]; levels?: string[] };
+  ts: number;
+  id?: string;
 }
 
 
@@ -75,6 +118,33 @@ interface SSETransportDiagnostics {
   };
 }
 
+// P4: LiveFilterSpec validation helper
+function isLiveFilterSpec(candidate: unknown): candidate is LiveFilterSpec {
+  if (!candidate || typeof candidate !== 'object') return false;
+  const c = candidate as Record<string, unknown>;
+  
+  switch (c.kind) {
+    case 'branches-levels':
+      return (
+        (c.branches === undefined || Array.isArray(c.branches)) &&
+        (c.levels === undefined || Array.isArray(c.levels))
+      );
+    case 'keyword':
+      return Array.isArray(c.keywords) && c.keywords.length > 0;
+    default:
+      return false;
+  }
+}
+
+// P4: Convert legacy FilterSpec to LiveFilterSpec
+function toLiveFilterSpec(filters: { branches?: string[]; levels?: string[] }): LiveFilterSpec {
+  return {
+    kind: 'branches-levels',
+    branches: filters.branches,
+    levels: filters.levels
+  };
+}
+
 type SSETransportController = {
   start(): void;
   stop(): void;
@@ -84,8 +154,12 @@ type SSETransportController = {
   getOptions(): Readonly<Required<SSETransportOptions>>;
   updateOptions(options: Partial<SSETransportOptions>): void;
   send?(level: string, message: string, data?: unknown): void; // P2: client ingestion
-  setFilters?(filters: Partial<FilterSpec>): void; // P4: live filter updates
-  getCurrentFilters?(): Readonly<FilterSpec>; // P4: read current filters
+  
+  // P4: Promise-based filter API
+  setFilters?(spec: LiveFilterSpec): Promise<FilterUpdateAck>; // P4.2: promise-based
+  setFiltersLegacy?(filters: { branches?: string[]; levels?: string[] }): void; // P4.1: legacy sync
+  getCurrentFilters?(): Readonly<LiveFilterSpec>; // P4: read current filters
+  onFiltersChanged?(callback: (spec: LiveFilterSpec) => void): () => void; // P4: events
 };
 
 const DEFAULT_OPTIONS: Required<SSETransportOptions> = {
@@ -117,9 +191,11 @@ class SSETransport {
   private droppedOutbound = 0;
   private pageHideListener?: () => void;
   
-  // P4: Live filter state
-  private currentFilters: FilterSpec = {};
-  private filterChangeListeners: ((filters: Readonly<FilterSpec>) => void)[] = [];
+  // P4: Live filter state (updated for promise-based API)
+  private currentFilters: LiveFilterSpec = { kind: 'branches-levels' };
+  private filterChangeListeners: ((filters: LiveFilterSpec) => void)[] = [];
+  private pendingFilterRequests = new Map<string, PendingFilterRequest>();
+  private readonly FILTER_TIMEOUT_MS = 5000; // 5 second timeout per request
 
   constructor(private options: Required<SSETransportOptions>) {}
 
@@ -310,35 +386,182 @@ class SSETransport {
     }
   }
 
-  // P4: Live filter updates - set new filters without reconnecting
-  setFilters(partialFilters: Partial<FilterSpec>): void {
-    const nextFilters: FilterSpec = { ...this.currentFilters, ...partialFilters };
-    
-    // Early exit if nothing changed
-    if (JSON.stringify(nextFilters) === JSON.stringify(this.currentFilters)) {
-      return;
+  // P4.2: Promise-based filter updates with ACK/error handling
+  setFilters(spec: LiveFilterSpec): Promise<FilterUpdateAck> {
+    // Validate input spec
+    if (!isLiveFilterSpec(spec)) {
+      return Promise.reject<FilterUpdateAck>({
+        ok: false,
+        error: 'invalid_spec',
+        message: 'Invalid filter specification'
+      } as FilterUpdateError);
     }
 
-    // Update local state immediately
-    this.currentFilters = nextFilters;
+    // Check if same spec is already pending
+    for (const [, pending] of this.pendingFilterRequests) {
+      if (JSON.stringify(pending.spec) === JSON.stringify(spec)) {
+        return pending.promise; // Return existing promise
+      }
+    }
+
+    // Early exit if nothing changed from current
+    if (JSON.stringify(spec) === JSON.stringify(this.currentFilters)) {
+      return Promise.resolve({
+        ok: true,
+        appliedAt: Date.now(),
+        spec: this.currentFilters
+      });
+    }
 
     if (!this.running) {
-      return; // Silently ignore if transport not running
+      return Promise.reject<FilterUpdateAck>({
+        ok: false,
+        error: 'internal',
+        message: 'Transport not running'
+      } as FilterUpdateError);
     }
 
-    // Queue control message to server
-    const controlMessage: ControlMessageEnvelope = {
-      __ctrl: true,
-      type: 'SET_FILTERS',
-      filters: nextFilters,
+    // Generate unique tag for this request
+    const tag = crypto.randomUUID();
+    
+    // Create promise with external resolve/reject
+    let resolve: (ack: FilterUpdateAck) => void;
+    let reject: (error: FilterUpdateError) => void;
+    
+    const promise = new Promise<FilterUpdateAck>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+
+    // Set up timeout
+    const timeout = setTimeout(() => {
+      this.pendingFilterRequests.delete(tag);
+      const error: FilterUpdateError = {
+        ok: false,
+        error: 'internal',
+        message: 'Filter update timeout'
+      };
+      reject(error);
+      
+      // Emit timeout event
+      safeEmit('orchestrator.sse.filters.timeout', {
+        tag,
+        spec,
+        timeoutMs: this.FILTER_TIMEOUT_MS
+      }, { level: 'warn' });
+    }, this.FILTER_TIMEOUT_MS);
+
+    // Track pending request
+    const pendingRequest: PendingFilterRequest = {
+      promise,
+      resolve: resolve!,
+      reject: reject!,
+      timeout,
+      spec
+    };
+    this.pendingFilterRequests.set(tag, pendingRequest);
+
+    // Create filter update frame
+    const updateFrame: FilterUpdateFrame = {
+      op: 'filter:update',
+      tag,
       ts: Date.now(),
-      id: crypto.randomUUID()
+      spec
     };
 
+    // Queue to outbound buffer (prioritize control messages)
+    this.enqueueControlMessage(updateFrame);
+
+    // Emit telemetry
+    safeEmit('orchestrator.sse.filters.requested', {
+      tag,
+      spec,
+      timestamp: Date.now()
+    }, { level: 'debug' });
+
+    return promise;
+  }
+
+  // P4.1: Legacy sync API for backward compatibility
+  setFiltersLegacy(filters: { branches?: string[]; levels?: string[] }): void {
+    const spec = toLiveFilterSpec(filters);
+    
+    // Fire and forget - don't await the promise
+    this.setFilters(spec).catch(error => {
+      console.warn('Legacy filter update failed:', error);
+    });
+  }
+
+  // P4: Get current filter state (read-only)
+  getCurrentFilters(): Readonly<LiveFilterSpec> {
+    return { ...this.currentFilters };
+  }
+
+  // P4: Subscribe to filter changes
+  onFiltersChanged(callback: (filters: LiveFilterSpec) => void): () => void {
+    this.filterChangeListeners.push(callback);
+    return () => {
+      const index = this.filterChangeListeners.indexOf(callback);
+      if (index !== -1) {
+        this.filterChangeListeners.splice(index, 1);
+      }
+    };
+  }
+
+  // P4.2: Handle server ACK/error frames (TODO: wire up in P4.2-b)
+  // @ts-expect-error - Method will be used in P4.2-b server implementation
+  private handleFilterResponse(frame: FilterAckFrame | FilterErrFrame): void {
+    const pending = this.pendingFilterRequests.get(frame.tag);
+    if (!pending) {
+      return; // Unknown or expired request
+    }
+
+    // Clean up pending request
+    clearTimeout(pending.timeout);
+    this.pendingFilterRequests.delete(frame.tag);
+
+    if (frame.op === 'filter:ack') {
+      // Update local state and notify
+      this.currentFilters = frame.activeSpec;
+      this.notifyFilterListeners();
+      
+      // Resolve promise
+      pending.resolve({
+        ok: true,
+        appliedAt: frame.appliedTs,
+        spec: frame.activeSpec
+      });
+
+      // Emit telemetry
+      safeEmit('orchestrator.sse.filters.acked', {
+        tag: frame.tag,
+        spec: frame.activeSpec,
+        appliedTs: frame.appliedTs
+      }, { level: 'debug' });
+    } else {
+      // Handle error
+      const error: FilterUpdateError = {
+        ok: false,
+        error: frame.code,
+        message: frame.message
+      };
+      pending.reject(error);
+
+      // Emit telemetry
+      safeEmit('orchestrator.sse.filters.rejected', {
+        tag: frame.tag,
+        code: frame.code,
+        message: frame.message
+      }, { level: 'warn' });
+    }
+  }
+
+  // P4.2: Helper to enqueue control messages with prioritization
+  private enqueueControlMessage(frame: FilterUpdateFrame): void {
     // Add to outbound buffer (prioritize control messages)
     if (this.outboundBuffer.length >= this.MAX_BUFFER_SIZE) {
       // Drop oldest non-control entries first
-      const firstNonControlIdx = this.outboundBuffer.findIndex(entry => !('__ctrl' in entry));
+      const firstNonControlIdx = this.outboundBuffer.findIndex(entry => !('op' in entry));
       if (firstNonControlIdx !== -1) {
         this.outboundBuffer.splice(firstNonControlIdx, 1);
         this.droppedOutbound++;
@@ -348,12 +571,14 @@ class SSETransport {
       }
     }
 
-    this.outboundBuffer.push(controlMessage);
-
+    this.outboundBuffer.push(frame as any); // Type assertion for buffer compatibility
+    
     // Trigger immediate flush for control messages
     this.flushOutbound();
+  }
 
-    // Notify listeners of filter change
+  // P4.2: Helper to notify filter change listeners
+  private notifyFilterListeners(): void {
     this.filterChangeListeners.forEach(listener => {
       try {
         listener(this.currentFilters);
@@ -361,28 +586,6 @@ class SSETransport {
         console.warn('Filter change listener error:', error);
       }
     });
-
-    // Emit telemetry
-    safeEmit('orchestrator.sse.filters.updated', {
-      filters: nextFilters,
-      timestamp: Date.now()
-    }, { level: 'debug' });
-  }
-
-  // P4: Get current filter state (read-only)
-  getCurrentFilters(): Readonly<FilterSpec> {
-    return { ...this.currentFilters };
-  }
-
-  // P4: Subscribe to filter changes
-  onFiltersChanged(callback: (filters: Readonly<FilterSpec>) => void): () => void {
-    this.filterChangeListeners.push(callback);
-    return () => {
-      const index = this.filterChangeListeners.indexOf(callback);
-      if (index !== -1) {
-        this.filterChangeListeners.splice(index, 1);
-      }
-    };
   }
 
   // P2: Set up beacon fallback for page hide events
@@ -528,8 +731,10 @@ function connectSSE(
     getOptions: () => activeTransport!.getOptions(),
     updateOptions: (opts: Partial<SSETransportOptions>) => activeTransport!.updateOptions(opts),
     send: (level: string, message: string, data?: unknown) => activeTransport!.send(level, message, data),
-    setFilters: (filters: Partial<FilterSpec>) => activeTransport!.setFilters(filters),
-    getCurrentFilters: () => activeTransport!.getCurrentFilters()
+    setFilters: (spec: LiveFilterSpec) => activeTransport!.setFilters(spec),
+    setFiltersLegacy: (filters: { branches?: string[]; levels?: string[] }) => activeTransport!.setFiltersLegacy(filters),
+    getCurrentFilters: () => activeTransport!.getCurrentFilters(),
+    onFiltersChanged: (callback: (spec: LiveFilterSpec) => void) => activeTransport!.onFiltersChanged(callback)
   };
 }
 

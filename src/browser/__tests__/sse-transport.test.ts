@@ -768,16 +768,25 @@ describe('SSETransport Integration', () => {
     it('should update filters without throwing', () => {
       transport = debug.sse.connect();
       
-      expect(() => transport.setFilters?.({ branches: ['core'] })).not.toThrow();
-      expect(() => transport.setFilters?.({ levels: ['error', 'warn'] })).not.toThrow();
-      expect(() => transport.setFilters?.({ branches: ['ui'], levels: ['info'] })).not.toThrow();
+      expect(() => transport.setFilters?.({ kind: 'branches-levels', branches: ['core'] })).not.toThrow();
+      expect(() => transport.setFilters?.({ kind: 'branches-levels', levels: ['error', 'warn'] })).not.toThrow();
+      expect(() => transport.setFilters?.({ kind: 'branches-levels', branches: ['ui'], levels: ['info'] })).not.toThrow();
     });
 
-    it('should handle filter updates when not running', () => {
+    it('should handle filter updates when not running', async () => {
       transport = debug.sse.connect({ autoStart: false });
       
-      // Should not throw when transport is stopped
-      expect(() => transport.setFilters?.({ branches: ['core'] })).not.toThrow();
+      // Should return rejected promise when transport is stopped
+      const result = transport.setFilters?.({ kind: 'branches-levels', branches: ['core'] });
+      expect(result).toBeInstanceOf(Promise);
+      
+      if (result) {
+        await expect(result).rejects.toMatchObject({
+          ok: false,
+          error: 'internal',
+          message: 'Transport not running'
+        });
+      }
     });
 
     it('should return current filters', () => {
@@ -792,10 +801,10 @@ describe('SSETransport Integration', () => {
       transport = debug.sse.connect();
       
       // Set initial filters
-      transport.setFilters?.({ branches: ['core'] });
+      transport.setFilters?.({ kind: 'branches-levels', branches: ['core'] });
       
       // Setting same filters should not cause issues
-      expect(() => transport.setFilters?.({ branches: ['core'] })).not.toThrow();
+      expect(() => transport.setFilters?.({ kind: 'branches-levels', branches: ['core'] })).not.toThrow();
     });
   });
 });
