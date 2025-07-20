@@ -133,6 +133,9 @@ export class CoreOrchestrator {
       return;
     }
 
+    const startTime = Date.now();
+    emitJitterbugEvent('orchestrator.core.shutdown.started', {});
+
     this.isShuttingDown = true;
 
     try {
@@ -153,7 +156,16 @@ export class CoreOrchestrator {
       this.isInitialized = false;
       this.isShuttingDown = false;
 
+      emitJitterbugEvent('orchestrator.core.shutdown.completed', {
+        durationMs: Date.now() - startTime
+      });
+
     } catch (error) {
+      emitJitterbugEvent('orchestrator.core.shutdown.failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        durationMs: Date.now() - startTime
+      });
+
       throw new OrchestratorError(
         `Failed to shutdown orchestrator: ${error instanceof Error ? error.message : 'Unknown error'}`,
         'SHUTDOWN_FAILED'
@@ -208,13 +220,29 @@ export class CoreOrchestrator {
   async unregisterBranch(name: BranchName): Promise<void> {
     this.ensureInitialized();
 
+    const startTime = Date.now();
+    emitJitterbugEvent('orchestrator.branch.unregistration.started', {
+      branchName: name
+    });
+
     try {
       await this.branchRegistry.unregisterBranch(name);
       
       // Clean up branch stats
       delete this.stats.branchStats[name];
+
+      emitJitterbugEvent('orchestrator.branch.unregistration.completed', {
+        branchName: name,
+        durationMs: Date.now() - startTime
+      });
       
     } catch (error) {
+      emitJitterbugEvent('orchestrator.branch.unregistration.failed', {
+        branchName: name,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        durationMs: Date.now() - startTime
+      });
+
       throw new OrchestratorError(
         `Failed to unregister branch ${name}: ${error instanceof Error ? error.message : 'Unknown error'}`,
         'BRANCH_UNREGISTRATION_FAILED',

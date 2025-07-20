@@ -284,6 +284,86 @@ export const eventSchemas = {
     },
     level: 'error' as const,
     description: 'Branch registration fails'
+  },
+
+  'orchestrator.branch.unregistration.started': {
+    validate: (payload: unknown): { branchName: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        branchName: validateString(p.branchName, 'branchName')
+      };
+    },
+    level: 'info' as const,
+    description: 'Branch unregistration begins'
+  },
+
+  'orchestrator.branch.unregistration.completed': {
+    validate: (payload: unknown): { branchName: string; durationMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        branchName: validateString(p.branchName, 'branchName'),
+        durationMs: validateNumber(p.durationMs, 'durationMs')
+      };
+    },
+    level: 'info' as const,
+    description: 'Branch unregistration completes successfully'
+  },
+
+  'orchestrator.branch.unregistration.failed': {
+    validate: (payload: unknown): { branchName: string; error: string; durationMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        branchName: validateString(p.branchName, 'branchName'),
+        error: validateString(p.error, 'error'),
+        durationMs: validateNumber(p.durationMs, 'durationMs')
+      };
+    },
+    level: 'error' as const,
+    description: 'Branch unregistration fails'
+  },
+
+  'orchestrator.core.shutdown.started': {
+    validate: (_payload: unknown) => ({}),
+    level: 'info' as const,
+    description: 'Core orchestrator shutdown begins'
+  },
+
+  'orchestrator.core.shutdown.completed': {
+    validate: (payload: unknown): { durationMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        durationMs: validateNumber(p.durationMs, 'durationMs')
+      };
+    },
+    level: 'info' as const,
+    description: 'Core orchestrator shutdown completes successfully'
+  },
+
+  'orchestrator.core.shutdown.failed': {
+    validate: (payload: unknown): { error: string; durationMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        error: validateString(p.error, 'error'),
+        durationMs: validateNumber(p.durationMs, 'durationMs')
+      };
+    },
+    level: 'error' as const,
+    description: 'Core orchestrator shutdown fails'
   }
 } as const;
 

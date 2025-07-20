@@ -1,0 +1,21 @@
+# Scripts and digest tools
+scripts/
+
+# Development artifacts  
+docs/
+agent/
+__tests__/
+
+# Source code (Vercel should only deploy dist)
+src/
+
+# Build tools and config
+tsconfig*.json
+vitest.config.ts
+.eslintrc.cjs
+.eslintignore
+.prettierrc
+
+# Development files
+problem.log
+.DS_Store

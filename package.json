@@ -27,8 +27,8 @@
         "format": "prettier --write \"src/**/*.ts\"",
         "format:check": "prettier --check \"src/**/*.ts\"",
         "typecheck": "tsc --noEmit",
-        "digest": "npx tsx scripts/generate-digest.ts",
-        "domain-snapshot": "npx tsx scripts/generate-domain-snapshot.ts",
+        "digest": "npx tsx scripts/digest-tools/generate-digest.ts",
+        "domain-snapshot": "npx tsx scripts/digest-tools/generate-domain-snapshot.ts",
         "prepublishOnly": "npm run build"
     },
     "keywords": [

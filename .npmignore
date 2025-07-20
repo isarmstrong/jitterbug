@@ -3,6 +3,7 @@ src/
 __tests__/
 docs/
 agent/
+scripts/
 
 # Config files
 .eslintrc.cjs

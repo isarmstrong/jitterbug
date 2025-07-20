@@ -636,6 +636,20 @@ class DigestGenerator {
     }
     digest += `- **Target coverage:** ≥90% (${metrics.events.coverage >= 0.9 ? '✅' : '⚠️'})\n\n`;
 
+    // Add instrumentation progress table
+    if (metrics.events.criticalFunctions.length > 0) {
+      digest += `## Instrumentation Progress\n`;
+      digest += `| Function | Instrumented? | Status |\n`;
+      digest += `|----------|---------------|--------|\n`;
+      
+      for (const fn of metrics.events.criticalFunctions) {
+        const instrumented = metrics.events.instrumented.includes(fn);
+        const status = instrumented ? '✅' : '❌';
+        digest += `| \`${fn}\` | ${instrumented ? 'Yes' : 'No'} | ${status} |\n`;
+      }
+      digest += '\n';
+    }
+
     // Graph Delta
     digest += `## Graph Delta\n`;
     const graphStats = this.getGraphStats();
@@ -943,17 +957,17 @@ class DigestGenerator {
     instrumented: string[];
     coverage: number;
   }> {
-    // Define critical orchestrator functions that should be instrumented
+    // Define actual critical orchestrator functions (updated to real function names)
     const criticalFunctions = [
-      'createExecutionPlan',
-      'executePlan', 
-      'dispatchStep',
-      'finalizePlan',
-      'processLog'
+      'initialize',
+      'processLog', 
+      'registerBranch',
+      'unregisterBranch',
+      'shutdown'
     ];
     
     try {
-      // Simple heuristic: look for emit( calls in orchestrator files
+      // Improved heuristic: look for emitJitterbugEvent calls in orchestrator files
       const instrumentedFunctions: string[] = [];
       
       const orchestratorFiles = execSync('find src/orchestrator -name "*.ts" -not -path "*/test*" -not -path "*/__tests__/*"', {
@@ -961,34 +975,46 @@ class DigestGenerator {
         encoding: 'utf8',
       }).trim().split('\n').filter(Boolean);
       
+      // Debug output
+      console.log('🔍 Scanning orchestrator files for instrumentation:', orchestratorFiles);
+      
       for (const file of orchestratorFiles) {
         try {
           const content = readFileSync(join(this.projectRoot, file), 'utf8');
           
-          // Look for function definitions that contain emit calls
+          // Ultra-simple detection: if file contains both function name and emitJitterbugEvent
+          // and they appear in reasonable proximity, count it as instrumented
           for (const fnName of criticalFunctions) {
-            const fnRegex = new RegExp(`(?:function|const)\\s+${fnName}[^{]*{[^}]*emit\\(`, 's');
-            if (fnRegex.test(content) || content.includes(`${fnName}(`)) {
-              if (content.includes('emit(')) {
+            if (content.includes(fnName) && content.includes('emitJitterbugEvent')) {
+              // Check if function definition exists
+              const functionDefRegex = new RegExp(`(async\\s+)?${fnName}\\s*\\(`);
+              if (functionDefRegex.test(content)) {
+                // Simple heuristic: if function is defined in a file that has emitJitterbugEvent calls,
+                // it's likely instrumented (good enough for now)
                 instrumentedFunctions.push(fnName);
+                console.log(`✅ Found instrumentation in ${fnName} (${file})`);
               }
             }
           }
-        } catch {
-          // File might not be readable
+        } catch (error) {
+          console.warn(`Failed to read ${file}:`, error);
         }
       }
       
       const coverage = criticalFunctions.length > 0 
-        ? Math.round((instrumentedFunctions.length / criticalFunctions.length) * 100) / 100
+        ? Math.round((instrumentedFunctions.length / criticalFunctions.length) * 100)
         : 0;
+      
+      console.log(`📊 Event coverage: ${instrumentedFunctions.length}/${criticalFunctions.length} = ${coverage}%`);
+      console.log(`📊 Instrumented functions:`, instrumentedFunctions);
       
       return {
         criticalFunctions,
         instrumented: [...new Set(instrumentedFunctions)],
-        coverage
+        coverage: coverage / 100  // Convert to decimal for percentage display
       };
-    } catch {
+    } catch (error) {
+      console.error('Event coverage detection failed:', error);
       return {
         criticalFunctions,
         instrumented: [],
