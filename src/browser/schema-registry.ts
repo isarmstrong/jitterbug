@@ -7,6 +7,7 @@
 
 // Import types for future use in payload validation
 import type { JitterbugEvent } from './types.js';
+import { notifyLogTaps } from './logs/internal/hooks.js';
 
 // Schema validation interface
 export interface EventSchema<P = unknown> {
@@ -855,7 +856,10 @@ export function safeEmit<T extends EventType>(type: T, payload: PayloadOf<T>, op
       const validated = eventSchemas[type].validate(payload);
       // Actually emit if global emit function is available
       if (globalEmitFn) {
-        return globalEmitFn(type, validated, opts);
+        const eventId = globalEmitFn(type, validated, opts);
+        // Notify internal log taps for log inspection
+        notifyLogTaps(type, validated, opts);
+        return eventId;
       }
       return undefined;
     } catch (error) {
@@ -864,7 +868,10 @@ export function safeEmit<T extends EventType>(type: T, payload: PayloadOf<T>, op
   }
   // Actually emit if global emit function is available
   if (globalEmitFn) {
-    return globalEmitFn(type, payload, opts);
+    const eventId = globalEmitFn(type, payload, opts);
+    // Notify internal log taps for log inspection
+    notifyLogTaps(type, payload, opts);
+    return eventId;
   }
   return undefined;
 }

@@ -17,12 +17,12 @@ describe('Public Surface Regression Guard', () => {
     
     // Current allowed exports (update this when adding new public APIs)
     const allowedExports = [
-      'configPersistence',       // Task 3.4 - @experimental
-      'emitJitterbugEvent',      // @experimental
-      'ensureJitterbugReady',    // @experimental  
-      'experimentalSafeEmit',    // @experimental
-      'initializeJitterbug',     // @stable
-      // 'logInspector',         // Task 3.5 - add when implementing
+      'configPersistence',       // Task 3.4 - @experimental (config API)
+      'emitJitterbugEvent',      // @experimental (programmatic emission)
+      'ensureJitterbugReady',    // @experimental (initialization utility)
+      'experimentalSafeEmit',    // @experimental (low-level emission - use sparingly)
+      'initializeJitterbug',     // @stable (primary entry point)
+      // 'logInspector',         // Task 3.5 - @experimental (log inspection) - add when implementing
     ].sort();
     
     expect(exportedSymbols).toEqual(allowedExports);

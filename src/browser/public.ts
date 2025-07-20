@@ -14,9 +14,11 @@ export { initializeJitterbug } from './bootstrap.js';
 export { ensureJitterbugReady, emitJitterbugEvent } from './utils.js';
 
 // Experimental features (Task 3.4)
+/** @experimental Configuration persistence API - subject to schema changes */
 export { configPersistence } from './config-persistence.js';
 
-// Re-export experimental helpers for backwards compatibility
+// Experimental emission utilities
+/** @experimental Low-level emission utility - prefer using jitterbug.emit() */
 export { safeEmit as experimentalSafeEmit } from './schema-registry.js';
 
 // Task 3.5 - Log Inspection (placeholder - will be uncommented when implementing)
