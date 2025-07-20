@@ -4,8 +4,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    include: ['src/**/*.test.ts', 'src/**/__tests__/**/*.ts'],
-    exclude: ['node_modules', 'dist'],
+    include: ['src/**/*.test.ts', 'src/**/__tests__/**/*.test.ts'],
+    exclude: ['node_modules', 'dist', 'src/**/__tests__/setup.ts', 'src/**/__tests__/fixtures.ts'],
     
     // Test isolation and mocking
     isolate: true,

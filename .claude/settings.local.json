@@ -39,7 +39,8 @@
       "Bash(find:*)",
       "mcp__task-master-ai__next_task",
       "WebFetch(domain:epicweb-dev-advanced-vitest-patterns.fly.dev)",
-      "WebFetch(domain:vitest.dev)"
+      "WebFetch(domain:vitest.dev)",
+      "Bash(npm test:*)"
     ],
     "deny": []
   },

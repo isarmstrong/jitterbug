@@ -14,12 +14,13 @@ expect.extend({
       typeof (received as any).name === 'string' &&
       typeof (received as any).active === 'boolean' &&
       typeof (received as any).enabled === 'boolean' &&
-      (received as any).stats && 
-      typeof (received as any).stats.events === 'number' &&
-      typeof (received as any).stats.errors === 'number';
+      typeof (received as any).eventCount === 'number' &&
+      typeof (received as any).errorCount === 'number' &&
+      typeof (received as any).lastActivity === 'string' &&
+      typeof (received as any).createdAt === 'string';
     
     return {
-      message: () => `expected ${JSON.stringify(received)} to be a valid branch record with name, active, enabled, and stats fields`,
+      message: () => `expected ${JSON.stringify(received)} to be a valid branch record with name, active, enabled, eventCount, errorCount, lastActivity, and createdAt fields`,
       pass: Boolean(isValid),
     };
   },
@@ -56,21 +57,8 @@ expect.extend({
 
 // Global setup and teardown
 beforeEach(() => {
-  // Reset to clean state before each test
-  const branches = experimentalBranches.list();
-  for (const branch of branches) {
-    if (branch.name !== 'main') {
-      try {
-        experimentalBranches.delete(branch.name);
-      } catch {
-        // Ignore deletion errors during cleanup
-      }
-    }
-  }
-  
-  // Ensure main is active and enabled
-  experimentalBranches.setActive('main');
-  experimentalBranches.enable('main');
+  // Reset to clean state before each test using internal reset function
+  experimentalBranches.__resetBranches();
 });
 
 afterEach(() => {

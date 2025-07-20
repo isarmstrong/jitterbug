@@ -8,6 +8,13 @@
 
 import { initializeJitterbug } from '../bootstrap.js';
 import type { JitterbugGlobal } from '../types.js';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+// Dynamically read package version for tests
+const packageJsonPath = join(process.cwd(), 'package.json');
+const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+const EXPECTED_VERSION = packageJson.version;
 
 describe('Jitterbug Bootstrap', () => {
   let mockWindow: any;
@@ -31,7 +38,7 @@ describe('Jitterbug Bootstrap', () => {
     initializeJitterbug(mockWindow);
     
     expect(mockWindow.jitterbug).toBeDefined();
-    expect(mockWindow.jitterbug.version).toBe('0.1.0');
+    expect(mockWindow.jitterbug.version).toBe(EXPECTED_VERSION);
     expect(typeof mockWindow.jitterbug.emit).toBe('function');
     expect(typeof mockWindow.jitterbug.getEvents).toBe('function');
     expect(typeof mockWindow.jitterbug.subscribe).toBe('function');
@@ -121,7 +128,8 @@ describe('Jitterbug Bootstrap', () => {
     const api: JitterbugGlobal = mockWindow.jitterbug;
     
     const generalHelp = api.help();
-    expect(generalHelp).toContain('Jitterbug v0.1 core API');
+    const expectedVersionText = `Jitterbug v${EXPECTED_VERSION.split('.').slice(0,2).join('.')} core API`;
+    expect(generalHelp).toContain(expectedVersionText);
     
     const emitHelp = api.help('emit');
     expect(emitHelp).toContain('Emit a structured debugging event');

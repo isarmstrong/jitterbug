@@ -1,5 +1,84 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`BranchManager (Advanced Testing) > API Contract & Shape > should maintain stable branch record structure 1`] = `
+{
+  "active": false,
+  "createdAt": Any<String>,
+  "enabled": true,
+  "errorCount": 0,
+  "eventCount": 0,
+  "lastActivity": Any<String>,
+  "metadata": {
+    "priority": "high",
+    "tags": [
+      "experimental",
+      "api",
+    ],
+    "type": "feature",
+  },
+  "name": "snapshot-test",
+  "parent": undefined,
+}
+`;
+
+exports[`BranchManager (Advanced Testing) > API Contract & Shape > should maintain stable detailed branch structure 1`] = `
+{
+  "active": false,
+  "createdAt": Any<String>,
+  "enabled": true,
+  "errorCount": 0,
+  "eventCount": 0,
+  "lastActivity": Any<String>,
+  "metadata": {
+    "complexity": "high",
+    "dependencies": [
+      "auth",
+      "database",
+    ],
+    "estimated_hours": 8,
+    "features": [
+      "logging",
+      "metrics",
+      "alerts",
+    ],
+  },
+  "name": "detailed-test",
+  "parent": "main",
+}
+`;
+
+exports[`BranchManager (Advanced Testing) > API Contract & Shape > should maintain stable list output structure 1`] = `
+[
+  {
+    "active": false,
+    "enabled": true,
+    "errorCount": 0,
+    "eventCount": 0,
+    "lastActivity": Any<String>,
+    "name": "main",
+    "parent": undefined,
+  },
+  {
+    "active": true,
+    "enabled": true,
+    "errorCount": 0,
+    "eventCount": 0,
+    "lastActivity": Any<String>,
+    "name": "test-branch",
+    "parent": undefined,
+  },
+  {
+    "active": false,
+    "enabled": true,
+    "errorCount": 0,
+    "eventCount": 0,
+    "lastActivity": Any<String>,
+    "name": "child-branch",
+    "parent": "main",
+  },
+]
+`;
+
 exports[`BranchManager (Advanced Testing) > Validation with Fixtures > should accept all valid edge case names 1`] = `
 [
   "✓ a",

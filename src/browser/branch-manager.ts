@@ -30,22 +30,22 @@ interface BranchRecord {
   stats: {
     events: number;
     errors: number;
-    lastEventAt?: ISODateString;
+    lastEventAt: ISODateString;
   };
 }
 
-/** @internal */
+/** @internal - Public view of branch for list operations */
 interface BranchSummary {
   name: string;
   active: boolean;
   enabled: boolean;
   eventCount: number;
   errorCount: number;
-  lastActivity?: ISODateString;
+  lastActivity: ISODateString;
   parent?: string;
 }
 
-/** @internal */
+/** @internal - Detailed view including metadata */
 interface BranchDetails extends BranchSummary {
   createdAt: ISODateString;
   metadata: Record<string, unknown>;
@@ -55,6 +55,27 @@ interface BranchDetails extends BranchSummary {
 // Branch name validation regex: alphanumeric, hyphens, underscores, dots, 1-40 chars
 const BRANCH_NAME_REGEX = /^[a-z0-9\-_.]{1,40}$/i;
 
+// Projection functions for clean API surface
+function toSummary(record: BranchRecord): BranchSummary {
+  return {
+    name: record.name,
+    parent: record.parent,
+    active: record.active,
+    enabled: record.enabled,
+    eventCount: record.stats.events,
+    errorCount: record.stats.errors,
+    lastActivity: record.stats.lastEventAt
+  };
+}
+
+function toDetails(record: BranchRecord): BranchDetails {
+  return {
+    ...toSummary(record),
+    createdAt: record.createdAt,
+    metadata: { ...record.metadata }
+  };
+}
+
 /** @internal */
 class BranchManager {
   private branches = new Map<BranchName, BranchRecord>();
@@ -62,13 +83,14 @@ class BranchManager {
   
   constructor() {
     // Always start with a main branch
+    const now = new Date().toISOString();
     this.branches.set('main', {
       name: 'main',
-      createdAt: new Date().toISOString(),
+      createdAt: now,
       active: true,
       enabled: true,
       metadata: { isDefault: true },
-      stats: { events: 0, errors: 0 }
+      stats: { events: 0, errors: 0, lastEventAt: now }
     });
   }
 
@@ -101,7 +123,7 @@ class BranchManager {
       active: false,
       enabled: true,
       metadata: options.metadata || {},
-      stats: { events: 0, errors: 0 }
+      stats: { events: 0, errors: 0, lastEventAt: now }
     };
 
     this.branches.set(name, record);
@@ -127,15 +149,7 @@ class BranchManager {
    * @experimental
    */
   getBranches(): BranchSummary[] {
-    return Array.from(this.branches.values()).map(record => ({
-      name: record.name,
-      active: record.active,
-      enabled: record.enabled,
-      eventCount: record.stats.events,
-      errorCount: record.stats.errors,
-      lastActivity: record.stats.lastEventAt,
-      parent: record.parent
-    }));
+    return Array.from(this.branches.values()).map(toSummary);
   }
 
   /**
@@ -154,17 +168,7 @@ class BranchManager {
     const record = this.branches.get(name);
     if (!record) return undefined;
 
-    return {
-      name: record.name,
-      active: record.active,
-      enabled: record.enabled,
-      eventCount: record.stats.events,
-      errorCount: record.stats.errors,
-      lastActivity: record.stats.lastEventAt,
-      parent: record.parent,
-      createdAt: record.createdAt,
-      metadata: { ...record.metadata }
-    };
+    return toDetails(record);
   }
 
   /**
@@ -343,6 +347,26 @@ class BranchManager {
 
     return false;
   }
+
+  /**
+   * Reset to initial state (testing only)
+   * @internal
+   */
+  __resetBranches(): void {
+    this.branches.clear();
+    this.activeBranch = 'main';
+    
+    // Recreate main branch
+    const now = new Date().toISOString();
+    this.branches.set('main', {
+      name: 'main',
+      createdAt: now,
+      active: true,
+      enabled: true,
+      metadata: { isDefault: true },
+      stats: { events: 0, errors: 0, lastEventAt: now }
+    });
+  }
 }
 
 // Singleton instance
@@ -352,14 +376,16 @@ const branchManager = new BranchManager();
 // Clean experimental API facade
 /** @experimental Branch management API (subject to change without SemVer guarantees) */
 export const experimentalBranches = {
-  create: (name: string, options?: { parent?: string; metadata?: Record<string, unknown>; autoActivate?: boolean }) => 
-    branchManager.createBranch(name, options),
+  create: (name: string, options?: { parent?: string; metadata?: Record<string, unknown>; autoActivate?: boolean }): BranchDetails => {
+    const record = branchManager.createBranch(name, options);
+    return toDetails(record);
+  },
   
-  list: () => branchManager.getBranches(),
+  list: (): BranchSummary[] => branchManager.getBranches(),
   
-  listActive: () => branchManager.listActiveBranches(),
+  listActive: (): BranchSummary[] => branchManager.listActiveBranches(),
   
-  get: (name: string) => branchManager.getBranch(name),
+  get: (name: string): BranchDetails | undefined => branchManager.getBranch(name),
   
   setActive: (name: string) => branchManager.setActiveBranch(name),
   
@@ -372,5 +398,8 @@ export const experimentalBranches = {
   delete: (name: string) => branchManager.deleteBranch(name),
   
   /** @internal */
-  _manager: branchManager // Internal access for bootstrap integration
+  _manager: branchManager, // Internal access for bootstrap integration
+  
+  /** @internal Testing only */
+  __resetBranches: () => branchManager.__resetBranches()
 };
