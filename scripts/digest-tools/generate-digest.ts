@@ -84,9 +84,11 @@ interface DigestMetrics {
   };
   /** Event coverage metrics */
   events: {
-    criticalFunctions: string[];
-    instrumented: string[];
-    coverage: number;
+    scopes: {
+      'runtime-core': { functions: string[]; instrumented: string[]; coverage: number };
+      'debugger-lifecycle': { functions: string[]; instrumented: string[]; coverage: number };
+    };
+    overall: number;
   };
   /** Dependency graph analysis */
   dependencies: {
@@ -625,30 +627,25 @@ class DigestGenerator {
 
     // Event Coverage
     digest += `## Event Coverage\n`;
-    digest += `- **Defined critical functions:** ${metrics.events.criticalFunctions.length}\n`;
-    digest += `- **Instrumented functions:** ${metrics.events.instrumented.length} (${Math.round(metrics.events.coverage * 100)}%)\n`;
-    if (metrics.events.instrumented.length > 0) {
-      digest += `- **Instrumented:** ${metrics.events.instrumented.join(', ')}\n`;
+    digest += `| Scope | Instrumented / Total | Percent |\n`;
+    digest += `|-------|----------------------|---------|\n`;
+    digest += `| runtime-core | ${metrics.events.scopes['runtime-core'].instrumented.length} / ${metrics.events.scopes['runtime-core'].functions.length} | ${Math.round(metrics.events.scopes['runtime-core'].coverage * 100)}% ${metrics.events.scopes['runtime-core'].coverage >= 0.9 ? '✅' : '⚠️'} |\n`;
+    digest += `| debugger-lifecycle | ${metrics.events.scopes['debugger-lifecycle'].instrumented.length} / ${metrics.events.scopes['debugger-lifecycle'].functions.length} | ${Math.round(metrics.events.scopes['debugger-lifecycle'].coverage * 100)}% ${metrics.events.scopes['debugger-lifecycle'].coverage >= 0.8 ? '✅' : '⚠️'} |\n`;
+    digest += `| **Overall (weighted)** | **${Math.round(metrics.events.overall * 100)}%** | ${metrics.events.overall >= 0.75 ? '✅' : '⚠️'} |\n\n`;
+    
+    digest += `**Scope Details:**\n`;
+    digest += `- **Runtime-core instrumented:** ${metrics.events.scopes['runtime-core'].instrumented.join(', ') || 'None'}\n`;
+    if (metrics.events.scopes['runtime-core'].instrumented.length < metrics.events.scopes['runtime-core'].functions.length) {
+      const missing = metrics.events.scopes['runtime-core'].functions.filter(fn => !metrics.events.scopes['runtime-core'].instrumented.includes(fn));
+      digest += `- **Runtime-core missing:** ${missing.join(', ')}\n`;
     }
-    const missing = metrics.events.criticalFunctions.filter(fn => !metrics.events.instrumented.includes(fn));
-    if (missing.length > 0) {
-      digest += `- **Missing instrumentation:** ${missing.join(', ')}\n`;
+    digest += `- **Debugger-lifecycle instrumented:** ${metrics.events.scopes['debugger-lifecycle'].instrumented.join(', ') || 'None'}\n`;
+    if (metrics.events.scopes['debugger-lifecycle'].instrumented.length < metrics.events.scopes['debugger-lifecycle'].functions.length) {
+      const missing = metrics.events.scopes['debugger-lifecycle'].functions.filter(fn => !metrics.events.scopes['debugger-lifecycle'].instrumented.includes(fn));
+      digest += `- **Debugger-lifecycle missing:** ${missing.join(', ')}\n`;
     }
-    digest += `- **Target coverage:** ≥90% (${metrics.events.coverage >= 0.9 ? '✅' : '⚠️'})\n\n`;
+    digest += '\n';
 
-    // Add instrumentation progress table
-    if (metrics.events.criticalFunctions.length > 0) {
-      digest += `## Instrumentation Progress\n`;
-      digest += `| Function | Instrumented? | Status |\n`;
-      digest += `|----------|---------------|--------|\n`;
-      
-      for (const fn of metrics.events.criticalFunctions) {
-        const instrumented = metrics.events.instrumented.includes(fn);
-        const status = instrumented ? '✅' : '❌';
-        digest += `| \`${fn}\` | ${instrumented ? 'Yes' : 'No'} | ${status} |\n`;
-      }
-      digest += '\n';
-    }
 
     // Graph Delta
     digest += `## Graph Delta\n`;
@@ -953,72 +950,92 @@ class DigestGenerator {
   }
 
   private async getEventCoverage(): Promise<{
-    criticalFunctions: string[];
-    instrumented: string[];
-    coverage: number;
+    scopes: {
+      'runtime-core': { functions: string[]; instrumented: string[]; coverage: number };
+      'debugger-lifecycle': { functions: string[]; instrumented: string[]; coverage: number };
+    };
+    overall: number;
   }> {
-    // Define actual critical orchestrator functions (updated to real function names)
-    const criticalFunctions = [
-      'initialize',
-      'processLog', 
-      'registerBranch',
-      'unregisterBranch',
-      'shutdown'
-    ];
-    
+    // Define instrumentation scopes with their critical functions
+    const scopes = {
+      'runtime-core': [
+        'createExecutionPlan',
+        'executePlan', 
+        'dispatchStep',
+        'finalizePlan',
+        'processLog'
+      ],
+      'debugger-lifecycle': [
+        'initialize',
+        'registerBranch', 
+        'unregisterBranch',
+        'shutdown',
+        'processLog'
+      ]
+    };
+
+    console.log('🔍 Scanning orchestrator files for instrumentation...');
+
+    const results = {
+      'runtime-core': { functions: scopes['runtime-core'], instrumented: [] as string[], coverage: 0 },
+      'debugger-lifecycle': { functions: scopes['debugger-lifecycle'], instrumented: [] as string[], coverage: 0 }
+    };
+
     try {
-      // Improved heuristic: look for emitJitterbugEvent calls in orchestrator files
-      const instrumentedFunctions: string[] = [];
-      
       const orchestratorFiles = execSync('find src/orchestrator -name "*.ts" -not -path "*/test*" -not -path "*/__tests__/*"', {
         cwd: this.projectRoot,
         encoding: 'utf8',
       }).trim().split('\n').filter(Boolean);
-      
-      // Debug output
-      console.log('🔍 Scanning orchestrator files for instrumentation:', orchestratorFiles);
-      
-      for (const file of orchestratorFiles) {
-        try {
-          const content = readFileSync(join(this.projectRoot, file), 'utf8');
-          
-          // Ultra-simple detection: if file contains both function name and emitJitterbugEvent
-          // and they appear in reasonable proximity, count it as instrumented
-          for (const fnName of criticalFunctions) {
-            if (content.includes(fnName) && content.includes('emitJitterbugEvent')) {
-              // Check if function definition exists
-              const functionDefRegex = new RegExp(`(async\\s+)?${fnName}\\s*\\(`);
-              if (functionDefRegex.test(content)) {
-                // Simple heuristic: if function is defined in a file that has emitJitterbugEvent calls,
-                // it's likely instrumented (good enough for now)
-                instrumentedFunctions.push(fnName);
-                console.log(`✅ Found instrumentation in ${fnName} (${file})`);
+
+      // Scan each scope
+      for (const [scopeName, scopeFunctions] of Object.entries(scopes)) {
+        const instrumentedFunctions: string[] = [];
+        
+        for (const file of orchestratorFiles) {
+          try {
+            const content = readFileSync(join(this.projectRoot, file), 'utf8');
+            
+            for (const fnName of scopeFunctions) {
+              // Ultra-simple detection: if file contains both function name and emitJitterbugEvent
+              if (content.includes(fnName) && content.includes('emitJitterbugEvent')) {
+                const functionDefRegex = new RegExp(`(async\\s+)?${fnName}\\s*\\(`);
+                if (functionDefRegex.test(content)) {
+                  if (!instrumentedFunctions.includes(fnName)) {
+                    instrumentedFunctions.push(fnName);
+                    console.log(`✅ Found instrumentation in ${fnName} (${file}) [${scopeName}]`);
+                  }
+                }
               }
             }
+          } catch (error) {
+            // File might not exist
           }
-        } catch (error) {
-          console.warn(`Failed to read ${file}:`, error);
         }
+
+        const coverage = scopeFunctions.length > 0 ? instrumentedFunctions.length / scopeFunctions.length : 0;
+        results[scopeName] = {
+          functions: scopeFunctions,
+          instrumented: [...new Set(instrumentedFunctions)],
+          coverage
+        };
       }
+
+      // Calculate overall coverage as average of scope percentages
+      const overallCoverage = (results['runtime-core'].coverage + results['debugger-lifecycle'].coverage) / 2;
       
-      const coverage = criticalFunctions.length > 0 
-        ? Math.round((instrumentedFunctions.length / criticalFunctions.length) * 100)
-        : 0;
-      
-      console.log(`📊 Event coverage: ${instrumentedFunctions.length}/${criticalFunctions.length} = ${coverage}%`);
-      console.log(`📊 Instrumented functions:`, instrumentedFunctions);
-      
+      console.log(`📊 Runtime-core coverage: ${results['runtime-core'].instrumented.length}/${results['runtime-core'].functions.length} = ${Math.round(results['runtime-core'].coverage * 100)}%`);
+      console.log(`📊 Debugger-lifecycle coverage: ${results['debugger-lifecycle'].instrumented.length}/${results['debugger-lifecycle'].functions.length} = ${Math.round(results['debugger-lifecycle'].coverage * 100)}%`);
+      console.log(`📊 Overall coverage: ${Math.round(overallCoverage * 100)}%`);
+
       return {
-        criticalFunctions,
-        instrumented: [...new Set(instrumentedFunctions)],
-        coverage: coverage / 100  // Convert to decimal for percentage display
+        scopes: results,
+        overall: overallCoverage
       };
     } catch (error) {
       console.error('Event coverage detection failed:', error);
       return {
-        criticalFunctions,
-        instrumented: [],
-        coverage: 0
+        scopes: results,
+        overall: 0
       };
     }
   }
