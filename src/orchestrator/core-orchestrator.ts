@@ -20,15 +20,19 @@ import type { RoutingDecision } from './routing-engine.js';
 import { EventBus, NamespacedEventBus } from './event-bus.js';
 import { ConfigurationManager } from './config-manager.js';
 import type { HealthMetrics } from './config-manager.js';
+import { BaseOrchestratorError } from './errors.js';
 
-export class OrchestratorError extends Error {
+export class OrchestratorError extends BaseOrchestratorError {
+  public readonly branchName?: BranchName;
+
   constructor(
     message: string,
-    public readonly code: string,
-    public readonly branchName?: BranchName
+    code: string,
+    branchName?: BranchName,
+    retryable = false
   ) {
-    super(message);
-    this.name = 'OrchestratorError';
+    super(message, code, 'orchestrator', retryable);
+    this.branchName = branchName;
   }
 }
 

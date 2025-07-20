@@ -11,6 +11,20 @@ export { RoutingEngine, RoutingEngineError } from './routing-engine.js';
 export { EventBus, NamespacedEventBus, EventBusError } from './event-bus.js';
 export { ConfigurationManager, ConfigurationError } from './config-manager.js';
 
+// Error hierarchy
+export {
+  BaseOrchestratorError,
+  ConfigurationError as OrchestratorConfigurationError,
+  DependencyError,
+  TransientError,
+  InvariantError,
+  CancelledError,
+  ValidationError,
+  isOrchestratorError,
+  isRetryableError,
+  getErrorMetrics
+} from './errors.js';
+
 // Type exports
 export type * from './types.js';
 

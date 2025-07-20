@@ -27,6 +27,8 @@
         "format": "prettier --write \"src/**/*.ts\"",
         "format:check": "prettier --check \"src/**/*.ts\"",
         "typecheck": "tsc --noEmit",
+        "digest": "npx tsx scripts/generate-digest.ts",
+        "domain-snapshot": "npx tsx scripts/generate-domain-snapshot.ts",
         "prepublishOnly": "npm run build"
     },
     "keywords": [
@@ -52,6 +54,7 @@
         "eslint-plugin-prettier": "^5.1.3",
         "next": "^14.0.0",
         "prettier": "^3.2.4",
+        "ts-node": "^10.9.2",
         "typescript": "^5.3.3",
         "vitest": "^1.6.1"
     },
