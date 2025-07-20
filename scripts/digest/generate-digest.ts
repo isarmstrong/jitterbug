@@ -129,47 +129,21 @@ class DigestGenerator {
   }
 
   private generateIntegrityHash(metrics: any): string {
-    const crypto = require('crypto');
-    
-    // Get stable exports
+    // Simple hash based on stable exports + event count
     const tierCounts = this.getStabilityTierCounts(join(this.projectRoot, 'src/index.ts'));
     const stableExports = ['initializeJitterbug', 'ensureJitterbugReady']; // Hardcoded for baseline
+    const eventCount = 28; // Total required events
     
-    // Get required events (sorted)
-    const requiredEvents = [
-      'orchestrator.plan.build.started',
-      'orchestrator.plan.build.completed', 
-      'orchestrator.plan.build.failed',
-      'orchestrator.plan.execution.started',
-      'orchestrator.plan.execution.completed',
-      'orchestrator.plan.execution.failed',
-      'orchestrator.plan.finalized',
-      'orchestrator.step.started',
-      'orchestrator.step.completed',
-      'orchestrator.step.failed',
-      'orchestrator.step.dispatch.started',
-      'orchestrator.step.dispatch.completed',
-      'orchestrator.step.dispatch.failed',
-      'orchestrator.core.initialization.started',
-      'orchestrator.core.initialization.completed',
-      'orchestrator.core.initialization.failed',
-      'orchestrator.core.shutdown.started',
-      'orchestrator.core.shutdown.completed',
-      'orchestrator.core.shutdown.failed',
-      'orchestrator.branch.registration.started',
-      'orchestrator.branch.registration.completed',
-      'orchestrator.branch.registration.failed',
-      'orchestrator.branch.unregistration.started',
-      'orchestrator.branch.unregistration.completed',
-      'orchestrator.branch.unregistration.failed',
-      'orchestrator.log.processing.started',
-      'orchestrator.log.processing.completed',
-      'orchestrator.log.processing.failed'
-    ].sort();
+    // Simple deterministic hash
+    const hashInput = `stable:${stableExports.join(',')}:experimental:${tierCounts.experimental}:events:${eventCount}`;
     
-    // Combine for hash
-    const hashInput = stableExports.join('|') + '::' + requiredEvents.join('|');
-    return crypto.createHash('sha256').update(hashInput).digest('hex').slice(0, 12);
+    // Simple string hash function (djb2)
+    let hash = 5381;
+    for (let i = 0; i < hashInput.length; i++) {
+      hash = ((hash << 5) + hash) + hashInput.charCodeAt(i);
+    }
+    
+    return Math.abs(hash).toString(16).slice(0, 12);
   }
 
   private async collectMetrics(): Promise<DigestMetrics> {
@@ -826,8 +800,8 @@ class DigestGenerator {
     // Digest Integrity
     digest += `## Digest Integrity\n\n`;
     const tierCounts = this.getStabilityTierCounts(join(this.projectRoot, 'src/index.ts'));
-    const moves = metrics.symbols.drift.filter(s => s.status === 'moved');
-    const internalizations = metrics.symbols.drift.filter(s => s.status === 'removed' && s.notes?.includes('Internalized'));
+    const movesForIntegrity = metrics.symbols.drift.filter(s => s.status === 'moved');
+    const internalizationsForIntegrity = metrics.symbols.drift.filter(s => s.status === 'removed' && s.notes?.includes('Internalized'));
     
     digest += `- **Coverage gates:** PASS (runtime-core ${Math.round(metrics.events.scopes['runtime-core'].coverage * 100)}%, lifecycle ${Math.round(metrics.events.scopes['debugger-lifecycle'].coverage * 100)}%)\n`;
     digest += `- **Schema completeness:** PASS (${metrics.events.overallCompletion || 28}/28)\n`;
@@ -835,7 +809,7 @@ class DigestGenerator {
     digest += `- **Stable export count:** ${tierCounts.stable} (≤5) – ${tierCounts.stable <= 5 ? 'PASS' : 'FAIL'}\n`;
     digest += `- **Experimental export count:** ${tierCounts.experimental} (≤5) – ${tierCounts.experimental <= 5 ? 'PASS' : 'FAIL'}\n`;
     digest += `- **Wildcard exports:** 0 – PASS\n`;
-    digest += `- **Symbol moves/internalizations:** ${moves.length + internalizations.length === 0 ? 'None (baseline stable)' : `${moves.length + internalizations.length} changes`}\n`;
+    digest += `- **Symbol moves/internalizations:** ${movesForIntegrity.length + internalizationsForIntegrity.length === 0 ? 'None (baseline stable)' : `${movesForIntegrity.length + internalizationsForIntegrity.length} changes`}\n`;
     digest += `- **Exceptions acknowledged:** 2 (documented)\n`;
     digest += '\n';
 
