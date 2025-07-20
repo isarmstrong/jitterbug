@@ -10,7 +10,52 @@
 
 export const VERSION = '0.2.0';
 
-// Placeholder for the new orchestrator implementation
-export function initializeJitterbug() {
-  console.log('🐛 Jitterbug v0.2.0 - Ready for implementation');
+// Core orchestrator exports
+export {
+  CoreOrchestrator,
+  OrchestratorError,
+  BranchRegistry,
+  BranchRegistryError,
+  RoutingEngine,
+  RoutingEngineError,
+  EventBus,
+  NamespacedEventBus,
+  EventBusError,
+  ConfigurationManager,
+  ConfigurationError,
+  createBranchName,
+  createEventType,
+  BUILTIN_EVENTS,
+  BUILTIN_BRANCHES,
+} from './orchestrator/index.js';
+
+// Type exports
+export type {
+  BranchName,
+  EventType,
+  LogLevel,
+  LogEntry,
+  LogMetadata,
+  BranchState,
+  DebugBranch,
+  BranchMetadata,
+  RoutingStrategy,
+  BranchEvent,
+  EventSubscription,
+  EventHandler,
+  OrchestratorConfig,
+  RoutingRule,
+  RoutingCondition,
+  EventBusConfig,
+  ErrorHandlingConfig,
+} from './orchestrator/index.js';
+
+/**
+ * Initialize Jitterbug with the provided configuration
+ */
+export async function initializeJitterbug(config?: import('./orchestrator/index.js').OrchestratorConfig): Promise<import('./orchestrator/index.js').CoreOrchestrator> {
+  const { CoreOrchestrator } = await import('./orchestrator/index.js');
+  const orchestrator = new CoreOrchestrator(config);
+  await orchestrator.initialize();
+  return orchestrator;
 }

@@ -27,7 +27,8 @@
       "Bash(tm mcp-keys:*)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:docs.anthropic.com)",
-      "mcp__task-master-ai__update_task"
+      "mcp__task-master-ai__update_task",
+      "mcp__task-master-ai__get_task"
     ],
     "deny": []
   },
