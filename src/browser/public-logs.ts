@@ -12,10 +12,19 @@ const coerceLimit = (n?: number): number | undefined =>
 
 export const logInspector = {
   query(opts: { sinceSeq?: number; limit?: number; level?: string; branch?: string } = {}) {
-    const { sinceSeq, limit } = opts;
+    const { sinceSeq, limit, branch, level } = opts;
     const raw = queryLogs(sinceSeq);
     let entries = raw.entries;
 
+    // Apply filtering
+    if (branch) {
+      entries = entries.filter(e => e.branch === branch);
+    }
+    if (level) {
+      entries = entries.filter(e => e.level === level);
+    }
+
+    // Apply limit after filtering
     if (limit) {
       entries = entries.slice(-coerceLimit(limit)!);
     }

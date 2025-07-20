@@ -207,6 +207,50 @@ describe('Log Inspector (Phase 1)', () => {
     });
   });
 
+  describe('Filtering (Phase 2)', () => {
+    it('should filter by branch', () => {
+      // Emit events with different branches
+      safeEmit('orchestrator.debugger.ready', { flushed: 1 }, { branch: 'main' });
+      safeEmit('orchestrator.debugger.ready', { flushed: 2 }, { branch: 'feature' });
+      safeEmit('orchestrator.debugger.ready', { flushed: 3 }, { branch: 'main' });
+      
+      const mainResults = logInspector.query({ branch: 'main' });
+      const featureResults = logInspector.query({ branch: 'feature' });
+      
+      expect(mainResults.entries.length).toBeGreaterThan(0);
+      expect(featureResults.entries.length).toBeGreaterThan(0);
+      expect(mainResults.entries.every(e => e.branch === 'main')).toBe(true);
+      expect(featureResults.entries.every(e => e.branch === 'feature')).toBe(true);
+    });
+
+    it('should filter by level', () => {
+      // Emit events with different levels
+      safeEmit('orchestrator.debugger.ready', { flushed: 1 }, { level: 'info' });
+      safeEmit('orchestrator.debugger.ready', { flushed: 2 }, { level: 'error' });
+      safeEmit('orchestrator.debugger.ready', { flushed: 3 }, { level: 'info' });
+      
+      const infoResults = logInspector.query({ level: 'info' });
+      const errorResults = logInspector.query({ level: 'error' });
+      
+      expect(infoResults.entries.length).toBeGreaterThan(0);
+      expect(errorResults.entries.length).toBeGreaterThan(0);
+      expect(infoResults.entries.every(e => e.level === 'info')).toBe(true);
+      expect(errorResults.entries.every(e => e.level === 'error')).toBe(true);
+    });
+
+    it('should support combined filtering', () => {
+      // Emit events with various combinations
+      safeEmit('orchestrator.debugger.ready', { flushed: 1 }, { branch: 'main', level: 'info' });
+      safeEmit('orchestrator.debugger.ready', { flushed: 2 }, { branch: 'main', level: 'error' });
+      safeEmit('orchestrator.debugger.ready', { flushed: 3 }, { branch: 'feature', level: 'info' });
+      
+      const filtered = logInspector.query({ branch: 'main', level: 'info' });
+      
+      expect(filtered.entries.length).toBeGreaterThan(0);
+      expect(filtered.entries.every(e => e.branch === 'main' && e.level === 'info')).toBe(true);
+    });
+  });
+
   describe('Event Capture Integration', () => {
     it.skip('should capture events via safeEmit', () => {
       const before = logInspector.query();

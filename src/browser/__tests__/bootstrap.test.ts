@@ -136,6 +136,12 @@ describe('Jitterbug Bootstrap', () => {
     expect(emitHelp).toContain('Emit a structured debugging event');
     expect(emitHelp).toContain('emit<T, P>');
     
+    // Test logInspector help topic (Task 3.5)
+    const logHelp = api.help('logInspector');
+    expect(logHelp).toMatch(/experimental/i); // Case insensitive
+    expect(logHelp).toContain('logInspector.query');
+    expect(logHelp).toMatch(/sinceSeq.*limit/);
+    
     const unknownHelp = api.help('unknown');
     expect(unknownHelp).toContain('No detailed help');
   });

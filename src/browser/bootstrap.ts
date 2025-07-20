@@ -199,10 +199,10 @@ const HELP_REGISTRY: HelpEntry[] = [
   {
     name: 'logInspector',
     summary: 'Experimental log inspection query interface',
-    signature: 'logInspector.query({ sinceSeq?, limit? }) → { entries, stats, nextSeq }',
+    signature: 'logInspector.query({ sinceSeq?, limit?, branch?, level? }) → { entries, stats, nextSeq }',
     since: '0.2',
     category: 'logs',
-    example: 'logInspector.query({ limit: 100 }) // Get last 100 entries'
+    example: 'logInspector.query({ branch: "main", level: "error", limit: 50 })'
   }
 ];
 
