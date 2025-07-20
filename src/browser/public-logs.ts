@@ -6,6 +6,7 @@
  */
 
 import { queryLogs } from './logs/internal/attach.js';
+import { logInspector as internalLogInspector } from './logs/index.js';
 
 const coerceLimit = (n?: number): number | undefined =>
   !n ? undefined : Math.min(Math.max(n, 1), 5000);
@@ -57,6 +58,20 @@ export const logInspector = {
   },
 
   /**
+   * Export logs with filtering and format options
+   * @experimental Phase B - Log export functionality
+   */
+  export(options?: {
+    format?: 'jsonl' | 'raw';
+    branches?: string[];
+    levels?: ('debug' | 'info' | 'warn' | 'error' | 'trace')[];
+    since?: number; // timestamp ms
+    limit?: number; // cap number of entries
+  }) {
+    return internalLogInspector.export(options);
+  },
+
+  /**
    * Get current log inspector capabilities
    * @experimental Forward-compatibility discovery
    */
@@ -64,7 +79,7 @@ export const logInspector = {
     const raw = queryLogs();
     return {
       filters: ['branch', 'level', 'time', 'type'] as const,
-      exports: ['json', 'ndjson'] as const, // Future Phase 3
+      exports: ['jsonl', 'raw'] as const, // Phase B implemented
       maxLimit: 5000,
       bufferCapacity: raw.stats.capacity
     };
