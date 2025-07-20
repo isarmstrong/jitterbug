@@ -63,21 +63,24 @@ class SSETransport {
         if (this.endpoint) {
           const clientCount = this.endpoint.broadcastLog(event);
           
-          // Emit instrumentation event for monitoring
-          safeEmit('orchestrator.transport.sse.broadcast', {
-            eventType: event.type,
-            clientCount,
-            success: clientCount > 0
-          }, { level: 'debug' });
+          // Hub will emit orchestrator.sse.event.sent for actual deliveries
+          // This is just for high-level transport monitoring
+          if (clientCount === 0) {
+            safeEmit('orchestrator.sse.event.dropped', {
+              eventType: event.type,
+              reason: 'no_connections'
+            }, { level: 'debug' });
+          }
         }
       });
 
       this.running = true;
 
       // Emit start event
-      safeEmit('orchestrator.transport.sse.started', {
+      safeEmit('orchestrator.sse.transport.started', {
         path: this.options.endpoint.path ?? '/__jitterbug/sse',
-        cors: this.options.endpoint.cors ?? true
+        cors: this.options.endpoint.cors ?? true,
+        capabilities: getSSECapabilities()
       }, { level: 'info' });
     } catch (error) {
       console.error('Failed to start SSE transport:', error);
@@ -99,7 +102,7 @@ class SSETransport {
     this.running = false;
 
     // Emit stop event
-    safeEmit('orchestrator.transport.sse.stopped', {
+    safeEmit('orchestrator.sse.transport.stopped', {
       uptime,
       clientsDisconnected
     }, { level: 'info' });
@@ -237,8 +240,61 @@ function isSSESupported(): boolean {
   return typeof EventSource !== 'undefined' && typeof ReadableStream !== 'undefined';
 }
 
+/**
+ * Get current SSE capabilities and feature flags
+ */
+function getSSECapabilities() {
+  return {
+    filters: { 
+      branches: false, // P3 - not yet implemented
+      levels: false    // P3 - not yet implemented
+    },
+    ingestion: false,  // P2 - not yet implemented  
+    resume: false,     // P5 - not yet implemented
+    batching: false,   // P7 - not yet implemented
+    heartbeat: false,  // P4 - not yet implemented
+    auth: false,       // P6 - not yet implemented
+    version: 1,
+    supported: isSSESupported()
+  } as const;
+}
+
+/**
+ * Get SSE help and usage information
+ */
+function getSSEHelp() {
+  return {
+    description: 'Server-Sent Events transport for real-time log streaming',
+    usage: {
+      connect: 'debug.sse.connect() - Start SSE transport with default options',
+      connectWithOptions: 'debug.sse.connect({ endpoint: { path: "/custom" } }) - Start with custom endpoint',
+      checkSupport: 'debug.sse.isSupported() - Check browser SSE support',
+      capabilities: 'debug.sse.capabilities() - Get current feature flags',
+      help: 'debug.sse.help() - Show this help'
+    },
+    endpoint: {
+      default: '/__jitterbug/sse',
+      method: 'GET',
+      cors: 'Enabled by default',
+      format: 'Server-Sent Events (text/event-stream)'
+    },
+    examples: {
+      basic: 'const sse = debug.sse.connect();',
+      customPath: 'const sse = debug.sse.connect({ endpoint: { path: "/logs/stream" } });',
+      checkStatus: 'sse.isRunning() // true if connected',
+      stop: 'sse.stop() // disconnect'
+    },
+    limitations: {
+      phase: 'P1 - Basic connectivity only',
+      filters: 'Branch/level filtering not yet available (P3)',
+      ingestion: 'Client → server sending not yet available (P2)',
+      resume: 'Connection resume not yet available (P5)'
+    }
+  } as const;
+}
+
 // Internal module exports - not part of public surface, only for umbrella integration
-export { connectSSE, isSSESupported };
+export { connectSSE, isSSESupported, getSSECapabilities, getSSEHelp };
 
 // Test-only exports (not in public surface)
 if (process.env.NODE_ENV === 'test') {

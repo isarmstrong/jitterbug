@@ -909,6 +909,103 @@ export const eventSchemas = {
     },
     level: 'debug' as const,
     description: 'SSE event broadcast'
+  },
+
+  // P1.5 SSE telemetry events
+  'orchestrator.sse.connection.opened': {
+    validate: (payload: unknown): { connectionId: string; since: number; filters: Record<string, any>; totalConnections: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        connectionId: validateString(p.connectionId, 'connectionId'),
+        since: validateNumber(p.since, 'since'),
+        filters: typeof p.filters === 'object' && p.filters !== null ? p.filters as Record<string, any> : {},
+        totalConnections: validateNumber(p.totalConnections, 'totalConnections')
+      };
+    },
+    level: 'debug' as const,
+    description: 'SSE client connection opened'
+  },
+
+  'orchestrator.sse.connection.closed': {
+    validate: (payload: unknown): { connectionId: string; reason: string; durationMs: number; totalConnections: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        connectionId: validateString(p.connectionId, 'connectionId'),
+        reason: validateString(p.reason, 'reason'),
+        durationMs: validateNumber(p.durationMs, 'durationMs'),
+        totalConnections: validateNumber(p.totalConnections, 'totalConnections')
+      };
+    },
+    level: 'debug' as const,
+    description: 'SSE client connection closed'
+  },
+
+  'orchestrator.sse.event.sent': {
+    validate: (payload: unknown): { count: number; messageType: string; activeConnections: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        count: validateNumber(p.count, 'count'),
+        messageType: validateString(p.messageType, 'messageType'),
+        activeConnections: validateNumber(p.activeConnections, 'activeConnections')
+      };
+    },
+    level: 'debug' as const,
+    description: 'SSE events successfully sent to clients'
+  },
+
+  'orchestrator.sse.event.dropped': {
+    validate: (payload: unknown): { eventType: string; reason: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        eventType: validateString(p.eventType, 'eventType'),
+        reason: validateString(p.reason, 'reason')
+      };
+    },
+    level: 'debug' as const,
+    description: 'SSE event dropped (no active connections)'
+  },
+
+  'orchestrator.sse.transport.started': {
+    validate: (payload: unknown): { path: string; cors: boolean; capabilities: Record<string, any> } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        path: validateString(p.path, 'path'),
+        cors: typeof p.cors === 'boolean' ? p.cors : false,
+        capabilities: typeof p.capabilities === 'object' && p.capabilities !== null ? p.capabilities as Record<string, any> : {}
+      };
+    },
+    level: 'info' as const,
+    description: 'SSE transport started'
+  },
+
+  'orchestrator.sse.transport.stopped': {
+    validate: (payload: unknown): { uptime: number; clientsDisconnected: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        uptime: validateNumber(p.uptime, 'uptime'),
+        clientsDisconnected: validateNumber(p.clientsDisconnected, 'clientsDisconnected')
+      };
+    },
+    level: 'info' as const,
+    description: 'SSE transport stopped'
   }
 } as const;
 

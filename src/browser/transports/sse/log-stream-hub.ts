@@ -82,9 +82,11 @@ class LogStreamHub {
     });
 
     // Emit connection event
-    safeEmit('orchestrator.transport.sse.client.connected', {
-      clientId,
-      totalClients: this.clients.size
+    safeEmit('orchestrator.sse.connection.opened', {
+      connectionId: clientId,
+      since: client.connectedAt,
+      filters: {}, // P3: will include actual filter config
+      totalConnections: this.clients.size
     }, { level: 'debug' });
 
     return client;
@@ -111,10 +113,11 @@ class LogStreamHub {
     this.clients.delete(clientId);
 
     // Emit disconnection event
-    safeEmit('orchestrator.transport.sse.client.disconnected', {
-      clientId,
-      uptime,
-      totalClients: this.clients.size
+    safeEmit('orchestrator.sse.connection.closed', {
+      connectionId: clientId,
+      reason: 'client_disconnect', // TODO P4: distinguish close reasons
+      durationMs: uptime,
+      totalConnections: this.clients.size
     }, { level: 'debug' });
 
     return true;
@@ -144,6 +147,16 @@ class LogStreamHub {
     deadClients.forEach(id => this.removeClient(id));
     
     this.messagesDispatched += successCount;
+
+    // Emit batch send telemetry (only for actual log events, not heartbeat)
+    if (message.type === 'log' && successCount > 0) {
+      safeEmit('orchestrator.sse.event.sent', {
+        count: successCount,
+        messageType: message.type,
+        activeConnections: this.clients.size
+      }, { level: 'debug' });
+    }
+    
     return successCount;
   }
 

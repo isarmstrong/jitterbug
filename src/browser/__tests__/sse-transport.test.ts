@@ -294,6 +294,63 @@ describe('SSEEndpoint', () => {
   });
 });
 
+describe('SSE Capabilities and Help', () => {
+  describe('Capabilities', () => {
+    it('should return current phase capabilities', () => {
+      const caps = debug.sse.capabilities();
+      
+      expect(caps).toEqual({
+        filters: { 
+          branches: false,
+          levels: false
+        },
+        ingestion: false,
+        resume: false,
+        batching: false,
+        heartbeat: false,
+        auth: false,
+        version: 1,
+        supported: expect.any(Boolean)
+      });
+    });
+
+    it('should indicate browser support correctly', () => {
+      const caps = debug.sse.capabilities();
+      const isSupported = debug.sse.isSupported();
+      
+      expect(caps.supported).toBe(isSupported);
+    });
+  });
+
+  describe('Help', () => {
+    it('should provide comprehensive help information', () => {
+      const help = debug.sse.help();
+      
+      expect(help.description).toContain('Server-Sent Events');
+      expect(help.usage.connect).toContain('debug.sse.connect()');
+      expect(help.endpoint.default).toBe('/__jitterbug/sse');
+      expect(help.limitations.phase).toContain('P1');
+    });
+
+    it('should include usage examples', () => {
+      const help = debug.sse.help();
+      
+      expect(help.examples.basic).toContain('debug.sse.connect()');
+      expect(help.examples.customPath).toContain('path:');
+      expect(help.examples.checkStatus).toContain('isRunning()');
+      expect(help.examples.stop).toContain('stop()');
+    });
+
+    it('should document current limitations', () => {
+      const help = debug.sse.help();
+      
+      expect(help.limitations.filters).toContain('not yet available');
+      expect(help.limitations.ingestion).toContain('not yet available');
+      expect(help.limitations.resume).toContain('not yet available');
+    });
+  });
+});
+
 describe('SSETransport Integration', () => {
   // Use structural typing instead of exported types
   let transport: ReturnType<typeof debug.sse.connect>;

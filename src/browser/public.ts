@@ -49,7 +49,7 @@ import { experimentalEmojiConsole } from './transports/emoji-console.js';
 import { configPersistence } from './config-persistence.js';
 import { safeEmit } from './schema-registry.js';
 // Internal access - not re-exported to prevent surface leakage
-import { connectSSE, isSSESupported } from './transports/sse-transport.js';
+import { connectSSE, isSSESupported, getSSECapabilities, getSSEHelp } from './transports/sse-transport.js';
 
 // Phase C: Debug Umbrella Consolidation
 /** @experimental Unified debug interface - consolidates logs, console, config, emit, and SSE */
@@ -68,7 +68,9 @@ export const debug = {
   /** @experimental Server-Sent Events transport interface */
   sse: {
     connect: connectSSE,
-    isSupported: isSSESupported
+    isSupported: isSSESupported,
+    capabilities: getSSECapabilities,
+    help: getSSEHelp
   },
   /** @experimental Safe event emission utility */
   emit: safeEmit
