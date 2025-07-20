@@ -22,6 +22,7 @@ import { validateEventPayload, eventSchemas, setGlobalEmitFn } from './schema-re
 import { experimentalBranches } from './branch-manager.js';
 import { experimentalDebug } from './debug-control.js';
 import { configPersistence } from './config-persistence.js';
+import { attachLogCapture } from './logs/internal/attach.js';
 
 // Simple ULID-like ID generator (simplified for bootstrap)
 function generateId(): string {
@@ -512,6 +513,10 @@ export function initializeJitterbug(global: Window = window): void {
 
   // Attach configuration persistence (Task 3.4) - after API creation
   api.debug.config = configPersistence;
+
+  // Attach log capture for Task 3.5 log inspection
+  const bufferSize = configPersistence.snapshot().logs?.bufferSize ?? 1000;
+  attachLogCapture(bufferSize);
 
   // Load and apply configuration before ready
   const configResult = configPersistence._loadConfig();
