@@ -98,7 +98,14 @@ const STYLES = {
   branch: 'color: #059669; font-weight: 500;'
 };
 
-class EmojiConsoleTransport {
+interface EmojiConsoleInstance {
+  start(): void;
+  stop(): void;
+  updateOptions(options: Partial<EmojiConsoleOptions>): void;
+  getOptions(): Readonly<Required<EmojiConsoleOptions>>;
+}
+
+class EmojiConsoleTransport implements EmojiConsoleInstance {
   private options: Required<EmojiConsoleOptions>;
   private unregister?: () => void;
 
@@ -277,46 +284,80 @@ class EmojiConsoleTransport {
 }
 
 // Global instance
-let globalTransport: EmojiConsoleTransport | null = null;
+let activeTransport: EmojiConsoleInstance | null = null;
+
+// Default options
+const DEFAULT_OPTIONS: EmojiConsoleOptions = {
+  enabled: true, // Will be overridden by isDevMode() in constructor
+  minLevel: 'info',
+  useGroups: true,
+  showTimestamps: true,
+  useBugEmoji: true
+};
 
 /**
- * Create and start emoji console transport
+ * Controller interface for emoji console transport
  * @experimental Subject to change without SemVer guarantees.
  */
-export function createEmojiConsole(options?: EmojiConsoleOptions): EmojiConsoleTransport {
-  return new EmojiConsoleTransport(options);
+export interface EmojiConsoleController {
+  stop(): void;
+  update(opts: Partial<EmojiConsoleOptions>): void;
+  options(): Readonly<Required<EmojiConsoleOptions>>;
 }
 
 /**
- * Start global emoji console transport (singleton)
+ * Enable (or reconfigure) the emoji console transport
+ * 
+ * Idempotent: calling again updates existing instance.
+ * 
  * @experimental Subject to change without SemVer guarantees.
  */
-export function startEmojiConsole(options?: EmojiConsoleOptions): void {
-  if (globalTransport) {
-    globalTransport.stop();
+export function experimentalEmojiConsole(
+  opts: Partial<EmojiConsoleOptions> = {}
+): EmojiConsoleController {
+  // If transport exists, update it and return controller
+  if (activeTransport) {
+    activeTransport.updateOptions(opts);
+    return createController();
   }
   
-  globalTransport = new EmojiConsoleTransport(options);
-  globalTransport.start();
+  // Create new transport with merged options
+  const mergedOptions = { ...DEFAULT_OPTIONS, ...opts };
+  activeTransport = new EmojiConsoleTransport(mergedOptions);
+  activeTransport.start();
+  
+  return createController();
 }
 
-/**
- * Stop global emoji console transport
- * @experimental Subject to change without SemVer guarantees.
- */
-export function stopEmojiConsole(): void {
-  if (globalTransport) {
-    globalTransport.stop();
-    globalTransport = null;
-  }
+function createController(): EmojiConsoleController {
+  return {
+    stop(): void {
+      if (activeTransport) {
+        activeTransport.stop();
+        activeTransport = null;
+      }
+    },
+    
+    update(opts: Partial<EmojiConsoleOptions>): void {
+      if (activeTransport) {
+        activeTransport.updateOptions(opts);
+      }
+    },
+    
+    options(): Readonly<Required<EmojiConsoleOptions>> {
+      if (activeTransport) {
+        return activeTransport.getOptions();
+      }
+      // Return defaults if no active transport
+      const transport = new EmojiConsoleTransport();
+      return transport.getOptions();
+    }
+  };
 }
 
-/**
- * Get current emoji console options
- * @experimental Subject to change without SemVer guarantees.
- */
-export function getEmojiConsoleOptions(): Readonly<Required<EmojiConsoleOptions>> | null {
-  return globalTransport?.getOptions() ?? null;
+// Internal factory for backward compatibility within this file
+function createEmojiConsole(options?: EmojiConsoleOptions): EmojiConsoleInstance {
+  return new EmojiConsoleTransport(options);
 }
 
 // Export types for external use

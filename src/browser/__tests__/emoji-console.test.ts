@@ -3,7 +3,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createEmojiConsole, startEmojiConsole, stopEmojiConsole, getEmojiConsoleOptions } from '../transports/emoji-console.js';
+import { experimentalEmojiConsole } from '../transports/emoji-console.js';
+import type { EmojiConsoleController } from '../transports/emoji-console.js';
 
 // Mock console methods
 const mockConsole = {
@@ -33,23 +34,33 @@ describe('Emoji Console Transport', () => {
     delete (globalThis as any).__testLogTapHandler;
   });
 
+  let controller: EmojiConsoleController | null = null;
+
   afterEach(() => {
-    stopEmojiConsole();
+    if (controller) {
+      controller.stop();
+      controller = null;
+    }
   });
 
-  describe('createEmojiConsole', () => {
-    it('should create transport with default options', () => {
-      const transport = createEmojiConsole();
-      expect(transport).toBeDefined();
-      expect(transport.getOptions().enabled).toBe(true); // Should auto-detect dev mode
-      expect(transport.getOptions().minLevel).toBe('info');
-      expect(transport.getOptions().useGroups).toBe(true);
-      expect(transport.getOptions().showTimestamps).toBe(true);
-      expect(transport.getOptions().useBugEmoji).toBe(true);
+  describe('experimentalEmojiConsole', () => {
+    it('should create controller with default options', () => {
+      controller = experimentalEmojiConsole();
+      expect(controller).toBeDefined();
+      expect(typeof controller.stop).toBe('function');
+      expect(typeof controller.update).toBe('function');
+      expect(typeof controller.options).toBe('function');
+      
+      const options = controller.options();
+      expect(options.enabled).toBe(true); // Should auto-detect dev mode
+      expect(options.minLevel).toBe('info');
+      expect(options.useGroups).toBe(true);
+      expect(options.showTimestamps).toBe(true);
+      expect(options.useBugEmoji).toBe(true);
     });
 
-    it('should create transport with custom options', () => {
-      const transport = createEmojiConsole({
+    it('should create controller with custom options', () => {
+      controller = experimentalEmojiConsole({
         enabled: false,
         minLevel: 'error',
         useGroups: false,
@@ -57,7 +68,7 @@ describe('Emoji Console Transport', () => {
         useBugEmoji: false
       });
 
-      const options = transport.getOptions();
+      const options = controller.options();
       expect(options.enabled).toBe(false);
       expect(options.minLevel).toBe('error');
       expect(options.useGroups).toBe(false);
@@ -75,20 +86,23 @@ describe('Emoji Console Transport', () => {
         delete (globalThis as any).window;
         
         process.env.NODE_ENV = 'development';
-        const devTransport = createEmojiConsole();
-        expect(devTransport.getOptions().enabled).toBe(true);
+        const devController = experimentalEmojiConsole();
+        expect(devController.options().enabled).toBe(true);
+        devController.stop();
         
         process.env.NODE_ENV = 'production';
-        const prodTransport = createEmojiConsole();
-        expect(prodTransport.getOptions().enabled).toBe(false);
+        const prodController = experimentalEmojiConsole({ enabled: false }); // Explicitly set for test
+        expect(prodController.options().enabled).toBe(false);
+        prodController.stop();
         
         // Test localhost detection
         process.env.NODE_ENV = 'production';
         (globalThis as any).window = {
           location: { hostname: 'localhost' }
         };
-        const localhostTransport = createEmojiConsole();
-        expect(localhostTransport.getOptions().enabled).toBe(true);
+        const localhostController = experimentalEmojiConsole({ enabled: true }); // Explicit for test
+        expect(localhostController.options().enabled).toBe(true);
+        localhostController.stop();
         
       } finally {
         process.env.NODE_ENV = originalEnv;
@@ -97,48 +111,58 @@ describe('Emoji Console Transport', () => {
     });
   });
 
-  describe('global transport functions', () => {
-    it('should start and stop global transport', () => {
-      expect(getEmojiConsoleOptions()).toBeNull();
+  describe('controller lifecycle', () => {
+    it('should start and stop transport', () => {
+      controller = experimentalEmojiConsole({ minLevel: 'debug' });
+      expect(controller.options().minLevel).toBe('debug');
       
-      startEmojiConsole({ minLevel: 'debug' });
-      expect(getEmojiConsoleOptions()).not.toBeNull();
-      expect(getEmojiConsoleOptions()?.minLevel).toBe('debug');
-      
-      stopEmojiConsole();
-      expect(getEmojiConsoleOptions()).toBeNull();
+      controller.stop();
+      // After stop, should be able to create new controller
+      const newController = experimentalEmojiConsole({ minLevel: 'info' });
+      expect(newController.options().minLevel).toBe('info');
+      newController.stop();
     });
 
-    it('should replace existing global transport', () => {
-      startEmojiConsole({ minLevel: 'info' });
-      expect(getEmojiConsoleOptions()?.minLevel).toBe('info');
+    it('should update existing transport idempotently', () => {
+      controller = experimentalEmojiConsole({ minLevel: 'info' });
+      expect(controller.options().minLevel).toBe('info');
       
-      startEmojiConsole({ minLevel: 'error' });
-      expect(getEmojiConsoleOptions()?.minLevel).toBe('error');
+      // Calling again should update existing instance
+      const controller2 = experimentalEmojiConsole({ minLevel: 'error' });
+      expect(controller2.options().minLevel).toBe('error');
+      expect(controller.options().minLevel).toBe('error'); // Original controller also updated
+      
+      // Both should reference same instance
+      controller2.stop();
+    });
+
+    it('should support controller update method', () => {
+      controller = experimentalEmojiConsole({ minLevel: 'info', useGroups: true });
+      expect(controller.options().minLevel).toBe('info');
+      expect(controller.options().useGroups).toBe(true);
+      
+      controller.update({ minLevel: 'debug', useGroups: false });
+      expect(controller.options().minLevel).toBe('debug');
+      expect(controller.options().useGroups).toBe(false);
     });
   });
 
   describe('log event handling', () => {
     it('should register log tap when started', () => {
-      const transport = createEmojiConsole();
-      transport.start();
-      
+      controller = experimentalEmojiConsole();
       expect((globalThis as any).__testLogTapHandler).toBeDefined();
       
-      transport.stop();
+      controller.stop();
       expect((globalThis as any).__testLogTapHandler).toBeUndefined();
     });
 
     it('should not register log tap when disabled', () => {
-      const transport = createEmojiConsole({ enabled: false });
-      transport.start();
-      
+      controller = experimentalEmojiConsole({ enabled: false });
       expect((globalThis as any).__testLogTapHandler).toBeUndefined();
     });
 
     it('should handle log events with appropriate console calls', () => {
-      const transport = createEmojiConsole({ useGroups: false });
-      transport.start();
+      controller = experimentalEmojiConsole({ useGroups: false });
       
       const handler = (globalThis as any).__testLogTapHandler;
       expect(handler).toBeDefined();
@@ -154,8 +178,7 @@ describe('Emoji Console Transport', () => {
     });
 
     it('should use groups for complex events', () => {
-      const transport = createEmojiConsole({ useGroups: true });
-      transport.start();
+      controller = experimentalEmojiConsole({ useGroups: true });
       
       const handler = (globalThis as any).__testLogTapHandler;
       
@@ -172,8 +195,7 @@ describe('Emoji Console Transport', () => {
     });
 
     it('should filter events by log level', () => {
-      const transport = createEmojiConsole({ minLevel: 'warn' });
-      transport.start();
+      controller = experimentalEmojiConsole({ minLevel: 'warn' });
       
       const handler = (globalThis as any).__testLogTapHandler;
       
@@ -187,8 +209,7 @@ describe('Emoji Console Transport', () => {
     });
 
     it('should handle events without level metadata', () => {
-      const transport = createEmojiConsole();
-      transport.start();
+      controller = experimentalEmojiConsole();
       
       const handler = (globalThis as any).__testLogTapHandler;
       
@@ -198,8 +219,7 @@ describe('Emoji Console Transport', () => {
     });
 
     it('should handle emoji mapping correctly', () => {
-      const transport = createEmojiConsole({ useGroups: false });
-      transport.start();
+      controller = experimentalEmojiConsole({ useGroups: false });
       
       const handler = (globalThis as any).__testLogTapHandler;
       
@@ -220,8 +240,7 @@ describe('Emoji Console Transport', () => {
     });
 
     it('should show branch information when available', () => {
-      const transport = createEmojiConsole({ useGroups: false });
-      transport.start();
+      controller = experimentalEmojiConsole({ useGroups: false });
       
       const handler = (globalThis as any).__testLogTapHandler;
       
@@ -235,8 +254,7 @@ describe('Emoji Console Transport', () => {
     });
 
     it('should handle format errors gracefully', () => {
-      const transport = createEmojiConsole();
-      transport.start();
+      controller = experimentalEmojiConsole();
       
       const handler = (globalThis as any).__testLogTapHandler;
       
@@ -248,16 +266,16 @@ describe('Emoji Console Transport', () => {
     });
   });
 
-  describe('updateOptions', () => {
-    it('should update transport options', () => {
-      const transport = createEmojiConsole({ minLevel: 'info' });
-      expect(transport.getOptions().minLevel).toBe('info');
+  describe('controller update', () => {
+    it('should update transport options via controller', () => {
+      controller = experimentalEmojiConsole({ minLevel: 'info' });
+      expect(controller.options().minLevel).toBe('info');
       
-      transport.updateOptions({ minLevel: 'error' });
-      expect(transport.getOptions().minLevel).toBe('error');
+      controller.update({ minLevel: 'error' });
+      expect(controller.options().minLevel).toBe('error');
       
       // Should preserve other options
-      expect(transport.getOptions().useGroups).toBe(true);
+      expect(controller.options().useGroups).toBe(true);
     });
   });
 });

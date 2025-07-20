@@ -23,8 +23,8 @@ import { experimentalBranches } from './branch-manager.js';
 import { experimentalDebug } from './debug-control.js';
 import { configPersistence } from './config-persistence.js';
 import { attachLogCapture } from './logs/internal/attach.js';
-import { startEmojiConsole, stopEmojiConsole, getEmojiConsoleOptions } from './transports/emoji-console.js';
-import type { EmojiConsoleOptions } from './transports/emoji-console.js';
+import { experimentalEmojiConsole } from './transports/emoji-console.js';
+import type { EmojiConsoleOptions, EmojiConsoleController } from './transports/emoji-console.js';
 
 // Simple ULID-like ID generator (simplified for bootstrap)
 function generateId(): string {
@@ -601,9 +601,9 @@ export function initializeJitterbug(global: Window = window): void {
     },
     // Emoji Console Transport methods (Task 4) @experimental
     console: {
-      start: (options?: EmojiConsoleOptions) => startEmojiConsole(options),
-      stop: stopEmojiConsole,
-      getOptions: getEmojiConsoleOptions
+      start: (options?: EmojiConsoleOptions) => experimentalEmojiConsole(options),
+      stop: () => emojiConsoleController.stop(),
+      getOptions: () => emojiConsoleController.options()
     }
   };
 
@@ -618,7 +618,7 @@ export function initializeJitterbug(global: Window = window): void {
   attachLogCapture(bufferSize);
 
   // Start emoji console transport for Task 4 (auto-detects development mode)
-  startEmojiConsole();
+  const emojiConsoleController = experimentalEmojiConsole();
 
   // Load and apply configuration before ready
   const configResult = configPersistence._loadConfig();

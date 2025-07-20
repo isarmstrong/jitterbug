@@ -108,9 +108,9 @@ export interface JitterbugGlobal {
 
   /** Console transport methods @experimental */
   console: {
-    start(options?: import('./transports/emoji-console.js').EmojiConsoleOptions): void;
+    start(options?: import('./transports/emoji-console.js').EmojiConsoleOptions): import('./transports/emoji-console.js').EmojiConsoleController;
     stop(): void;
-    getOptions(): Readonly<Required<import('./transports/emoji-console.js').EmojiConsoleOptions>> | null;
+    getOptions(): Readonly<Required<import('./transports/emoji-console.js').EmojiConsoleOptions>>;
   };
 
   /** Symbol: internal (not enumerable) to guard private state (optional). */

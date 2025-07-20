@@ -206,7 +206,12 @@ describe('Jitterbug Bootstrap', () => {
     expect(stopHelp).toContain('console.stop');
     
     // Test that methods are callable
-    expect(() => api.console.start()).not.toThrow();
+    const controller = api.console.start();
+    expect(controller).toBeDefined();
+    expect(typeof controller.stop).toBe('function');
+    expect(typeof controller.update).toBe('function');
+    expect(typeof controller.options).toBe('function');
+    
     expect(() => api.console.stop()).not.toThrow();
     expect(() => api.console.getOptions()).not.toThrow();
   });
