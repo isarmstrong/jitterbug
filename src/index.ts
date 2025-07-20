@@ -10,13 +10,30 @@
 
 export const VERSION = '0.2.0';
 
-// Stable API (≤5 exports)
+/**
+ * Initialize the Jitterbug runtime.
+ * @stable
+ */
 export { initializeJitterbug } from './browser/bootstrap.js';
-export { ensureJitterbugReady, emitJitterbugEvent } from './browser/utils.js';
+
+/**
+ * Wait until initialization completes.
+ * @stable
+ */
+export { ensureJitterbugReady } from './browser/utils.js';
+
+/**
+ * Emit a jitterbug event (low-level).
+ * @experimental Use timeline abstractions instead when available.
+ */
+export { emitJitterbugEvent } from './browser/utils.js';
 
 // Core types
+/** @stable */
 export type { JitterbugEvent, JitterbugGlobal, JitterbugDiagnostics } from './browser/types.js';
 
-// Experimental APIs (≤2 exports)
-/** @experimental Subject to change without SemVer guarantees */
+/**
+ * Event emission with schema validation.
+ * @experimental
+ */
 export { safeEmit as experimentalSafeEmit } from './browser/schema-registry.js';
