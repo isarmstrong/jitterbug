@@ -18,7 +18,7 @@ export const DebugLevels = {
   TRACE: 5
 } as const;
 
-interface DebugState {
+export interface DebugState {
   enabled: boolean;
   level: DebugLevel;
   changedAt: string;   // ISO timestamp

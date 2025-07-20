@@ -223,7 +223,13 @@ class DigestGenerator {
       const changedFiles = execSync(`git diff --name-only ${this.since}..HEAD -- "*.ts" "*.tsx"`, {
         cwd: this.projectRoot,
         encoding: 'utf8',
-      }).trim().split('\n').filter(Boolean);
+      }).trim().split('\n').filter(Boolean).filter(file => 
+        !file.includes('__tests__') && 
+        !file.includes('/test') && 
+        !file.includes('/internal/') && 
+        !file.includes('/__internal__/') && 
+        !file.includes('.internal.')
+      );
 
       const added: string[] = [];
       const removed: string[] = [];
@@ -458,6 +464,16 @@ class DigestGenerator {
       const lines = output.trim().split('\n').filter(line => line);
       for (const line of lines) {
         const [status, file] = line.split('\t');
+        
+        // Skip internal implementation files
+        if (file.includes('__tests__') || 
+            file.includes('/test') || 
+            file.includes('/internal/') || 
+            file.includes('/__internal__/') || 
+            file.includes('.internal.')) {
+          continue;
+        }
+        
         if (status === 'A') newFiles.push(file);
         else if (status === 'D') deletedFiles.push(file);
         else if (status === 'M') modifiedFiles.push(file);
@@ -1007,8 +1023,8 @@ class DigestGenerator {
     const symbols: PublicSymbol[] = [];
     
     try {
-      // Get all TypeScript files in the ref
-      const files = execSync(`git ls-tree -r --name-only ${ref} | grep -E "\\.(ts|tsx)$" | grep -v __tests__ | grep -v test`, {
+      // Get all TypeScript files in the ref, excluding test and internal implementation directories
+      const files = execSync(`git ls-tree -r --name-only ${ref} | grep -E "\\.(ts|tsx)$" | grep -v __tests__ | grep -v test | grep -v "/internal/" | grep -v "/__internal__/" | grep -v "\\.internal\\."`, {
         cwd: this.projectRoot,
         encoding: 'utf8',
       }).trim().split('\n').filter(Boolean);

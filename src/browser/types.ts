@@ -93,7 +93,7 @@ export interface JitterbugGlobal {
     levels: Record<string, number>;
     getState(): any;
     /** Configuration persistence @experimental */
-    config: {
+    config?: {
       save(): Promise<any>;
       load(): any;
       reset(): any;

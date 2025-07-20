@@ -42,7 +42,9 @@
       "WebFetch(domain:vitest.dev)",
       "Bash(npm test:*)",
       "Bash(pnpm digest:*)",
-      "Bash(pnpm test:*)"
+      "Bash(pnpm test:*)",
+      "Bash(npx @isarmstrong/digest@latest:*)",
+      "Bash(cat:*)"
     ],
     "deny": []
   },
