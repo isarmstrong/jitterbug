@@ -92,6 +92,13 @@ export interface JitterbugGlobal {
     getLevel(): number;
     levels: Record<string, number>;
     getState(): any;
+    /** Configuration persistence @experimental */
+    config: {
+      save(): Promise<any>;
+      load(): any;
+      reset(): any;
+      snapshot(): any;
+    };
   };
 
   /** (Future) Config methods reserved; show stubs in help for discoverability. */

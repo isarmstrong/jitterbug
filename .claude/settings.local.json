@@ -41,7 +41,8 @@
       "WebFetch(domain:epicweb-dev-advanced-vitest-patterns.fly.dev)",
       "WebFetch(domain:vitest.dev)",
       "Bash(npm test:*)",
-      "Bash(pnpm digest:*)"
+      "Bash(pnpm digest:*)",
+      "Bash(pnpm test:*)"
     ],
     "deny": []
   },

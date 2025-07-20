@@ -166,7 +166,7 @@ describe('Jitterbug Bootstrap', () => {
     api.emit('orchestrator.plan.created', {}, { level: 'debug' });
     
     const allEvents = api.getEvents();
-    expect(allEvents.length).toBe(4); // 3 test events + 1 debug.level.changed event
+    expect(allEvents.length).toBe(5); // 3 test events + 1 debug.level.changed + 1 config.load.completed
     
     const errorEvents = api.getEvents({ level: 'error' });
     expect(errorEvents.length).toBe(1);

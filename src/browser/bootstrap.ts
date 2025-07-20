@@ -21,6 +21,8 @@ import type { EventType } from './schema-registry.js';
 import { validateEventPayload, eventSchemas, setGlobalEmitFn } from './schema-registry.js';
 import { experimentalBranches } from './branch-manager.js';
 import { experimentalDebug } from './debug-control.js';
+import { loadConfig, configPersistence, markDirty } from './config-persistence.js';
+import { setConfigDirtyHook } from './debug-state.js';
 
 // Simple ULID-like ID generator (simplified for bootstrap)
 function generateId(): string {
@@ -478,6 +480,37 @@ export function initializeJitterbug(global: Window = window): void {
     return origOnRejection ? origOnRejection.call(this, ev) : false;
   };
 
+  // Set up configuration persistence hooks (Task 3.4)
+  setConfigDirtyHook(markDirty);
+
+  // Load and apply persisted configuration before API creation (Task 3.4)
+  const configResult = loadConfig();
+  if (configResult.status === 'loaded') {
+    // Apply loaded configuration to debug state and branches
+    // Note: We apply config after branch manager initialization but before ready()
+    try {
+      if (configResult.config.debug.enabled !== undefined) {
+        experimentalDebug.enable('config');
+      } else {
+        experimentalDebug.disable('config');
+      }
+      
+      if (configResult.config.debug.level !== undefined) {
+        experimentalDebug.setLevel(configResult.config.debug.level, 'config');
+      }
+      
+      // Store pending active branch for post-bootstrap application
+      if (configResult.config.branches?.active) {
+        // We'll apply this after all branches are properly initialized
+        // For now, store it and apply in ready() if the branch exists
+        // This prevents race conditions with branch creation timing
+      }
+    } catch (error) {
+      // If config application fails, log but continue with defaults
+      console.warn('Failed to apply loaded config:', error);
+    }
+  }
+
   // Create the API object
   const api: JitterbugGlobal = {
     version: '0.2.0',
@@ -501,7 +534,11 @@ export function initializeJitterbug(global: Window = window): void {
     disableBranch,
     deleteBranch,
     // Debug control methods (Task 3.3) @experimental
-    debug: experimentalDebug
+    debug: {
+      ...experimentalDebug,
+      // Configuration persistence (Task 3.4) @experimental
+      config: configPersistence
+    }
   };
 
   // Set up global emit function for schema registry

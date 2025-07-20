@@ -724,6 +724,112 @@ export const eventSchemas = {
     },
     level: 'error' as const,
     description: 'Debug control validation failed'
+  },
+
+  // Configuration persistence events (Task 3.4) - Optional tracking
+  'orchestrator.config.load.started': {
+    validate: (payload: unknown): { source: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        source: validateString(p.source, 'source')
+      };
+    },
+    level: 'debug' as const,
+    description: 'Configuration load begins'
+  },
+
+  'orchestrator.config.load.completed': {
+    validate: (payload: unknown): { source: string; migrated: boolean; durationMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        source: validateString(p.source, 'source'),
+        migrated: typeof p.migrated === 'boolean' ? p.migrated : false,
+        durationMs: validateNumber(p.durationMs, 'durationMs')
+      };
+    },
+    level: 'info' as const,
+    description: 'Configuration load completes successfully'
+  },
+
+  'orchestrator.config.load.failed': {
+    validate: (payload: unknown): { reason: string; durationMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        reason: validateString(p.reason, 'reason'),
+        durationMs: validateNumber(p.durationMs, 'durationMs')
+      };
+    },
+    level: 'warn' as const,
+    description: 'Configuration load fails'
+  },
+
+  'orchestrator.config.persist.scheduled': {
+    validate: (payload: unknown): { debounceMs: number; reason: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        debounceMs: validateNumber(p.debounceMs, 'debounceMs'),
+        reason: validateString(p.reason, 'reason')
+      };
+    },
+    level: 'debug' as const,
+    description: 'Configuration persistence scheduled'
+  },
+
+  'orchestrator.config.persist.completed': {
+    validate: (payload: unknown): { bytes: number; durationMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        bytes: validateNumber(p.bytes, 'bytes'),
+        durationMs: validateNumber(p.durationMs, 'durationMs')
+      };
+    },
+    level: 'debug' as const,
+    description: 'Configuration persistence completes'
+  },
+
+  'orchestrator.config.persist.failed': {
+    validate: (payload: unknown): { reason: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        reason: validateString(p.reason, 'reason')
+      };
+    },
+    level: 'warn' as const,
+    description: 'Configuration persistence fails'
+  },
+
+  'orchestrator.config.reset': {
+    validate: (payload: unknown): { previousVersion: number; newVersion: number; timestamp: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        previousVersion: validateNumber(p.previousVersion, 'previousVersion'),
+        newVersion: validateNumber(p.newVersion, 'newVersion'),
+        timestamp: validateString(p.timestamp, 'timestamp')
+      };
+    },
+    level: 'info' as const,
+    description: 'Configuration reset to defaults'
   }
 } as const;
 

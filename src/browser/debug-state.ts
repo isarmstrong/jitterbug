@@ -35,15 +35,15 @@ const state: DebugState = {
 };
 
 // Persistence hook placeholder for Task 3.4
-let onConfigDirty: (() => void) | undefined;
+let onConfigDirty: ((reason: string) => void) | undefined;
 
 /** @internal - For Task 3.4 persistence only */
-export function setConfigDirtyHook(fn: () => void): void {
+export function setConfigDirtyHook(fn: (reason: string) => void): void {
   onConfigDirty = fn;
 }
 
-function markConfigDirty(): void {
-  onConfigDirty?.();
+function markConfigDirty(reason: string): void {
+  onConfigDirty?.(reason);
 }
 
 /** @internal */
@@ -60,7 +60,7 @@ export function updateDebugEnabled(next: boolean, by: DebugState['changedBy']): 
   state.changedAt = new Date().toISOString();
   state.changedBy = by;
   
-  markConfigDirty();
+  markConfigDirty('debug.enabled');
   return { changed: true, prev };
 }
 
@@ -73,7 +73,7 @@ export function updateDebugLevel(next: DebugLevel, by: DebugState['changedBy']):
   state.changedAt = new Date().toISOString();
   state.changedBy = by;
   
-  markConfigDirty();
+  markConfigDirty('debug.level');
   return { changed: true, prev };
 }
 
