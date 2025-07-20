@@ -1,0 +1,37 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`BranchManager (Advanced Testing) > Validation with Fixtures > should accept all valid edge case names 1`] = `
+[
+  "✓ a",
+  "✓ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "✓ kebab-case-name",
+  "✓ snake_case_name",
+  "✓ dot.separated.name",
+  "✓ mixed-case_Name.123",
+  "✓ all-lowercase-123",
+  "✓ ALL-UPPERCASE-123",
+]
+`;
+
+exports[`BranchManager (Advanced Testing) > Validation with Fixtures > should provide consistent error messages 1`] = `
+[
+  "✓ Branch name must be a non-empty string",
+  "✓ Branch name must be 1-40 characters: letters, numbers, hyphens, underscores, dots only",
+  "✓ Branch name cannot start or end with a dot",
+  "✓ Cannot delete the main branch",
+  "✓ Cannot disable the main branch",
+]
+`;
+
+exports[`BranchManager (Advanced Testing) > Validation with Fixtures > should reject all invalid branch names consistently 1`] = `
+[
+  "Branch name must be a non-empty string",
+  "Branch name must be 1-40 characters: letters, numbers, hyphens, underscores, dots only",
+  "Branch name cannot start or end with a dot",
+  "Branch name cannot start or end with a dot",
+  "Branch name must be 1-40 characters: letters, numbers, hyphens, underscores, dots only",
+  "Branch name must be 1-40 characters: letters, numbers, hyphens, underscores, dots only",
+  "Branch name must be 1-40 characters: letters, numbers, hyphens, underscores, dots only",
+  "Branch name must be 1-40 characters: letters, numbers, hyphens, underscores, dots only",
+]
+`;

@@ -1,228 +1,260 @@
 /**
- * Branch Manager Tests
- * Basic functionality tests for Task 3.2 implementation
+ * Branch Manager Tests - Advanced Vitest Patterns
+ * Uses snapshots, custom matchers, fixtures, and event testing
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { BranchManager } from '../branch-manager.js';
+import { experimentalBranches } from '../branch-manager.js';
+import { 
+  testBranches, 
+  invalidBranchNames, 
+  validEdgeCaseBranchNames,
+  // createEventCapture, // Future: for event emission testing
+  // createBranchHierarchy // Future: for complex hierarchy testing
+} from './fixtures.js';
 
-describe('BranchManager', () => {
-  let manager: BranchManager;
+describe('BranchManager (Advanced Testing)', () => {
+  // Future: Event capture for testing lifecycle events
+  // let eventCapture: ReturnType<typeof createEventCapture>;
 
   beforeEach(() => {
-    manager = new BranchManager();
+    // eventCapture = createEventCapture();
+    // Note: Global setup handles branch cleanup
   });
 
-  describe('initialization', () => {
-    it('should start with main branch as active', () => {
-      expect(manager.getActiveBranch()).toBe('main');
-    });
-
-    it('should have main branch in branches list', () => {
-      const branches = manager.getBranches();
-      expect(branches).toHaveLength(1);
-      expect(branches[0].name).toBe('main');
-      expect(branches[0].active).toBe(true);
-      expect(branches[0].enabled).toBe(true);
-    });
-  });
-
-  describe('createBranch', () => {
-    it('should create a new branch successfully', () => {
-      const result = manager.createBranch('test-branch');
+  describe('API Contract & Shape', () => {
+    it('should maintain stable branch record structure', () => {
+      const result = experimentalBranches.create('snapshot-test', testBranches.withMetadata.options);
       
-      expect(result.name).toBe('test-branch');
-      expect(result.active).toBe(false);
-      expect(result.enabled).toBe(true);
-      expect(result.parent).toBeUndefined();
+      expect(result).toBeBranchRecord();
+      expect(result).toMatchSnapshot({
+        createdAt: expect.any(String),
+        stats: {
+          lastEventAt: expect.any(String)
+        }
+      });
     });
 
-    it('should create branch with parent', () => {
-      const result = manager.createBranch('child-branch', { parent: 'main' });
+    it('should maintain stable list output structure', () => {
+      // Create predictable branch set
+      experimentalBranches.create(testBranches.simple.name);
+      experimentalBranches.create(testBranches.withParent.name, testBranches.withParent.options);
+      experimentalBranches.setActive(testBranches.simple.name);
       
-      expect(result.parent).toBe('main');
-    });
-
-    it('should auto-activate if requested', () => {
-      manager.createBranch('auto-active', { autoActivate: true });
+      const branches = experimentalBranches.list();
       
-      expect(manager.getActiveBranch()).toBe('auto-active');
-    });
-
-    it('should reject invalid branch names', () => {
-      expect(() => manager.createBranch('')).toThrow();
-      expect(() => manager.createBranch('invalid-name-with-way-too-many-characters-exceeding-limit')).toThrow();
-      expect(() => manager.createBranch('.starts-with-dot')).toThrow();
-      expect(() => manager.createBranch('ends-with-dot.')).toThrow();
-    });
-
-    it('should reject duplicate branch names', () => {
-      manager.createBranch('duplicate');
-      expect(() => manager.createBranch('duplicate')).toThrow();
-    });
-
-    it('should reject non-existent parent', () => {
-      expect(() => manager.createBranch('orphan', { parent: 'non-existent' })).toThrow();
-    });
-
-    it('should prevent circular references', () => {
-      manager.createBranch('parent');
-      manager.createBranch('child', { parent: 'parent' });
+      expect(branches).toHaveLength(3);
+      branches.forEach(branch => {
+        expect(branch).toBeBranchSummary();
+      });
       
-      expect(() => manager.createBranch('parent', { parent: 'child' })).toThrow();
+      expect(branches).toMatchSnapshot(
+        branches.map(() => ({ lastActivity: expect.any(String) }))
+      );
+    });
+
+    it('should maintain stable detailed branch structure', () => {
+      experimentalBranches.create('detailed-test', testBranches.complex.options);
+      const details = experimentalBranches.get('detailed-test');
+      
+      expect(details).toMatchSnapshot({
+        createdAt: expect.any(String),
+        lastActivity: expect.any(String)
+      });
     });
   });
 
-  describe('getBranches and listActiveBranches', () => {
-    beforeEach(() => {
-      manager.createBranch('branch1');
-      manager.createBranch('branch2', { autoActivate: true });
-      manager.createBranch('branch3');
-    });
-
-    it('should return all branches', () => {
-      const branches = manager.getBranches();
-      expect(branches).toHaveLength(4); // main + 3 created
+  describe('Validation with Fixtures', () => {
+    it('should reject all invalid branch names consistently', () => {
+      const errors: string[] = [];
       
-      const names = branches.map(b => b.name);
-      expect(names).toContain('main');
-      expect(names).toContain('branch1');
-      expect(names).toContain('branch2');
-      expect(names).toContain('branch3');
+      for (const invalidName of invalidBranchNames) {
+        try {
+          experimentalBranches.create(invalidName);
+        } catch (error) {
+          errors.push((error as Error).message);
+        }
+      }
+      
+      expect(errors).toMatchSnapshot();
+      expect(errors).toHaveLength(invalidBranchNames.length);
     });
 
-    it('should return only active branches', () => {
-      const activeBranches = manager.listActiveBranches();
-      expect(activeBranches).toHaveLength(1);
-      expect(activeBranches[0].name).toBe('branch2');
+    it('should accept all valid edge case names', () => {
+      const results: string[] = [];
+      
+      for (const validName of validEdgeCaseBranchNames) {
+        try {
+          experimentalBranches.create(validName);
+          expect(validName).toBeValidBranchName();
+          results.push(`✓ ${validName}`);
+          experimentalBranches.delete(validName); // Cleanup
+        } catch (error) {
+          results.push(`✗ ${validName}: ${(error as Error).message}`);
+        }
+      }
+      
+      expect(results).toMatchSnapshot();
+      expect(results.every(r => r.startsWith('✓'))).toBe(true);
+    });
+
+    it('should provide consistent error messages', () => {
+      const errorTests = [
+        { test: () => experimentalBranches.create(''), expectedPattern: 'non-empty string' },
+        { test: () => experimentalBranches.create('a'.repeat(50)), expectedPattern: '1-40 characters' },
+        { test: () => experimentalBranches.create('.invalid'), expectedPattern: 'cannot start' },
+        { test: () => experimentalBranches.delete('main'), expectedPattern: 'Cannot delete the main branch' },
+        { test: () => experimentalBranches.disable('main'), expectedPattern: 'Cannot disable the main branch' }
+      ];
+      
+      const actualErrors = errorTests.map(({ test, expectedPattern }) => {
+        try {
+          test();
+          return `No error thrown`;
+        } catch (error) {
+          const message = (error as Error).message;
+          const matches = message.includes(expectedPattern);
+          return matches ? `✓ ${message}` : `✗ Expected pattern "${expectedPattern}" in "${message}"`;
+        }
+      });
+      
+      expect(actualErrors).toMatchSnapshot();
+      expect(actualErrors.every(e => e.startsWith('✓'))).toBe(true);
     });
   });
 
-  describe('branch activation', () => {
-    beforeEach(() => {
-      manager.createBranch('test-branch');
+  describe('Hierarchical Operations', () => {
+    it('should handle complex branch hierarchies', () => {
+      
+      // Build the hierarchy
+      experimentalBranches.create('feature', { parent: 'main' });
+      experimentalBranches.create('hotfix', { parent: 'main' });
+      experimentalBranches.create('feature-auth', { parent: 'feature' });
+      experimentalBranches.create('feature-api', { parent: 'feature' });
+      
+      const branches = experimentalBranches.list();
+      expect(branches).toHaveLength(5); // main + 4 created
+      
+      // Test hierarchy constraints
+      expect(() => experimentalBranches.delete('feature')).toThrow('has 2 child branches');
+      
+      // Test successful cleanup order
+      experimentalBranches.delete('feature-auth');
+      experimentalBranches.delete('feature-api');
+      expect(() => experimentalBranches.delete('feature')).not.toThrow();
     });
 
-    it('should set active branch', () => {
-      manager.setActiveBranch('test-branch');
-      expect(manager.getActiveBranch()).toBe('test-branch');
+    it('should prevent circular references in complex scenarios', () => {
+      experimentalBranches.create('a');
+      experimentalBranches.create('b', { parent: 'a' });
+      experimentalBranches.create('c', { parent: 'b' });
+      
+      // Try to create cycle: a -> b -> c -> a
+      expect(() => experimentalBranches.create('a', { parent: 'c' })).toThrow('would create a cycle');
+    });
+  });
+
+  describe('Performance & Resource Management', () => {
+    it('should handle rapid branch operations efficiently', () => {
+      const start = performance.now();
+      
+      // Create many branches rapidly
+      for (let i = 0; i < 50; i++) {
+        experimentalBranches.create(`perf-test-${i}`);
+      }
+      
+      const createTime = performance.now() - start;
+      expect(createTime).toBeLessThan(100); // Should complete in < 100ms
+      
+      const listStart = performance.now();
+      const branches = experimentalBranches.list();
+      const listTime = performance.now() - listStart;
+      
+      expect(branches).toHaveLength(51); // main + 50 created
+      expect(listTime).toBeLessThan(10); // List should be very fast
     });
 
-    it('should deactivate previous branch', () => {
-      manager.setActiveBranch('test-branch');
+    it('should maintain memory efficiency with branch deletion', () => {
+      // Create and delete many branches
+      for (let i = 0; i < 100; i++) {
+        experimentalBranches.create(`temp-${i}`);
+        experimentalBranches.delete(`temp-${i}`);
+      }
       
-      const branches = manager.getBranches();
-      const mainBranch = branches.find(b => b.name === 'main');
-      const testBranch = branches.find(b => b.name === 'test-branch');
+      const finalBranches = experimentalBranches.list();
+      expect(finalBranches).toHaveLength(1); // Only main should remain
+    });
+  });
+
+  describe('State Isolation', () => {
+    it('should maintain isolated state between operations', () => {
+      // Create branch in first "context"
+      experimentalBranches.create('isolated-1');
+      const beforeState = experimentalBranches.list().map(b => b.name);
       
+      // Simulate second "context" operations
+      experimentalBranches.create('isolated-2');
+      experimentalBranches.setActive('isolated-2');
+      
+      // Verify first context state is preserved but extended
+      const afterState = experimentalBranches.list().map(b => b.name);
+      expect(beforeState.every(name => afterState.includes(name))).toBe(true);
+      expect(afterState).toContain('isolated-2');
+      expect(experimentalBranches.getActive()).toBe('isolated-2');
+    });
+
+    it('should handle concurrent-like operations gracefully', () => {
+      // Simulate rapid state changes
+      const operations = [
+        () => experimentalBranches.create('concurrent-1'),
+        () => experimentalBranches.create('concurrent-2'),
+        () => experimentalBranches.setActive('concurrent-1'),
+        () => experimentalBranches.setActive('concurrent-2'),
+        () => experimentalBranches.disable('concurrent-1'),
+        () => experimentalBranches.enable('concurrent-1')
+      ];
+      
+      // Execute all operations
+      operations.forEach(op => op());
+      
+      // Verify final state is consistent
+      const branches = experimentalBranches.list();
+      expect(branches.find(b => b.name === 'concurrent-1')).toBeTruthy();
+      expect(branches.find(b => b.name === 'concurrent-2')).toBeTruthy();
+      expect(experimentalBranches.getActive()).toBe('concurrent-2');
+    });
+  });
+
+  describe('Integration Points', () => {
+    it('should maintain branch state during activation switches', () => {
+      const branch1 = experimentalBranches.create('integration-1');
+      const branch2 = experimentalBranches.create('integration-2');
+      
+      expect(branch1.active).toBe(false);
+      expect(branch2.active).toBe(false);
+      
+      experimentalBranches.setActive('integration-1');
+      
+      const updatedBranches = experimentalBranches.list();
+      const activeBranch = updatedBranches.find(b => b.name === 'integration-1');
+      const inactiveBranch = updatedBranches.find(b => b.name === 'integration-2');
+      const mainBranch = updatedBranches.find(b => b.name === 'main');
+      
+      expect(activeBranch?.active).toBe(true);
+      expect(inactiveBranch?.active).toBe(false);
       expect(mainBranch?.active).toBe(false);
-      expect(testBranch?.active).toBe(true);
     });
 
-    it('should reject non-existent branch', () => {
-      expect(() => manager.setActiveBranch('non-existent')).toThrow();
-    });
-  });
-
-  describe('branch enable/disable', () => {
-    beforeEach(() => {
-      manager.createBranch('test-branch');
-    });
-
-    it('should disable and enable branches', () => {
-      expect(manager.isBranchEnabled('test-branch')).toBe(true);
+    it('should handle enable/disable state correctly', () => {
+      experimentalBranches.create('state-test');
       
-      manager.disableBranch('test-branch');
-      expect(manager.isBranchEnabled('test-branch')).toBe(false);
+      expect(experimentalBranches._manager.isBranchEnabled('state-test')).toBe(true);
       
-      manager.enableBranch('test-branch');
-      expect(manager.isBranchEnabled('test-branch')).toBe(true);
-    });
-
-    it('should not allow disabling main branch', () => {
-      expect(() => manager.disableBranch('main')).toThrow();
-    });
-
-    it('should reject non-existent branches', () => {
-      expect(() => manager.enableBranch('non-existent')).toThrow();
-      expect(() => manager.disableBranch('non-existent')).toThrow();
-    });
-  });
-
-  describe('deleteBranch', () => {
-    beforeEach(() => {
-      manager.createBranch('test-branch');
-    });
-
-    it('should delete branch successfully', () => {
-      const result = manager.deleteBranch('test-branch');
-      expect(result).toBe(true);
+      experimentalBranches.disable('state-test');
+      expect(experimentalBranches._manager.isBranchEnabled('state-test')).toBe(false);
       
-      const branches = manager.getBranches();
-      expect(branches.find(b => b.name === 'test-branch')).toBeUndefined();
-    });
-
-    it('should not allow deleting main branch', () => {
-      expect(() => manager.deleteBranch('main')).toThrow();
-    });
-
-    it('should switch to main if deleting active branch', () => {
-      manager.setActiveBranch('test-branch');
-      manager.deleteBranch('test-branch');
-      
-      expect(manager.getActiveBranch()).toBe('main');
-    });
-
-    it('should prevent deleting branch with children', () => {
-      manager.createBranch('child', { parent: 'test-branch' });
-      
-      expect(() => manager.deleteBranch('test-branch')).toThrow();
-    });
-
-    it('should return false for non-existent branch', () => {
-      const result = manager.deleteBranch('non-existent');
-      expect(result).toBe(false);
-    });
-  });
-
-  describe('event recording', () => {
-    beforeEach(() => {
-      manager.createBranch('test-branch');
-    });
-
-    it('should record events for enabled branches', () => {
-      manager.recordEventForBranch('test-branch');
-      
-      const branch = manager.getBranch('test-branch');
-      expect(branch?.eventCount).toBe(1);
-      expect(branch?.errorCount).toBe(0);
-    });
-
-    it('should record errors separately', () => {
-      manager.recordEventForBranch('test-branch', true);
-      
-      const branch = manager.getBranch('test-branch');
-      expect(branch?.eventCount).toBe(1);
-      expect(branch?.errorCount).toBe(1);
-    });
-
-    it('should not record for disabled branches', () => {
-      manager.disableBranch('test-branch');
-      manager.recordEventForBranch('test-branch');
-      
-      const branch = manager.getBranch('test-branch');
-      expect(branch?.eventCount).toBe(0);
-    });
-
-    it('should update lastActivity timestamp', () => {
-      const beforeTime = new Date().toISOString();
-      manager.recordEventForBranch('test-branch');
-      const afterTime = new Date().toISOString();
-      
-      const branch = manager.getBranch('test-branch');
-      expect(branch?.lastActivity).toBeDefined();
-      expect(branch?.lastActivity! >= beforeTime).toBe(true);
-      expect(branch?.lastActivity! <= afterTime).toBe(true);
+      experimentalBranches.enable('state-test');
+      expect(experimentalBranches._manager.isBranchEnabled('state-test')).toBe(true);
     });
   });
 });

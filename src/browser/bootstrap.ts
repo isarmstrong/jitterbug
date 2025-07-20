@@ -19,8 +19,7 @@ import type {
 import { INTERNAL } from './types.js';
 import type { EventType } from './schema-registry.js';
 import { validateEventPayload, eventSchemas } from './schema-registry.js';
-import { branchManager } from './branch-manager.js';
-import type { BranchSummary, BranchDetails } from './branch-manager.js';
+import { experimentalBranches } from './branch-manager.js';
 
 // Simple ULID-like ID generator (simplified for bootstrap)
 function generateId(): string {
@@ -199,10 +198,10 @@ export function initializeJitterbug(global: Window = window): void {
     
     const id = generateId();
     const schema = eventSchemas[type as EventType];
-    const targetBranch = opts.branch || branchManager.getActiveBranch();
+    const targetBranch = opts.branch || experimentalBranches._manager.getActiveBranch();
     
     // Only emit if the target branch is enabled
-    if (!branchManager.isBranchEnabled(targetBranch)) {
+    if (!experimentalBranches._manager.isBranchEnabled(targetBranch)) {
       return id; // Return ID but don't emit
     }
     
@@ -227,7 +226,7 @@ export function initializeJitterbug(global: Window = window): void {
     
     // Record event statistics in branch manager
     const isError = evt.level === 'error';
-    branchManager.recordEventForBranch(targetBranch, isError);
+    experimentalBranches._manager.recordEventForBranch(targetBranch, isError);
     
     if (state.enabled) {
       state.subscribers.forEach(subscriber => {
@@ -296,7 +295,7 @@ export function initializeJitterbug(global: Window = window): void {
       bootstrapCount: state.bootstrapQueue.length,
       subscribers: state.subscribers.size,
       bufferSize: state.buffer.length,
-      branches: branchManager.getBranches().map(b => b.name)
+      branches: experimentalBranches._manager.getBranches().map(b => b.name)
     };
   }
 
@@ -337,41 +336,41 @@ export function initializeJitterbug(global: Window = window): void {
     return state.enabled;
   }
 
-  // Branch management methods (Task 3.2)
+  // Branch management methods (Task 3.2) @experimental
   function createBranch(name: string, options = {}) {
-    return branchManager.createBranch(name, options);
+    return experimentalBranches.create(name, options);
   }
 
-  function getBranches(): BranchSummary[] {
-    return branchManager.getBranches();
+  function getBranches() {
+    return experimentalBranches.list();
   }
 
-  function listActiveBranches(): BranchSummary[] {
-    return branchManager.listActiveBranches();
+  function listActiveBranches() {
+    return experimentalBranches.listActive();
   }
 
-  function getBranch(name: string): BranchDetails | undefined {
-    return branchManager.getBranch(name);
+  function getBranch(name: string) {
+    return experimentalBranches.get(name);
   }
 
   function setActiveBranch(name: string): void {
-    branchManager.setActiveBranch(name);
+    experimentalBranches.setActive(name);
   }
 
   function getActiveBranch(): string {
-    return branchManager.getActiveBranch();
+    return experimentalBranches.getActive();
   }
 
   function enableBranch(name: string): void {
-    branchManager.enableBranch(name);
+    experimentalBranches.enable(name);
   }
 
   function disableBranch(name: string): void {
-    branchManager.disableBranch(name);
+    experimentalBranches.disable(name);
   }
 
   function deleteBranch(name: string): boolean {
-    return branchManager.deleteBranch(name);
+    return experimentalBranches.delete(name);
   }
 
   // Early error capture setup

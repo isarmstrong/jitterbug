@@ -37,7 +37,9 @@
       "Bash(npx tsc:*)",
       "Bash(pnpm add:*)",
       "Bash(find:*)",
-      "mcp__task-master-ai__next_task"
+      "mcp__task-master-ai__next_task",
+      "WebFetch(domain:epicweb-dev-advanced-vitest-patterns.fly.dev)",
+      "WebFetch(domain:vitest.dev)"
     ],
     "deny": []
   },

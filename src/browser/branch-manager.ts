@@ -6,18 +6,21 @@
  */
 
 import { safeEmit } from './schema-registry.js';
-import type { JitterbugEvent } from './types.js';
 
-export type BranchName = string;
-export type ISODateString = string;
+/** @internal */
+type BranchName = string;
+/** @internal */
+type ISODateString = string;
 
-export interface BranchOptions {
+/** @internal */
+interface BranchOptions {
   parent?: BranchName;
   metadata?: Record<string, unknown>;
   autoActivate?: boolean;
 }
 
-export interface BranchRecord {
+/** @internal */
+interface BranchRecord {
   name: BranchName;
   parent?: BranchName;
   createdAt: ISODateString;
@@ -31,7 +34,8 @@ export interface BranchRecord {
   };
 }
 
-export interface BranchSummary {
+/** @internal */
+interface BranchSummary {
   name: string;
   active: boolean;
   enabled: boolean;
@@ -41,31 +45,18 @@ export interface BranchSummary {
   parent?: string;
 }
 
-export interface BranchDetails extends BranchSummary {
+/** @internal */
+interface BranchDetails extends BranchSummary {
   createdAt: ISODateString;
   metadata: Record<string, unknown>;
 }
 
-export interface BranchEvent extends JitterbugEvent {
-  type: 'orchestrator.branch.lifecycle.created' 
-      | 'orchestrator.branch.lifecycle.activated'
-      | 'orchestrator.branch.lifecycle.deactivated'
-      | 'orchestrator.branch.lifecycle.enabled'
-      | 'orchestrator.branch.lifecycle.disabled'
-      | 'orchestrator.branch.lifecycle.deleted';
-  payload: {
-    branch: string;
-    parent?: string;
-    previous?: string;
-    timestamp: string;
-    metadata?: Record<string, unknown>;
-  };
-}
 
 // Branch name validation regex: alphanumeric, hyphens, underscores, dots, 1-40 chars
 const BRANCH_NAME_REGEX = /^[a-z0-9\-_.]{1,40}$/i;
 
-export class BranchManager {
+/** @internal */
+class BranchManager {
   private branches = new Map<BranchName, BranchRecord>();
   private activeBranch: BranchName = 'main';
   
@@ -355,4 +346,31 @@ export class BranchManager {
 }
 
 // Singleton instance
-export const branchManager = new BranchManager();
+/** @internal */
+const branchManager = new BranchManager();
+
+// Clean experimental API facade
+/** @experimental Branch management API (subject to change without SemVer guarantees) */
+export const experimentalBranches = {
+  create: (name: string, options?: { parent?: string; metadata?: Record<string, unknown>; autoActivate?: boolean }) => 
+    branchManager.createBranch(name, options),
+  
+  list: () => branchManager.getBranches(),
+  
+  listActive: () => branchManager.listActiveBranches(),
+  
+  get: (name: string) => branchManager.getBranch(name),
+  
+  setActive: (name: string) => branchManager.setActiveBranch(name),
+  
+  getActive: () => branchManager.getActiveBranch(),
+  
+  enable: (name: string) => branchManager.enableBranch(name),
+  
+  disable: (name: string) => branchManager.disableBranch(name),
+  
+  delete: (name: string) => branchManager.deleteBranch(name),
+  
+  /** @internal */
+  _manager: branchManager // Internal access for bootstrap integration
+};
