@@ -119,7 +119,7 @@
               "3.1"
             ],
             "details": "Implement jitterbug.enable() and jitterbug.disable() methods to control global debugging state with immediate effect on all active branches. Create jitterbug.setLevel(level) to adjust logging verbosity with support for standard levels (error, warn, info, debug, trace). Build jitterbug.getStatus() to return comprehensive debugging state including enabled status, current level, active branches, and recent activity statistics. Add granular control methods like setLevelForBranch(branch, level) for branch-specific configuration. Implement proper state transitions and ensure all changes are immediately reflected in logging behavior.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Test enable/disable toggles affect all logging output immediately. Verify setLevel filters logs appropriately across all severity levels. Validate getStatus returns accurate real-time state information. Test branch-specific level settings override global settings correctly."
           },
           {
@@ -131,7 +131,7 @@
               "3.3"
             ],
             "details": "Implement jitterbug.saveConfig() to serialize current debugging state including enabled branches, log levels, and custom settings to localStorage with proper error handling for quota exceeded scenarios. Create jitterbug.loadConfig() to restore saved configuration with validation and migration support for older config versions. Build jitterbug.resetConfig() to clear saved settings and restore defaults. Implement automatic config loading during initialization to restore user preferences across page reloads. Add config versioning to handle schema changes gracefully. Include methods like exportConfig() and importConfig(data) for sharing configurations.",
-            "status": "pending",
+            "status": "in-progress",
             "testStrategy": "Test saveConfig stores complete state in localStorage with correct serialization. Verify loadConfig restores all settings including branch states and log levels. Test automatic restoration on page reload maintains user preferences. Validate config migration handles version differences correctly."
           },
           {
@@ -237,7 +237,7 @@
     ],
     "metadata": {
       "created": "2025-07-19T22:50:56.179Z",
-      "updated": "2025-07-20T03:58:47.247Z",
+      "updated": "2025-07-20T04:49:21.100Z",
       "description": "Clean rewrite of Jitterbug with orchestrator pattern"
     }
   }

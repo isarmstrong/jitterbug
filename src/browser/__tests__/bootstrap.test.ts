@@ -158,19 +158,22 @@ describe('Jitterbug Bootstrap', () => {
     initializeJitterbug(mockWindow);
     const api: JitterbugGlobal = mockWindow.jitterbug;
     
+    // Set debug level to TRACE to ensure all test events are captured
+    api.debug.setLevel(api.debug.levels.TRACE);
+    
     api.emit('orchestrator.step.started', {}, { level: 'info' });
     api.emit('orchestrator.step.failed', {}, { level: 'error' });
     api.emit('orchestrator.plan.created', {}, { level: 'debug' });
     
     const allEvents = api.getEvents();
-    expect(allEvents.length).toBe(3);
+    expect(allEvents.length).toBe(4); // 3 test events + 1 debug.level.changed event
     
     const errorEvents = api.getEvents({ level: 'error' });
     expect(errorEvents.length).toBe(1);
     expect(errorEvents[0].type).toBe('orchestrator.step.failed');
     
     const stepEvents = api.getEvents({ typePrefix: 'orchestrator.step.' });
-    expect(stepEvents.length).toBe(2);
+    expect(stepEvents.length).toBe(2); // step.started + step.failed
     
     const limitedEvents = api.getEvents({ limit: 2 });
     expect(limitedEvents.length).toBe(2);

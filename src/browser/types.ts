@@ -83,6 +83,17 @@ export interface JitterbugGlobal {
   disableBranch(name: string): void;
   deleteBranch(name: string): boolean;
 
+  /** Debug control methods @experimental */
+  debug: {
+    enable(by?: 'api' | 'config'): any;
+    disable(by?: 'api' | 'config'): any;
+    isEnabled(): boolean;
+    setLevel(level: unknown, by?: 'api' | 'config'): any;
+    getLevel(): number;
+    levels: Record<string, number>;
+    getState(): any;
+  };
+
   /** (Future) Config methods reserved; show stubs in help for discoverability. */
   saveConfig?(): void;
   loadConfig?(): void;

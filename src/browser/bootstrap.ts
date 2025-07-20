@@ -18,8 +18,9 @@ import type {
 
 import { INTERNAL } from './types.js';
 import type { EventType } from './schema-registry.js';
-import { validateEventPayload, eventSchemas } from './schema-registry.js';
+import { validateEventPayload, eventSchemas, setGlobalEmitFn } from './schema-registry.js';
 import { experimentalBranches } from './branch-manager.js';
+import { experimentalDebug, guardedEmit, emitWithAutoLevel } from './debug-control.js';
 
 // Simple ULID-like ID generator (simplified for bootstrap)
 function generateId(): string {
@@ -142,6 +143,55 @@ const HELP_REGISTRY: HelpEntry[] = [
     since: '0.2',
     category: 'branch',
     example: 'jitterbug.deleteBranch("old-session")'
+  },
+  // Debug control help entries (Task 3.3)
+  {
+    name: 'debug.enable',
+    summary: 'Enable debug event emission',
+    signature: 'debug.enable(by?: "api" | "config"): DebugState',
+    since: '0.2',
+    category: 'debug',
+    example: 'jitterbug.debug.enable()'
+  },
+  {
+    name: 'debug.disable',
+    summary: 'Disable debug event emission',
+    signature: 'debug.disable(by?: "api" | "config"): DebugState',
+    since: '0.2',
+    category: 'debug',
+    example: 'jitterbug.debug.disable()'
+  },
+  {
+    name: 'debug.isEnabled',
+    summary: 'Check if debug emission is enabled',
+    signature: 'debug.isEnabled(): boolean',
+    since: '0.2',
+    category: 'debug',
+    example: 'jitterbug.debug.isEnabled()'
+  },
+  {
+    name: 'debug.setLevel',
+    summary: 'Set debug level (0-5: OFF, ERROR, WARN, INFO, DEBUG, TRACE)',
+    signature: 'debug.setLevel(level: 0|1|2|3|4|5, by?: "api" | "config"): DebugState',
+    since: '0.2',
+    category: 'debug',
+    example: 'jitterbug.debug.setLevel(3) // INFO level'
+  },
+  {
+    name: 'debug.getLevel',
+    summary: 'Get current debug level',
+    signature: 'debug.getLevel(): number',
+    since: '0.2',
+    category: 'debug',
+    example: 'jitterbug.debug.getLevel()'
+  },
+  {
+    name: 'debug.levels',
+    summary: 'Debug level constants',
+    signature: 'debug.levels: { OFF: 0, ERROR: 1, WARN: 2, INFO: 3, DEBUG: 4, TRACE: 5 }',
+    since: '0.2',
+    category: 'debug',
+    example: 'jitterbug.debug.setLevel(jitterbug.debug.levels.DEBUG)'
   }
 ];
 
@@ -221,14 +271,29 @@ export function initializeJitterbug(global: Window = window): void {
       }
     };
 
-    const target = state.ready ? state.buffer : state.bootstrapQueue;
-    ringPush(target, evt, state.maxBuffer);
+    // Apply debug gating - check if event should be emitted based on debug level/enabled state
+    // Map string levels to numeric levels for gating
+    const levelMap = { debug: 4, info: 3, warn: 2, error: 1 };
+    const numericLevel = levelMap[evt.level as keyof typeof levelMap] ?? 3; // Default to INFO
+    
+    // Use debug gating to determine if event should be stored/emitted
+    const { enabled, level } = experimentalDebug.getState();
+    const shouldEmit = enabled && numericLevel <= level;
+    
+    // Special case: always emit debug control events and validation failures
+    const isDebugControl = type.startsWith('orchestrator.debug.');
+    const isValidationError = type === 'orchestrator.debug.validation.failed';
+    
+    if (shouldEmit || isDebugControl || isValidationError) {
+      const target = state.ready ? state.buffer : state.bootstrapQueue;
+      ringPush(target, evt, state.maxBuffer);
+    }
     
     // Record event statistics in branch manager
     const isError = evt.level === 'error';
     experimentalBranches._manager.recordEventForBranch(targetBranch, isError);
     
-    if (state.enabled) {
+    if (state.enabled && (shouldEmit || isDebugControl || isValidationError)) {
       state.subscribers.forEach(subscriber => {
         try {
           subscriber(evt);
@@ -305,6 +370,7 @@ export function initializeJitterbug(global: Window = window): void {
         'Jitterbug v0.2 core API:',
         '  Core: enable(), disable(), isEnabled(), emit(), getEvents(), subscribe()',
         '  Branch: createBranch(), getBranches(), setActiveBranch(), getActiveBranch()',
+        '  Debug: debug.enable(), debug.disable(), debug.isEnabled(), debug.setLevel(n), debug.getLevel(), debug.levels',
         '  System: ready(), diagnostics(), help(topic)',
         'Future: saveConfig(), exportLogs()',
         'Use help("createBranch") for details.'
@@ -433,8 +499,13 @@ export function initializeJitterbug(global: Window = window): void {
     getActiveBranch,
     enableBranch,
     disableBranch,
-    deleteBranch
+    deleteBranch,
+    // Debug control methods (Task 3.3) @experimental
+    debug: experimentalDebug
   };
+
+  // Set up global emit function for schema registry
+  setGlobalEmitFn(emit);
 
   // Add internal state access (non-enumerable)
   Object.defineProperty(api, INTERNAL as any, { 

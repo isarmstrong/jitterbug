@@ -628,27 +628,138 @@ export const eventSchemas = {
     },
     level: 'info' as const,
     description: 'Branch deleted from registry'
+  },
+
+  // Debug control events (Task 3.3)
+  'orchestrator.debug.enabled': {
+    validate: (payload: unknown): { prev: boolean; by: string; timestamp: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      const validSources = ['system', 'api', 'config'];
+      const by = validateString(p.by, 'by');
+      if (!validSources.includes(by)) {
+        throw new TypeError(`by must be one of: ${validSources.join(', ')}`);
+      }
+      return {
+        prev: typeof p.prev === 'boolean' ? p.prev : false,
+        by,
+        timestamp: validateString(p.timestamp, 'timestamp')
+      };
+    },
+    level: 'info' as const,
+    description: 'Debug event emission enabled'
+  },
+
+  'orchestrator.debug.disabled': {
+    validate: (payload: unknown): { prev: boolean; by: string; timestamp: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      const validSources = ['system', 'api', 'config'];
+      const by = validateString(p.by, 'by');
+      if (!validSources.includes(by)) {
+        throw new TypeError(`by must be one of: ${validSources.join(', ')}`);
+      }
+      return {
+        prev: typeof p.prev === 'boolean' ? p.prev : false,
+        by,
+        timestamp: validateString(p.timestamp, 'timestamp')
+      };
+    },
+    level: 'info' as const,
+    description: 'Debug event emission disabled'
+  },
+
+  'orchestrator.debug.level.changed': {
+    validate: (payload: unknown): { prev: number; next: number; by: string; timestamp: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      const validSources = ['system', 'api', 'config'];
+      const by = validateString(p.by, 'by');
+      if (!validSources.includes(by)) {
+        throw new TypeError(`by must be one of: ${validSources.join(', ')}`);
+      }
+      const prev = validateNumber(p.prev, 'prev');
+      const next = validateNumber(p.next, 'next');
+      if (prev < 0 || prev > 5 || !Number.isInteger(prev)) {
+        throw new TypeError('prev must be integer 0-5');
+      }
+      if (next < 0 || next > 5 || !Number.isInteger(next)) {
+        throw new TypeError('next must be integer 0-5');
+      }
+      return {
+        prev,
+        next,
+        by,
+        timestamp: validateString(p.timestamp, 'timestamp')
+      };
+    },
+    level: 'info' as const,
+    description: 'Debug level changed'
+  },
+
+  'orchestrator.debug.validation.failed': {
+    validate: (payload: unknown): { reason: string; received: any; expected: string; by: string; timestamp: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      const validSources = ['system', 'api', 'config'];
+      const by = validateString(p.by, 'by');
+      if (!validSources.includes(by)) {
+        throw new TypeError(`by must be one of: ${validSources.join(', ')}`);
+      }
+      return {
+        reason: validateString(p.reason, 'reason'),
+        received: p.received, // any type allowed
+        expected: validateString(p.expected, 'expected'),
+        by,
+        timestamp: validateString(p.timestamp, 'timestamp')
+      };
+    },
+    level: 'error' as const,
+    description: 'Debug control validation failed'
   }
 } as const;
 
 export type EventType = keyof typeof eventSchemas;
 export type PayloadOf<T extends EventType> = ReturnType<(typeof eventSchemas)[T]['validate']>;
 
+// Global emit function reference (set by bootstrap)
+let globalEmitFn: ((type: string, payload: any, opts?: any) => string) | undefined;
+
+export function setGlobalEmitFn(emitFn: (type: string, payload: any, opts?: any) => string): void {
+  globalEmitFn = emitFn;
+}
+
 // Emit guard for development/test
 /** @experimental Subject to change without SemVer guarantees. */
-export function safeEmit<T extends EventType>(type: T, payload: PayloadOf<T>, opts?: any) {
+export function safeEmit<T extends EventType>(type: T, payload: PayloadOf<T>, opts?: any): string | undefined {
   if (process.env.NODE_ENV !== 'production') {
     if (!eventSchemas[type]) {
       throw new Error(`[schema-missing] Event '${type}' emitted without registered schema`);
     }
     try {
       const validated = eventSchemas[type].validate(payload);
-      return { type, payload: validated, opts };
+      // Actually emit if global emit function is available
+      if (globalEmitFn) {
+        return globalEmitFn(type, validated, opts);
+      }
+      return undefined;
     } catch (error) {
       throw new Error(`[schema-invalid] Event '${type}' payload validation failed: ${error}`);
     }
   }
-  return { type, payload, opts };
+  // Actually emit if global emit function is available
+  if (globalEmitFn) {
+    return globalEmitFn(type, payload, opts);
+  }
+  return undefined;
 }
 
 // Validation function
