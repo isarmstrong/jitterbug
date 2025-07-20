@@ -26,6 +26,7 @@ interface ClientLogEnvelope {
   seq?: number;       // per-connection sequence
 }
 
+
 interface SSETransportOptions {
   enabled?: boolean;
   autoStart?: boolean;
@@ -63,6 +64,7 @@ const DEFAULT_OPTIONS: Required<SSETransportOptions> = {
   filters: {},
   auth: {}
 };
+
 
 class SSETransport {
   private endpoint: SSEEndpoint | null = null;

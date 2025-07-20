@@ -7,6 +7,37 @@
 
 import { LogStreamHub, type BroadcastMessage } from './log-stream-hub.js';
 
+// P3: Filter predicate type
+type LogFilterPredicate = (entry: { level: string; branch?: string }) => boolean;
+
+// P3: Parse filter query parameters
+function parseFilters(url: URL): LogFilterPredicate | undefined {
+  const branches = url.searchParams.get('branches');
+  const levels = url.searchParams.get('levels');
+  
+  if (!branches && !levels) return undefined;
+  
+  const branchSet = branches ? new Set(branches.split(',').map(b => b.trim().toLowerCase())) : undefined;
+  const levelSet = levels ? new Set(levels.split(',').map(l => l.trim())) : undefined;
+  
+  if (branchSet && levelSet) {
+    return (entry) => {
+      const branch = entry.branch?.toLowerCase() ?? '';
+      return branchSet.has(branch) && levelSet.has(entry.level);
+    };
+  }
+  
+  if (branchSet) {
+    return (entry) => {
+      const branch = entry.branch?.toLowerCase() ?? '';
+      return branchSet.has(branch);
+    };
+  }
+  
+  // levels only
+  return (entry) => levelSet!.has(entry.level);
+}
+
 interface SSEEndpointConfig {
   path?: string;
   cors?: boolean;
@@ -93,11 +124,15 @@ class SSEEndpoint {
   /**
    * Create SSE response with client stream
    */
-  private createSSEResponse(_request: SSERequest): SSEResponse {
+  private createSSEResponse(request: SSERequest): SSEResponse {
     const clientId = `client-${++this.clientSequence}-${Date.now()}`;
     
     try {
-      const client = this.hub.addClient(clientId);
+      // P3: Parse filters from query parameters
+      const url = new URL(request.url, 'http://localhost');
+      const filter = parseFilters(url);
+      
+      const client = this.hub.addClient(clientId, filter);
       
       const headers: Record<string, string> = {
         'Content-Type': 'text/event-stream',

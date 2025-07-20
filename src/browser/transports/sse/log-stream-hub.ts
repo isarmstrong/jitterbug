@@ -7,6 +7,9 @@
 
 import { safeEmit } from '../../schema-registry.js';
 
+// P3: Filter predicate type
+type LogFilterPredicate = (entry: { level: string; branch?: string }) => boolean;
+
 interface SSEClient {
   readonly id: string;
   readonly stream: ReadableStream<Uint8Array>;
@@ -14,6 +17,14 @@ interface SSEClient {
   readonly connectedAt: number;
   lastHeartbeat: number;
   isActive: boolean;
+  // P3: Optional filter predicate for this client
+  filter?: LogFilterPredicate;
+  // P3: Filter stats
+  stats: {
+    sent: number;
+    filteredOut: number;
+    lastDispatchTs?: number;
+  };
 }
 
 interface BroadcastMessage {
@@ -46,7 +57,7 @@ class LogStreamHub {
   /**
    * Add a new SSE client to the hub
    */
-  addClient(clientId: string): SSEClient {
+  addClient(clientId: string, filter?: LogFilterPredicate): SSEClient {
     if (this.clients.has(clientId)) {
       throw new Error(`Client ${clientId} already exists`);
     }
@@ -68,7 +79,12 @@ class LogStreamHub {
       controller: controller!,
       connectedAt: Date.now(),
       lastHeartbeat: Date.now(),
-      isActive: true
+      isActive: true,
+      filter,
+      stats: {
+        sent: 0,
+        filteredOut: 0
+      }
     };
 
     this.clients.set(clientId, client);
@@ -128,6 +144,7 @@ class LogStreamHub {
    */
   broadcast(message: BroadcastMessage): number {
     let successCount = 0;
+    let filteredCount = 0;
     const deadClients: string[] = [];
 
     for (const [clientId, client] of this.clients) {
@@ -136,7 +153,24 @@ class LogStreamHub {
         continue;
       }
 
+      // P3: Apply filter for log messages (skip filtering for heartbeat/ready)
+      if (message.type === 'log' && client.filter) {
+        const logData = message.data;
+        const filterEntry = {
+          level: logData.level || 'info',
+          branch: logData.branch
+        };
+        
+        if (!client.filter(filterEntry)) {
+          client.stats.filteredOut++;
+          filteredCount++;
+          continue;
+        }
+      }
+
       if (this.sendToClient(client, message)) {
+        client.stats.sent++;
+        client.stats.lastDispatchTs = message.timestamp;
         successCount++;
       } else {
         deadClients.push(clientId);
@@ -153,7 +187,8 @@ class LogStreamHub {
       safeEmit('orchestrator.sse.event.sent', {
         count: successCount,
         messageType: message.type,
-        activeConnections: this.clients.size
+        activeConnections: this.clients.size,
+        filteredOut: filteredCount
       }, { level: 'debug' });
     }
     

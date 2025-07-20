@@ -947,7 +947,7 @@ export const eventSchemas = {
   },
 
   'orchestrator.sse.event.sent': {
-    validate: (payload: unknown): { count: number; messageType: string; activeConnections: number } => {
+    validate: (payload: unknown): { count: number; messageType: string; activeConnections: number; filteredOut?: number } => {
       if (!payload || typeof payload !== 'object') {
         throw new TypeError('payload must be an object');
       }
@@ -955,7 +955,8 @@ export const eventSchemas = {
       return {
         count: validateNumber(p.count, 'count'),
         messageType: validateString(p.messageType, 'messageType'),
-        activeConnections: validateNumber(p.activeConnections, 'activeConnections')
+        activeConnections: validateNumber(p.activeConnections, 'activeConnections'),
+        filteredOut: p.filteredOut !== undefined ? validateNumber(p.filteredOut, 'filteredOut') : undefined
       };
     },
     level: 'debug' as const,
