@@ -19,6 +19,8 @@ import type {
 import { INTERNAL } from './types.js';
 import type { EventType } from './schema-registry.js';
 import { validateEventPayload, eventSchemas } from './schema-registry.js';
+import { branchManager } from './branch-manager.js';
+import type { BranchSummary, BranchDetails } from './branch-manager.js';
 
 // Simple ULID-like ID generator (simplified for bootstrap)
 function generateId(): string {
@@ -37,7 +39,6 @@ interface JitterbugState {
   maxBuffer: number;
   subscribers: Set<Listener>;
   ready: boolean;
-  branches: Set<string>;
 }
 
 const HELP_REGISTRY: HelpEntry[] = [
@@ -94,6 +95,54 @@ const HELP_REGISTRY: HelpEntry[] = [
     signature: 'ready(): void', 
     since: '0.1', 
     category: 'core'
+  },
+  {
+    name: 'createBranch',
+    summary: 'Create a new debug branch',
+    signature: 'createBranch(name: string, options?: BranchOptions): BranchRecord',
+    since: '0.2',
+    category: 'branch',
+    example: 'jitterbug.createBranch("feature-test", { autoActivate: true })'
+  },
+  {
+    name: 'getBranches',
+    summary: 'Get all registered branches',
+    signature: 'getBranches(): BranchSummary[]',
+    since: '0.2',
+    category: 'branch',
+    example: 'jitterbug.getBranches()'
+  },
+  {
+    name: 'listActiveBranches',
+    summary: 'Get only active branches',
+    signature: 'listActiveBranches(): BranchSummary[]',
+    since: '0.2',
+    category: 'branch',
+    example: 'jitterbug.listActiveBranches()'
+  },
+  {
+    name: 'setActiveBranch',
+    summary: 'Set the active branch for new events',
+    signature: 'setActiveBranch(name: string): void',
+    since: '0.2',
+    category: 'branch',
+    example: 'jitterbug.setActiveBranch("debug-session")'
+  },
+  {
+    name: 'getActiveBranch',
+    summary: 'Get the currently active branch name',
+    signature: 'getActiveBranch(): string',
+    since: '0.2',
+    category: 'branch',
+    example: 'jitterbug.getActiveBranch()'
+  },
+  {
+    name: 'deleteBranch',
+    summary: 'Delete a branch (with validation)',
+    signature: 'deleteBranch(name: string): boolean',
+    since: '0.2',
+    category: 'branch',
+    example: 'jitterbug.deleteBranch("old-session")'
   }
 ];
 
@@ -110,8 +159,7 @@ export function initializeJitterbug(global: Window = window): void {
     bootstrapQueue: [],
     maxBuffer: 2000,
     subscribers: new Set(),
-    ready: false,
-    branches: new Set(['main'])
+    ready: false
   };
 
   function ringPush<T>(arr: T[], item: T, max: number): void {
@@ -151,13 +199,20 @@ export function initializeJitterbug(global: Window = window): void {
     
     const id = generateId();
     const schema = eventSchemas[type as EventType];
+    const targetBranch = opts.branch || branchManager.getActiveBranch();
+    
+    // Only emit if the target branch is enabled
+    if (!branchManager.isBranchEnabled(targetBranch)) {
+      return id; // Return ID but don't emit
+    }
+    
     const evt: JitterbugEvent = {
       id,
       t: Date.now(),
       type,
       level: opts.level || schema?.level,
       planHash: opts.planHash,
-      branch: opts.branch || 'main',
+      branch: targetBranch,
       stepId: opts.stepId,
       payload: validatedPayload as Record<string, unknown>,
       meta: { 
@@ -169,6 +224,10 @@ export function initializeJitterbug(global: Window = window): void {
 
     const target = state.ready ? state.buffer : state.bootstrapQueue;
     ringPush(target, evt, state.maxBuffer);
+    
+    // Record event statistics in branch manager
+    const isError = evt.level === 'error';
+    branchManager.recordEventForBranch(targetBranch, isError);
     
     if (state.enabled) {
       state.subscribers.forEach(subscriber => {
@@ -237,18 +296,19 @@ export function initializeJitterbug(global: Window = window): void {
       bootstrapCount: state.bootstrapQueue.length,
       subscribers: state.subscribers.size,
       bufferSize: state.buffer.length,
-      branches: Array.from(state.branches)
+      branches: branchManager.getBranches().map(b => b.name)
     };
   }
 
   function help(topic?: string): string {
     if (!topic) {
       return [
-        'Jitterbug v0.1 core API:',
-        '  enable(), disable(), isEnabled(), emit(type, payload, opts), getEvents(opts)',
-        '  subscribe(fn), ready(), diagnostics(), help(topic)',
-        'Future: createBranch(), saveConfig(), exportLogs()',
-        'Use help("emit") for details.'
+        'Jitterbug v0.2 core API:',
+        '  Core: enable(), disable(), isEnabled(), emit(), getEvents(), subscribe()',
+        '  Branch: createBranch(), getBranches(), setActiveBranch(), getActiveBranch()',
+        '  System: ready(), diagnostics(), help(topic)',
+        'Future: saveConfig(), exportLogs()',
+        'Use help("createBranch") for details.'
       ].join('\n');
     }
 
@@ -275,6 +335,43 @@ export function initializeJitterbug(global: Window = window): void {
 
   function isEnabled(): boolean {
     return state.enabled;
+  }
+
+  // Branch management methods (Task 3.2)
+  function createBranch(name: string, options = {}) {
+    return branchManager.createBranch(name, options);
+  }
+
+  function getBranches(): BranchSummary[] {
+    return branchManager.getBranches();
+  }
+
+  function listActiveBranches(): BranchSummary[] {
+    return branchManager.listActiveBranches();
+  }
+
+  function getBranch(name: string): BranchDetails | undefined {
+    return branchManager.getBranch(name);
+  }
+
+  function setActiveBranch(name: string): void {
+    branchManager.setActiveBranch(name);
+  }
+
+  function getActiveBranch(): string {
+    return branchManager.getActiveBranch();
+  }
+
+  function enableBranch(name: string): void {
+    branchManager.enableBranch(name);
+  }
+
+  function disableBranch(name: string): void {
+    branchManager.disableBranch(name);
+  }
+
+  function deleteBranch(name: string): boolean {
+    return branchManager.deleteBranch(name);
   }
 
   // Early error capture setup
@@ -318,7 +415,7 @@ export function initializeJitterbug(global: Window = window): void {
 
   // Create the API object
   const api: JitterbugGlobal = {
-    version: '0.1.0',
+    version: '0.2.0',
     isEnabled,
     enable,
     disable,
@@ -327,7 +424,17 @@ export function initializeJitterbug(global: Window = window): void {
     subscribe,
     help,
     ready,
-    diagnostics
+    diagnostics,
+    // Branch management methods (Task 3.2) @experimental
+    createBranch,
+    getBranches,
+    listActiveBranches,
+    getBranch,
+    setActiveBranch,
+    getActiveBranch,
+    enableBranch,
+    disableBranch,
+    deleteBranch
   };
 
   // Add internal state access (non-enumerable)

@@ -107,8 +107,8 @@
             "dependencies": [
               "3.1"
             ],
-            "details": "Implement jitterbug.createBranch(name, config) method that dynamically creates new debug branches with custom configurations. Build jitterbug.getBranches() to retrieve all registered branches with their current states and configurations. Create jitterbug.listActiveBranches() to show only enabled branches with their recent activity. Add branch-specific methods like enableBranch(name), disableBranch(name), and removeBranch(name). Ensure all branch operations properly integrate with the core orchestrator to maintain consistency. Include validation to prevent duplicate branch names and handle edge cases like removing active branches.",
-            "status": "pending",
+            "details": "Implement jitterbug.createBranch(name, config) method that dynamically creates new debug branches with custom configurations. Build jitterbug.getBranches() to retrieve all registered branches with their current states and configurations. Create jitterbug.listActiveBranches() to show only enabled branches with their recent activity. Add branch-specific methods like enableBranch(name), disableBranch(name), and removeBranch(name). Ensure all branch operations properly integrate with the core orchestrator to maintain consistency. Include validation to prevent duplicate branch names and handle edge cases like removing active branches.\n<info added on 2025-07-20T03:59:21.576Z>\nTask 3.2 successfully completed with full branch management API implementation. Created BranchManager singleton in src/browser/branch-manager.ts with comprehensive branch lifecycle management including parent-child relationships and cycle detection. Implemented all required window.jitterbug methods: createBranch(), getBranches(), listActiveBranches(), getBranch(), setActiveBranch(), getActiveBranch(), enableBranch(), disableBranch(), deleteBranch(). Added 6 new lifecycle events to schema registry for branch operations. Integrated branch filtering into bootstrap emit() method ensuring only enabled branches receive events. Added event statistics tracking per branch including counts and last activity timestamps. Enhanced diagnostics() and help system with branch command documentation. Implemented robust validation with name regex patterns, circular reference prevention, and safety guards preventing deletion of main/active branches or branches with children. Created comprehensive test suite with 26 test cases covering all workflows, validation, and edge cases. Branch management foundation complete and ready for debug mode control methods in task 3.3.\n</info added on 2025-07-20T03:59:21.576Z>",
+            "status": "done",
             "testStrategy": "Test creating multiple branches with different configurations and verify they're properly registered. Validate getBranches() returns complete branch information including state and config. Test enabling/disabling branches affects their logging behavior. Verify branch removal cleans up all associated resources."
           },
           {
@@ -237,7 +237,7 @@
     ],
     "metadata": {
       "created": "2025-07-19T22:50:56.179Z",
-      "updated": "2025-07-20T01:22:24.300Z",
+      "updated": "2025-07-20T03:58:47.247Z",
       "description": "Clean rewrite of Jitterbug with orchestrator pattern"
     }
   }

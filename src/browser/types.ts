@@ -72,9 +72,16 @@ export interface JitterbugGlobal {
   /** Internal diagnostics snapshot (clone, read-only). */
   diagnostics(): JitterbugDiagnostics;
 
-  /** (Future) Branch management stub to avoid API churn. */
-  createBranch?(name: string): void;
-  getBranches?(): string[];
+  /** Branch management methods @experimental */
+  createBranch(name: string, options?: any): any;
+  getBranches(): any[];
+  listActiveBranches(): any[];
+  getBranch(name: string): any;
+  setActiveBranch(name: string): void;
+  getActiveBranch(): string;
+  enableBranch(name: string): void;
+  disableBranch(name: string): void;
+  deleteBranch(name: string): boolean;
 
   /** (Future) Config methods reserved; show stubs in help for discoverability. */
   saveConfig?(): void;

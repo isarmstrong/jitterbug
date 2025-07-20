@@ -534,6 +534,100 @@ export const eventSchemas = {
     },
     level: 'info' as const,
     description: 'Plan finalization completes'
+  },
+
+  // Branch lifecycle management events (Task 3.2)
+  'orchestrator.branch.lifecycle.created': {
+    validate: (payload: unknown): { branch: string; parent?: string; timestamp: string; metadata?: Record<string, unknown> } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        branch: validateString(p.branch, 'branch'),
+        parent: validateOptionalString(p.parent, 'parent'),
+        timestamp: validateString(p.timestamp, 'timestamp'),
+        metadata: p.metadata && typeof p.metadata === 'object' ? p.metadata as Record<string, unknown> : undefined
+      };
+    },
+    level: 'info' as const,
+    description: 'New debug branch created'
+  },
+
+  'orchestrator.branch.lifecycle.activated': {
+    validate: (payload: unknown): { branch: string; previous?: string; timestamp: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        branch: validateString(p.branch, 'branch'),
+        previous: validateOptionalString(p.previous, 'previous'),
+        timestamp: validateString(p.timestamp, 'timestamp')
+      };
+    },
+    level: 'info' as const,
+    description: 'Branch set as active for new events'
+  },
+
+  'orchestrator.branch.lifecycle.deactivated': {
+    validate: (payload: unknown): { branch: string; timestamp: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        branch: validateString(p.branch, 'branch'),
+        timestamp: validateString(p.timestamp, 'timestamp')
+      };
+    },
+    level: 'info' as const,
+    description: 'Branch no longer active'
+  },
+
+  'orchestrator.branch.lifecycle.enabled': {
+    validate: (payload: unknown): { branch: string; timestamp: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        branch: validateString(p.branch, 'branch'),
+        timestamp: validateString(p.timestamp, 'timestamp')
+      };
+    },
+    level: 'info' as const,
+    description: 'Branch enabled for event logging'
+  },
+
+  'orchestrator.branch.lifecycle.disabled': {
+    validate: (payload: unknown): { branch: string; timestamp: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        branch: validateString(p.branch, 'branch'),
+        timestamp: validateString(p.timestamp, 'timestamp')
+      };
+    },
+    level: 'info' as const,
+    description: 'Branch disabled for event logging'
+  },
+
+  'orchestrator.branch.lifecycle.deleted': {
+    validate: (payload: unknown): { branch: string; timestamp: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        branch: validateString(p.branch, 'branch'),
+        timestamp: validateString(p.timestamp, 'timestamp')
+      };
+    },
+    level: 'info' as const,
+    description: 'Branch deleted from registry'
   }
 } as const;
 
