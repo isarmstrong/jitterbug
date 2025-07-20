@@ -13,6 +13,15 @@ export { initializeJitterbug } from './bootstrap.js';
 // Utility functions for programmatic use (minimal set)
 export { ensureJitterbugReady, emitJitterbugEvent } from './utils.js';
 
+// Experimental features (Task 3.4)
+export { configPersistence } from './config-persistence.js';
+
+// Re-export experimental helpers for backwards compatibility
+export { safeEmit as experimentalSafeEmit } from './schema-registry.js';
+
+// Task 3.5 - Log Inspection (placeholder - will be uncommented when implementing)
+// export { logInspector } from './logs/index.js';
+
 // Essential type definitions for TypeScript consumers
 export type {
   JitterbugEvent,
