@@ -194,6 +194,15 @@ const HELP_REGISTRY: HelpEntry[] = [
     since: '0.2',
     category: 'debug',
     example: 'jitterbug.debug.setLevel(jitterbug.debug.levels.DEBUG)'
+  },
+  // Log Inspector help entries (Task 3.5 Phase 1)
+  {
+    name: 'logInspector',
+    summary: 'Experimental log inspection query interface',
+    signature: 'logInspector.query({ sinceSeq?, limit? }) → { entries, stats, nextSeq }',
+    since: '0.2',
+    category: 'logs',
+    example: 'logInspector.query({ limit: 100 }) // Get last 100 entries'
   }
 ];
 
@@ -373,9 +382,10 @@ export function initializeJitterbug(global: Window = window): void {
         '  Core: enable(), disable(), isEnabled(), emit(), getEvents(), subscribe()',
         '  Branch: createBranch(), getBranches(), setActiveBranch(), getActiveBranch()',
         '  Debug: debug.enable(), debug.disable(), debug.isEnabled(), debug.setLevel(n), debug.getLevel(), debug.levels',
+        '  Logs: logInspector.query() - experimental log inspection',
         '  System: ready(), diagnostics(), help(topic)',
         'Future: saveConfig(), exportLogs()',
-        'Use help("createBranch") for details.'
+        'Use help("logInspector") for details.'
       ].join('\n');
     }
 

@@ -21,8 +21,9 @@ export { configPersistence } from './config-persistence.js';
 /** @experimental Low-level emission utility - prefer using jitterbug.emit() */
 export { safeEmit as experimentalSafeEmit } from './schema-registry.js';
 
-// Task 3.5 - Log Inspection (placeholder - will be uncommented when implementing)
-// export { logInspector } from './logs/index.js';
+// Task 3.5 - Log Inspection Phase 1 (@experimental)
+/** @experimental Log inspection query interface - subject to API changes */
+export { logInspector } from './public-logs.js';
 
 // Essential type definitions for TypeScript consumers
 export type {

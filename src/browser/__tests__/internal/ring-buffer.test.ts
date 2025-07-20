@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createRing, type LogEntry } from '../../logs/internal/ring-buffer.js';
+import { createRing } from '../../logs/internal/ring-buffer.js';
 
 describe('Ring Buffer (Internal)', () => {
   let buffer: ReturnType<typeof createRing>;

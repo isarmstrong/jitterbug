@@ -9,33 +9,47 @@ import { getDebugState, DebugLevels, type DebugLevel, setConfigDirtyHook } from 
 import { experimentalBranches } from '../browser/branch-manager.js';
 import { safeEmit } from '../browser/schema-registry.js';
 
-export function createConfigPersistence() {
-  // Internal types scoped to factory function
-  type BranchName = string;
-  type ISODateString = string;
+// Public types that need to be exported
+export interface DebugConfigV1 {
+  version: 1;
+  updatedAt: string;
+  debug: {
+    enabled: boolean;
+    level: DebugLevel;
+  };
+  branches: {
+    active: string | null;
+  };
+  logs?: {
+    bufferSize?: number; // Forward-compatible for Task 3.5
+  };
+}
 
-  interface DebugConfigV1 {
-    version: 1;
-    updatedAt: ISODateString;
-    debug: {
-      enabled: boolean;
-      level: DebugLevel;
-    };
-    branches: {
-      active: BranchName | null;
-    };
-    logs?: {
-      bufferSize?: number; // Forward-compatible for Task 3.5
-    };
-  }
+export interface ConfigLoadResult {
+  status: 'loaded' | 'defaulted' | 'migrated' | 'invalid';
+  config: DebugConfigV1;
+  migrated?: boolean;
+  errors?: string[];
+}
 
-  interface ConfigLoadResult {
-    status: 'loaded' | 'defaulted' | 'migrated' | 'invalid';
-    config: DebugConfigV1;
-    migrated?: boolean;
-    errors?: string[];
-  }
-
+export function createConfigPersistence(): {
+  configPersistence: {
+    save(): Promise<{ ok: boolean; bytes?: number; error?: string; skipped?: boolean; }>;
+    load(): ConfigLoadResult;
+    reset(): ConfigLoadResult;
+    snapshot(): DebugConfigV1;
+    _loadConfig(): ConfigLoadResult;
+    _markDirty(reason: string): void;
+  };
+  internal: {
+    loadConfig(): ConfigLoadResult;
+    markDirty(reason: string): void;
+    flush(): Promise<{ ok: boolean; bytes?: number; error?: string; skipped?: boolean; }>;
+    resetConfig(): ConfigLoadResult;
+    validateConfig(obj: unknown): { ok: true; value: DebugConfigV1; } | { ok: false; errors: string[]; };
+    currentConfigSnapshot(): DebugConfigV1;
+  };
+} {
   // Storage configuration
   const CONFIG_KEY = '__jitterbug_config_v1';
   const META_KEY = '__jitterbug_config_meta'; // Reserved for future migrations

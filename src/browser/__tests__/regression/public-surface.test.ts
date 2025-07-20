@@ -16,7 +16,7 @@ const EXPECTED_EXPORTS = [
   'ensureJitterbugReady',    // @experimental (initialization utility)
   'experimentalSafeEmit',    // @experimental (low-level emission - prefer jitterbug.emit())
   'initializeJitterbug',     // @stable (primary entry point)
-  // 'logInspector',         // Task 3.5 - @experimental (log inspection) - add when implementing
+  'logInspector',            // Task 3.5 Phase 1 - @experimental (query-only log inspection)
 ].sort();
 
 const TIER_LIMITS = {
@@ -58,7 +58,7 @@ describe('Public Surface Regression Guard', () => {
     const pkg = await import('../../index.js');
     
     // Verify all exports are functions or objects (not undefined/types)
-    for (const [name, value] of Object.entries(pkg)) {
+    for (const [_name, value] of Object.entries(pkg)) {
       expect(typeof value).not.toBe('undefined');
       expect(value).not.toBeNull();
       // Note: TypeScript types should not appear in runtime Object.keys()
