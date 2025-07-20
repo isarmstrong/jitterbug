@@ -1,0 +1,244 @@
+{
+  "master": {
+    "tasks": [],
+    "metadata": {
+      "created": "2025-07-19T22:50:56.178Z",
+      "updated": "2025-07-19T22:50:56.178Z",
+      "description": "Tasks for master context"
+    }
+  },
+  "jitterbug-rewrite": {
+    "tasks": [
+      {
+        "id": 2,
+        "title": "Create Core Orchestrator Module",
+        "description": "Build the central orchestrator class that manages debug branches and delegates logging operations across different debugging contexts (auth, api, ui, etc.) with clean separation of concerns.",
+        "details": "Implement a CoreOrchestrator class that serves as the central coordination point for all debugging operations. The orchestrator should maintain a registry of debug branches (auth, api, ui, database, etc.) and delegate logging requests to the appropriate branch based on context. Create a clean interface for registering new branches dynamically. Implement method routing that can intelligently determine which branch should handle specific log entries based on metadata, error types, or explicit context tags. Add lifecycle management for branches including initialization, cleanup, and state management. Include a simple pub/sub system for inter-branch communication when needed. Design the orchestrator to be lightweight and avoid circular dependencies. Implement configuration management that allows enabling/disabling specific branches at runtime. Add error handling to ensure orchestrator failures don't crash the debugging system itself.",
+        "testStrategy": "Create unit tests for orchestrator initialization and branch registration. Test delegation logic with mock branches for different contexts. Verify dynamic branch registration and unregistration works correctly. Test error handling when branches fail to initialize or process logs. Validate configuration changes properly enable/disable branches. Test inter-branch communication through the pub/sub system. Create integration tests with multiple branches active simultaneously. Verify orchestrator maintains clean separation between branch concerns and doesn't leak state between contexts.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design Core Orchestrator Architecture and Interfaces",
+            "description": "Create the foundational architecture for CoreOrchestrator class including interfaces for branch registration, lifecycle management, and message routing",
+            "dependencies": [],
+            "details": "Define the CoreOrchestrator class structure with TypeScript interfaces for DebugBranch, BranchRegistry, and OrchestrationContext. Create interfaces for branch lifecycle hooks (initialize, cleanup, suspend, resume). Design the routing strategy interface that determines which branch handles specific log entries based on metadata, error types, and context tags. Define the configuration interface for runtime branch management. Establish clear boundaries to prevent circular dependencies by using dependency injection patterns and event-driven communication interfaces.",
+            "status": "done",
+            "testStrategy": "Create type-checking tests to ensure all interfaces are properly defined. Write unit tests to verify interface contracts are enforceable. Test that the architecture supports loose coupling between components."
+          },
+          {
+            "id": 2,
+            "title": "Implement Branch Registry and Dynamic Registration System",
+            "description": "Build the branch registry system that manages debug branches with dynamic registration, unregistration, and state tracking capabilities",
+            "dependencies": [
+              "2.1"
+            ],
+            "details": "Implement a BranchRegistry class that maintains a Map of registered debug branches keyed by branch name (auth, api, ui, database, etc.). Create registerBranch() and unregisterBranch() methods with validation to ensure branch names are unique and branches implement required interfaces. Add getBranch(), getAllBranches(), and hasBranch() methods for branch discovery. Implement branch state tracking (active, suspended, failed) with state transition validation. Add support for branch metadata storage including version, capabilities, and configuration requirements. Include thread-safe operations for concurrent branch registration.",
+            "status": "done",
+            "testStrategy": "Test branch registration with valid and invalid branch implementations. Verify duplicate branch names are rejected. Test concurrent registration scenarios. Validate branch state transitions follow defined rules. Test registry queries return correct branch information."
+          },
+          {
+            "id": 3,
+            "title": "Create Intelligent Log Routing and Delegation Engine",
+            "description": "Implement the routing engine that intelligently determines which branch should handle specific log entries based on configurable rules and metadata analysis",
+            "dependencies": [
+              "2.1",
+              "2.2"
+            ],
+            "details": "Build a RoutingEngine class that analyzes log entries and determines the appropriate branch for processing. Implement multiple routing strategies: metadata-based routing (using explicit context tags), error-type routing (matching error types to specialized branches), pattern-based routing (using regex or glob patterns on log content), and fallback routing for unmatched logs. Create a routing rule system that allows dynamic rule configuration with priority ordering. Implement delegation methods that pass log entries to selected branches with proper error boundaries. Add routing analytics to track which branches handle which types of logs for optimization.",
+            "status": "done",
+            "testStrategy": "Test routing decisions with various log entry types and metadata combinations. Verify routing rules are applied in correct priority order. Test fallback behavior when no specific route matches. Validate error handling when target branch fails to process logs."
+          },
+          {
+            "id": 4,
+            "title": "Implement Pub/Sub System for Inter-Branch Communication",
+            "description": "Create a lightweight publish/subscribe system that enables branches to communicate with each other without creating direct dependencies",
+            "dependencies": [
+              "2.1",
+              "2.2"
+            ],
+            "details": "Implement an EventBus class within the orchestrator that provides publish(), subscribe(), and unsubscribe() methods for inter-branch communication. Create event types for common scenarios: branch status changes, shared context updates, error propagation, and coordination messages. Implement event filtering and namespacing to prevent event collision between branches. Add support for both synchronous and asynchronous event handling with proper error isolation. Create event history tracking for debugging the pub/sub system itself. Implement automatic cleanup of subscriptions when branches are unregistered.",
+            "status": "done",
+            "testStrategy": "Test event publishing and subscription with multiple branches. Verify events are properly isolated between namespaces. Test cleanup of subscriptions on branch unregistration. Validate error in one subscriber doesn't affect others. Test both sync and async event handling."
+          },
+          {
+            "id": 5,
+            "title": "Add Configuration Management and Error Resilience Layer",
+            "description": "Implement runtime configuration management for enabling/disabling branches and comprehensive error handling to ensure orchestrator stability",
+            "dependencies": [
+              "2.1",
+              "2.2",
+              "2.3",
+              "2.4"
+            ],
+            "details": "Create a ConfigurationManager that allows runtime control of branch states through enable(), disable(), and configure() methods. Implement configuration validation and merging with defaults for each branch. Add configuration persistence options (memory, localStorage, or custom storage). Build comprehensive error handling with try-catch boundaries around all branch operations, fallback logging when branches fail, and orchestrator self-healing capabilities. Implement circuit breaker pattern for repeatedly failing branches. Add orchestrator health monitoring with metrics on branch performance, error rates, and routing efficiency. Create graceful degradation modes when critical branches fail.",
+            "status": "done",
+            "testStrategy": "Test configuration changes take effect immediately without requiring restart. Verify branch failures don't cascade to orchestrator failure. Test circuit breaker activates after threshold failures. Validate health metrics accurately reflect system state. Test graceful degradation maintains core functionality."
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Implement Browser Console API with window.jitterbug Interface",
+        "description": "Create an interactive browser console API that exposes window.jitterbug for runtime configuration, debugging control, and settings persistence with auto-initialization capabilities.",
+        "details": "Implement the window.jitterbug global API that provides interactive access to the Jitterbug debugging system from the browser console. Create methods for creating and managing debug branches dynamically (jitterbug.createBranch(), jitterbug.getBranches()). Build debug mode controls with methods like jitterbug.enable(), jitterbug.disable(), jitterbug.setLevel(), and jitterbug.getStatus(). Implement persistent configuration using localStorage with methods like jitterbug.saveConfig(), jitterbug.loadConfig(), and jitterbug.resetConfig(). Add utility methods for inspecting current state such as jitterbug.listActiveBranches(), jitterbug.getRecentLogs(), and jitterbug.exportLogs(). Ensure the API auto-initializes on page load by attaching to window object and setting up early error capture before other scripts execute. Include proper error handling and validation for all API methods. Design the interface to be discoverable with help methods and clear naming conventions. Integrate with the orchestrator to ensure all console commands properly delegate to the appropriate debugging branches.",
+        "testStrategy": "Verify window.jitterbug is available immediately after script load. Test all API methods work correctly from browser console. Validate configuration persistence across page reloads by testing localStorage integration. Test branch creation and management through console API matches internal state. Verify debug mode toggling affects actual logging behavior. Test early error capture by intentionally triggering errors during page initialization. Validate exported logs contain expected data and formatting. Test API discovery features like help methods return proper documentation. Ensure all methods handle invalid inputs gracefully with clear error messages.",
+        "status": "pending",
+        "dependencies": [
+          2
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design and Implement Core window.jitterbug API Structure",
+            "description": "Create the foundational window.jitterbug object with proper TypeScript interfaces, initialization logic, and auto-attachment to the window object during script load.",
+            "dependencies": [],
+            "details": "Define the complete TypeScript interface for window.jitterbug API including all method signatures and property types. Implement the core object structure with proper namespacing and module pattern to prevent global scope pollution. Create an initialization system that automatically attaches to window object before other scripts execute, ensuring early error capture capability. Set up proper error boundaries and validation helpers that will be used across all API methods. Implement a help() method that displays available commands and usage examples in the console.",
+            "status": "pending",
+            "testStrategy": "Verify window.jitterbug exists immediately after script inclusion. Test that the object structure matches the defined TypeScript interface. Validate early initialization by checking if errors thrown before DOMContentLoaded are captured. Test the help() method displays comprehensive API documentation."
+          },
+          {
+            "id": 2,
+            "title": "Implement Branch Management Methods",
+            "description": "Build the branch creation and management functionality including createBranch(), getBranches(), listActiveBranches(), and related branch control methods.",
+            "dependencies": [
+              "3.1"
+            ],
+            "details": "Implement jitterbug.createBranch(name, config) method that dynamically creates new debug branches with custom configurations. Build jitterbug.getBranches() to retrieve all registered branches with their current states and configurations. Create jitterbug.listActiveBranches() to show only enabled branches with their recent activity. Add branch-specific methods like enableBranch(name), disableBranch(name), and removeBranch(name). Ensure all branch operations properly integrate with the core orchestrator to maintain consistency. Include validation to prevent duplicate branch names and handle edge cases like removing active branches.",
+            "status": "pending",
+            "testStrategy": "Test creating multiple branches with different configurations and verify they're properly registered. Validate getBranches() returns complete branch information including state and config. Test enabling/disabling branches affects their logging behavior. Verify branch removal cleans up all associated resources."
+          },
+          {
+            "id": 3,
+            "title": "Build Debug Mode Control Methods",
+            "description": "Create the core debugging control methods including enable(), disable(), setLevel(), getStatus(), and related state management functionality.",
+            "dependencies": [
+              "3.1"
+            ],
+            "details": "Implement jitterbug.enable() and jitterbug.disable() methods to control global debugging state with immediate effect on all active branches. Create jitterbug.setLevel(level) to adjust logging verbosity with support for standard levels (error, warn, info, debug, trace). Build jitterbug.getStatus() to return comprehensive debugging state including enabled status, current level, active branches, and recent activity statistics. Add granular control methods like setLevelForBranch(branch, level) for branch-specific configuration. Implement proper state transitions and ensure all changes are immediately reflected in logging behavior.",
+            "status": "pending",
+            "testStrategy": "Test enable/disable toggles affect all logging output immediately. Verify setLevel filters logs appropriately across all severity levels. Validate getStatus returns accurate real-time state information. Test branch-specific level settings override global settings correctly."
+          },
+          {
+            "id": 4,
+            "title": "Implement Configuration Persistence with localStorage",
+            "description": "Build the configuration persistence layer with saveConfig(), loadConfig(), resetConfig() methods and automatic state restoration on page load.",
+            "dependencies": [
+              "3.2",
+              "3.3"
+            ],
+            "details": "Implement jitterbug.saveConfig() to serialize current debugging state including enabled branches, log levels, and custom settings to localStorage with proper error handling for quota exceeded scenarios. Create jitterbug.loadConfig() to restore saved configuration with validation and migration support for older config versions. Build jitterbug.resetConfig() to clear saved settings and restore defaults. Implement automatic config loading during initialization to restore user preferences across page reloads. Add config versioning to handle schema changes gracefully. Include methods like exportConfig() and importConfig(data) for sharing configurations.",
+            "status": "pending",
+            "testStrategy": "Test saveConfig stores complete state in localStorage with correct serialization. Verify loadConfig restores all settings including branch states and log levels. Test automatic restoration on page reload maintains user preferences. Validate config migration handles version differences correctly."
+          },
+          {
+            "id": 5,
+            "title": "Create Log Inspection and Export Utilities",
+            "description": "Implement utility methods for inspecting logs including getRecentLogs(), exportLogs(), clearLogs(), and integration with the orchestrator for comprehensive log access.",
+            "dependencies": [
+              "3.1",
+              "3.2"
+            ],
+            "details": "Implement jitterbug.getRecentLogs(count, filter) to retrieve recent log entries with optional filtering by branch, level, or time range. Create jitterbug.exportLogs(format) supporting multiple export formats (JSON, CSV, formatted text) with configurable options for including metadata and stack traces. Build jitterbug.clearLogs() to purge log history with options for selective clearing by branch or time range. Add search functionality with findLogs(query) supporting text search and structured queries. Ensure all methods properly delegate to the orchestrator to access centralized log storage. Include performance optimizations for handling large log volumes.",
+            "status": "pending",
+            "testStrategy": "Test getRecentLogs returns correct number of entries with proper filtering. Verify exportLogs generates valid output in all supported formats. Test clearLogs removes appropriate entries while preserving others based on filters. Validate search functionality finds logs by content and metadata accurately."
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Create Beautiful Emoji Console Transport with Expandable Details",
+        "description": "Build a visually appealing console transport that uses the yellow bug emoji (🐛) and console.group/groupCollapsed to create expandable log sections with top-line analysis and detailed context in development mode.",
+        "details": "Implement a console transport that enhances the debugging experience with beautiful formatting and emoji indicators. Use the yellow bug emoji (🐛) as the primary indicator for Jitterbug logs. Create a top-line summary that shows the most important information at a glance, including timestamp, log level, and brief message. Use console.group() and console.groupCollapsed() to create expandable sections that contain full context, stack traces, and detailed metadata. In development mode, automatically expand groups for critical errors while keeping info/debug logs collapsed by default. Implement color coding using console CSS styling for different log levels. Add smart formatting that detects and highlights important data like URLs, error codes, and performance metrics. Create fallback behavior for environments that don't support console grouping. Ensure the transport integrates cleanly with the core orchestrator and can be configured through the window.jitterbug API.",
+        "testStrategy": "Verify emoji rendering appears correctly across different browsers and console environments. Test console.group expansion/collapse behavior works as expected in Chrome DevTools, Firefox, and Safari. Validate that top-line summaries contain essential information while detailed sections show complete context. Test development vs production mode behavior differences. Verify color coding and CSS styling renders properly. Test fallback behavior in environments without console grouping support. Validate integration with the orchestrator pattern and configuration through window.jitterbug API.",
+        "status": "pending",
+        "dependencies": [
+          2
+        ],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Implement SSE (Server-Sent Events) Transport for Unified Client/Server Log Streaming",
+        "description": "Create a real-time log streaming system using Server-Sent Events that enables bidirectional flow where client logs are sent to server and all logs are streamed back via SSE for unified viewing across environments. Must support both React 18 and React 19 with compatibility layer for streaming API changes.",
+        "status": "pending",
+        "dependencies": [
+          2
+        ],
+        "priority": "medium",
+        "details": "Implement a comprehensive SSE transport system with both client and server components, ensuring compatibility across React versions. CRITICAL: Research React 19 breaking changes related to Server-Sent Events, streaming APIs, and suspense boundaries before implementation. Create compatibility layer for React 18/19 differences in streaming, server components, and SSE handling. On the client side, create an SSE client that connects to the server endpoint and receives real-time log streams, while also providing methods to send client-side logs to the server via HTTP POST. Build a server-side SSE endpoint that maintains persistent connections with clients and broadcasts log events in real-time. Implement a log aggregation system that collects logs from multiple sources (client-side errors, server-side events, API calls, etc.) and streams them through the SSE connection. Create connection management with automatic reconnection logic, heartbeat mechanisms, and graceful degradation when SSE is unavailable. Design the transport to integrate seamlessly with the orchestrator pattern, allowing different debug branches to stream their logs through the SSE connection. Implement filtering and routing capabilities so clients can subscribe to specific log types or branches. Add authentication and authorization to ensure only authorized clients can access log streams. Include compression and batching for efficient data transfer, and implement proper error handling for connection failures and network issues.",
+        "testStrategy": "Test SSE connection establishment and persistence across different browsers and network conditions. Verify bidirectional log flow by sending client logs to server and confirming they appear in the SSE stream. Test automatic reconnection behavior when connections are lost or interrupted. Validate that multiple clients can connect simultaneously and receive independent log streams. Test log filtering and branch-specific subscriptions work correctly. Verify authentication prevents unauthorized access to log streams. Test performance with high-volume log streaming and ensure no memory leaks occur during extended sessions. Validate graceful degradation when SSE is not supported or network conditions are poor. Test integration with the orchestrator system to ensure all debug branches can stream through SSE. Verify compression and batching optimize network usage without introducing significant latency. CRITICAL: Test React 18 and React 19 compatibility thoroughly, ensuring the compatibility layer works correctly across both versions. Test streaming APIs and suspense boundary behavior in both React versions.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Research React 19 SSE Compatibility and Breaking Changes",
+            "description": "Investigate React 19's breaking changes related to Server-Sent Events, streaming APIs, and suspense boundaries to ensure compatibility.",
+            "status": "pending",
+            "dependencies": [],
+            "details": "Thoroughly research and document React 19 breaking changes that affect SSE implementation: streaming APIs changes, server component streaming updates, suspense boundary modifications, and any SSE-specific breaking changes. Create compatibility matrix and document required shimming approach.",
+            "testStrategy": "Create test cases for both React 18 and React 19 to validate findings and ensure compatibility layer requirements are accurate."
+          },
+          {
+            "id": 2,
+            "title": "Create React 18/19 Compatibility Layer",
+            "description": "Build compatibility shims and abstractions to support both React 18 and React 19 streaming APIs.",
+            "status": "pending",
+            "dependencies": [],
+            "details": "Implement compatibility layer that abstracts React version differences for streaming, SSE handling, and suspense boundaries. Create runtime detection of React version and appropriate API shimming.",
+            "testStrategy": "Test compatibility layer works correctly in both React 18 and React 19 environments, ensuring no breaking changes in either version."
+          },
+          {
+            "id": 3,
+            "title": "Implement Client-Side SSE Connection Management",
+            "description": "Create the client-side SSE client with connection management, reconnection logic, and log sending capabilities.",
+            "status": "pending",
+            "dependencies": [],
+            "details": "Build EventSource wrapper with automatic reconnection, heartbeat monitoring, authentication handling, and methods to send client logs via HTTP POST. Ensure React compatibility layer is properly integrated.",
+            "testStrategy": "Test connection establishment, reconnection behavior, and bidirectional log flow across different network conditions and both React versions."
+          },
+          {
+            "id": 4,
+            "title": "Build Server-Side SSE Endpoint and Broadcasting System",
+            "description": "Create server endpoint that maintains persistent SSE connections and broadcasts logs to connected clients.",
+            "status": "pending",
+            "dependencies": [],
+            "details": "Implement SSE endpoint with connection management, log broadcasting, filtering capabilities, and integration with orchestrator system. Include authentication, compression, and error handling.",
+            "testStrategy": "Test multiple client connections, log filtering, authentication, and performance under high-volume log streaming."
+          },
+          {
+            "id": 5,
+            "title": "Integrate SSE Transport with Orchestrator System",
+            "description": "Connect the SSE transport to the existing orchestrator to enable debug branch log streaming.",
+            "status": "pending",
+            "dependencies": [],
+            "details": "Create integration layer that allows orchestrator debug branches to stream their logs through the SSE connection with proper routing and filtering based on branch context.",
+            "testStrategy": "Verify all debug branches can stream through SSE and that filtering works correctly for different branch types and log levels."
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Create Next.js Integration Package with App Router Support",
+        "description": "Build a Next.js integration package that provides a client component for log viewing and API routes for SSE endpoints, focused on essential functionality with app router compatibility.",
+        "details": "Create a dedicated Next.js package that integrates seamlessly with the Jitterbug debugging system. Implement a React client component that can display logs in real-time using the SSE transport system. The component should be lightweight, responsive, and provide filtering capabilities for different log levels and branches. Create API route handlers compatible with Next.js 13+ App Router that serve as SSE endpoints for streaming logs. Implement proper TypeScript definitions for all components and utilities. Include a simple setup function that automatically configures the integration with minimal configuration required. The package should export clear interfaces for the log viewer component, API route handlers, and any utility functions. Ensure compatibility with both Pages Router and App Router architectures. Design the client component to handle connection states, error recovery, and automatic reconnection to the SSE endpoint. Include proper cleanup mechanisms for component unmounting and connection disposal.",
+        "testStrategy": "Test the client component renders correctly and connects to SSE endpoints without errors. Verify compatibility with both App Router and Pages Router by creating test applications for each. Test log filtering and display functionality with various log levels and branch types. Validate TypeScript definitions are correct and provide proper intellisense. Test SSE connection handling including reconnection on network failures. Verify the setup function correctly initializes the integration with minimal configuration. Test component cleanup and memory management during mount/unmount cycles. Validate the package works correctly when installed as a dependency in fresh Next.js applications.",
+        "status": "pending",
+        "dependencies": [
+          2,
+          5
+        ],
+        "priority": "low",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-07-19T22:50:56.179Z",
+      "updated": "2025-07-19T23:55:06.466Z",
+      "description": "Clean rewrite of Jitterbug with orchestrator pattern"
+    }
+  }
+}

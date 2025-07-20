@@ -43,3 +43,27 @@ tmp/
 # Cache
 .cache/
 .eslintcache 
+
+# Archive folder
+archive_2025_01_19/
+
+# MCP configuration with secrets
+.mcp.json
+
+# Logs
+logs
+dev-debug.log
+# Dependency directories
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific
+
+# Task files
+# tasks.json
+# tasks/ 

@@ -1,3 +1,0 @@
-export { };
-
-// ... rest of the original index.ts content ... 

@@ -1,0 +1,11 @@
+# Task ID: 3
+# Title: Implement Browser Console API with window.jitterbug Interface
+# Status: pending
+# Dependencies: 2
+# Priority: high
+# Description: Create an interactive browser console API that exposes window.jitterbug for runtime configuration, debugging control, and settings persistence with auto-initialization capabilities.
+# Details:
+Implement the window.jitterbug global API that provides interactive access to the Jitterbug debugging system from the browser console. Create methods for creating and managing debug branches dynamically (jitterbug.createBranch(), jitterbug.getBranches()). Build debug mode controls with methods like jitterbug.enable(), jitterbug.disable(), jitterbug.setLevel(), and jitterbug.getStatus(). Implement persistent configuration using localStorage with methods like jitterbug.saveConfig(), jitterbug.loadConfig(), and jitterbug.resetConfig(). Add utility methods for inspecting current state such as jitterbug.listActiveBranches(), jitterbug.getRecentLogs(), and jitterbug.exportLogs(). Ensure the API auto-initializes on page load by attaching to window object and setting up early error capture before other scripts execute. Include proper error handling and validation for all API methods. Design the interface to be discoverable with help methods and clear naming conventions. Integrate with the orchestrator to ensure all console commands properly delegate to the appropriate debugging branches.
+
+# Test Strategy:
+Verify window.jitterbug is available immediately after script load. Test all API methods work correctly from browser console. Validate configuration persistence across page reloads by testing localStorage integration. Test branch creation and management through console API matches internal state. Verify debug mode toggling affects actual logging behavior. Test early error capture by intentionally triggering errors during page initialization. Validate exported logs contain expected data and formatting. Test API discovery features like help methods return proper documentation. Ensure all methods handle invalid inputs gracefully with clear error messages.

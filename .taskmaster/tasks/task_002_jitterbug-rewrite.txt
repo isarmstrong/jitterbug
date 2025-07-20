@@ -1,0 +1,11 @@
+# Task ID: 2
+# Title: Create Core Orchestrator Module
+# Status: pending
+# Dependencies: None
+# Priority: high
+# Description: Build the central orchestrator class that manages debug branches and delegates logging operations across different debugging contexts (auth, api, ui, etc.) with clean separation of concerns.
+# Details:
+Implement a CoreOrchestrator class that serves as the central coordination point for all debugging operations. The orchestrator should maintain a registry of debug branches (auth, api, ui, database, etc.) and delegate logging requests to the appropriate branch based on context. Create a clean interface for registering new branches dynamically. Implement method routing that can intelligently determine which branch should handle specific log entries based on metadata, error types, or explicit context tags. Add lifecycle management for branches including initialization, cleanup, and state management. Include a simple pub/sub system for inter-branch communication when needed. Design the orchestrator to be lightweight and avoid circular dependencies. Implement configuration management that allows enabling/disabling specific branches at runtime. Add error handling to ensure orchestrator failures don't crash the debugging system itself.
+
+# Test Strategy:
+Create unit tests for orchestrator initialization and branch registration. Test delegation logic with mock branches for different contexts. Verify dynamic branch registration and unregistration works correctly. Test error handling when branches fail to initialize or process logs. Validate configuration changes properly enable/disable branches. Test inter-branch communication through the pub/sub system. Create integration tests with multiple branches active simultaneously. Verify orchestrator maintains clean separation between branch concerns and doesn't leak state between contexts.

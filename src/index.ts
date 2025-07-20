@@ -1,19 +1,16 @@
-export { createDebug, createJitterbug, factory } from "./core";
-export { ErrorAggregationProcessor } from "./processors/error-aggregation";
-export { MetricsProcessor } from "./processors/metrics";
-export { SanitizeProcessor } from "./processors/sanitize";
-export { ConsoleTransport } from "./transports/console";
-export { EdgeTransport, type EdgeTransportConfig } from "./transports/edge";
-export * from "./types";
-export { Environment, LogLevels, Runtime } from "./types/core";
+/**
+ * Jitterbug - Edge-first debugging system for Next.js
+ * Version 0.2.0
+ * 
+ * A clean orchestrator-based implementation for unified client/server logging
+ * 
+ * Node.js 20+ required (optimized for Node 22)
+ * Compatible with React 18 & 19 (SSE implementation will need shimming)
+ */
 
-// Export EBL types
-export type { ValidationResult } from "./types/ebl/core";
-export type { RuntimeEnvironment, RuntimeGuard } from "./types/ebl/guards";
-export type { MemoryMetricKey, MemoryMetrics, MemoryUnit } from "./types/ebl/memory";
-export type { ValidationStrategy, ValidationStrategyConfig } from "./types/ebl/strategy";
+export const VERSION = '0.2.0';
 
-// Export subpath exports for transports
-export * as console from "./transports/console";
-export * as edge from "./transports/edge";
-
+// Placeholder for the new orchestrator implementation
+export function initializeJitterbug() {
+  console.log('🐛 Jitterbug v0.2.0 - Ready for implementation');
+}

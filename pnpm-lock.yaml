@@ -8,12 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@isarmstrong/jitterbug-core-types':
-        specifier: workspace:*
-        version: link:packages/core-types
-      '@types/semver':
-        specifier: ^7.5.8
-        version: 7.5.8
       p-queue:
         specifier: ^7.4.1
         version: 7.4.1
@@ -30,6 +24,9 @@ importers:
         specifier: ^3.22.4
         version: 3.24.1
     devDependencies:
+      '@isarmstrong/jitterbug-core-types':
+        specifier: link:packages/jitterbug-core-types
+        version: link:packages/jitterbug-core-types
       '@types/node':
         specifier: ^20.11.5
         version: 20.17.10
@@ -123,18 +120,27 @@ importers:
         specifier: ^5.0.0
         version: 5.3.3
 
+  packages/jitterbug-core-types:
+    devDependencies:
+      rimraf:
+        specifier: ^5.0.0
+        version: 5.0.10
+      typescript:
+        specifier: ^5.0.0
+        version: 5.3.3
+
   packages/jitterbug-next:
     dependencies:
       '@isarmstrong/jitterbug':
         specifier: workspace:*
         version: link:../..
-      '@isarmstrong/jitterbug-types':
-        specifier: workspace:*
-        version: link:../jitterbug-types
       react:
         specifier: '>=18.0.0'
         version: 18.2.0
     devDependencies:
+      '@isarmstrong/jitterbug-core-types':
+        specifier: workspace:*
+        version: link:../jitterbug-core-types
       '@types/node':
         specifier: ^20.0.0
         version: 20.17.10
@@ -162,6 +168,9 @@ importers:
 
   packages/jitterbug-types:
     devDependencies:
+      '@isarmstrong/jitterbug-core-types':
+        specifier: workspace:*
+        version: link:../jitterbug-core-types
       rimraf:
         specifier: ^5.0.0
         version: 5.0.10
@@ -2210,8 +2219,6 @@ snapshots:
 
   '@isarmstrong/jitterbug@file:':
     dependencies:
-      '@isarmstrong/jitterbug-core-types': link:packages/core-types
-      '@types/semver': 7.5.8
       p-queue: 7.4.1
       p-throttle: 5.1.0
       react-dom: 18.2.0(react@18.2.0)

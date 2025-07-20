@@ -1,0 +1,11 @@
+# Task ID: 4
+# Title: Create Beautiful Emoji Console Transport with Expandable Details
+# Status: pending
+# Dependencies: 2
+# Priority: medium
+# Description: Build a visually appealing console transport that uses the yellow bug emoji (🐛) and console.group/groupCollapsed to create expandable log sections with top-line analysis and detailed context in development mode.
+# Details:
+Implement a console transport that enhances the debugging experience with beautiful formatting and emoji indicators. Use the yellow bug emoji (🐛) as the primary indicator for Jitterbug logs. Create a top-line summary that shows the most important information at a glance, including timestamp, log level, and brief message. Use console.group() and console.groupCollapsed() to create expandable sections that contain full context, stack traces, and detailed metadata. In development mode, automatically expand groups for critical errors while keeping info/debug logs collapsed by default. Implement color coding using console CSS styling for different log levels. Add smart formatting that detects and highlights important data like URLs, error codes, and performance metrics. Create fallback behavior for environments that don't support console grouping. Ensure the transport integrates cleanly with the core orchestrator and can be configured through the window.jitterbug API.
+
+# Test Strategy:
+Verify emoji rendering appears correctly across different browsers and console environments. Test console.group expansion/collapse behavior works as expected in Chrome DevTools, Firefox, and Safari. Validate that top-line summaries contain essential information while detailed sections show complete context. Test development vs production mode behavior differences. Verify color coding and CSS styling renders properly. Test fallback behavior in environments without console grouping support. Validate integration with the orchestrator pattern and configuration through window.jitterbug API.

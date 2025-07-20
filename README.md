@@ -103,3 +103,43 @@ export async function GET() {
 
   return new Response(stream);
 }
+<!-- TASKMASTER_EXPORT_START -->
+> 🎯 **Taskmaster Export** - 2025-07-19 23:02:29 UTC
+> 📋 Export: with subtasks • Status filter: none
+> 🔗 Powered by [Task Master](https://task-master.dev?utm_source=github-readme&utm_medium=readme-export&utm_campaign=jitterbug&utm_content=task-export-link)
+
+| Project Dashboard |  |
+| :-                |:-|
+| Task Progress     | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| Done | 0 |
+| In Progress | 0 |
+| Pending | 5 |
+| Deferred | 0 |
+| Cancelled | 0 |
+|-|-|
+| Subtask Progress | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| Completed | 0 |
+| In Progress | 0 |
+| Pending | 10 |
+
+
+| ID | Title | Status | Priority | Dependencies | Complexity |
+| :- | :-    | :-     | :-       | :-           | :-         |
+| 2 | Create Core Orchestrator Module | ○&nbsp;pending | high | None | N/A |
+| 2.1 | Design Core Orchestrator Architecture and Interfaces | ○&nbsp;pending | -            | None | N/A |
+| 2.2 | Implement Branch Registry and Dynamic Registration System | ○&nbsp;pending | -            | 2.1 | N/A |
+| 2.3 | Create Intelligent Log Routing and Delegation Engine | ○&nbsp;pending | -            | 2.1, 2.2 | N/A |
+| 2.4 | Implement Pub/Sub System for Inter-Branch Communication | ○&nbsp;pending | -            | 2.1, 2.2 | N/A |
+| 2.5 | Add Configuration Management and Error Resilience Layer | ○&nbsp;pending | -            | 2.1, 2.2, 2.3, 2.4 | N/A |
+| 3 | Implement Browser Console API with window.jitterbug Interface | ○&nbsp;pending | high | 2 | N/A |
+| 3.1 | Design and Implement Core window.jitterbug API Structure | ○&nbsp;pending | -            | None | N/A |
+| 3.2 | Implement Branch Management Methods | ○&nbsp;pending | -            | 3.1 | N/A |
+| 3.3 | Build Debug Mode Control Methods | ○&nbsp;pending | -            | 3.1 | N/A |
+| 3.4 | Implement Configuration Persistence with localStorage | ○&nbsp;pending | -            | 3.2, 3.3 | N/A |
+| 3.5 | Create Log Inspection and Export Utilities | ○&nbsp;pending | -            | 3.1, 3.2 | N/A |
+| 4 | Create Beautiful Emoji Console Transport with Expandable Details | ○&nbsp;pending | medium | 2 | N/A |
+| 5 | Implement SSE (Server-Sent Events) Transport for Unified Client/Server Log Streaming | ○&nbsp;pending | medium | 2 | N/A |
+| 6 | Create Next.js Integration Package with App Router Support | ○&nbsp;pending | low | 2, 5 | N/A |
+
+> 📋 **End of Taskmaster Export** - Tasks are synced from your project using the `sync-readme` command.
+<!-- TASKMASTER_EXPORT_END -->

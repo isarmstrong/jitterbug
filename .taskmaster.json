@@ -1,0 +1,12 @@
+{
+  "models": {
+    "primary": "claude-4-sonnet",
+    "research": "perplexity-sonar-research", 
+    "backup": "gpt-4.1"
+  },
+  "project": {
+    "name": "jitterbug-rewrite",
+    "type": "typescript",
+    "framework": "next"
+  }
+}

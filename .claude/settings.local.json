@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(tree:*)",
+      "Bash(git stash show:*)",
+      "Bash(grep:*)",
+      "Bash(git grep:*)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(tm)",
+      "Bash(tm help:*)",
+      "Bash(tm init:*)",
+      "Bash(ls:*)",
+      "Bash(tm models:*)",
+      "Bash(tm add-tag:*)",
+      "Bash(tm tags:*)",
+      "Bash(tm use-tag:*)",
+      "Bash(tm add-task:*)",
+      "Bash(tm remove-dependency:*)",
+      "Bash(tm list:*)",
+      "Bash(tm analyze-complexity:*)",
+      "Bash(tm complexity-report:*)",
+      "Bash(tm expand:*)",
+      "Bash(tm sync-readme:*)",
+      "Bash(tm mcp-keys:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "mcp__task-master-ai__update_task"
+    ],
+    "deny": []
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "task-master-ai"
+  ]
+}
