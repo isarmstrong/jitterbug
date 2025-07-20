@@ -41,49 +41,23 @@ export interface DebugConfigPublic {
 }
 
 /**
- * Result of configuration load operations.
+ * Unified result type for configuration load/save operations.
  * 
  * @experimental Subject to API changes
  */
-export interface ConfigLoadResult {
-  /** Load operation outcome */
-  status: 'loaded' | 'defaulted' | 'migrated' | 'invalid';
-  /** Resulting configuration */
-  config: DebugConfigPublic;
-  /** Migration flag (if config was auto-migrated) */
-  migrated?: boolean;
-  /** Validation errors (if status === 'invalid') */
-  errors?: string[];
-}
+export type ConfigIOResult =
+  | {
+      kind: 'load';
+      status: 'loaded' | 'defaulted' | 'migrated' | 'invalid';
+      config: DebugConfigPublic;
+      migrated?: boolean;
+      errors?: string[];
+    }
+  | {
+      kind: 'save';
+      status: 'saved' | 'skipped' | 'error';
+      bytes?: number;
+      error?: string;
+    };
 
-/**
- * Result of configuration save operations.
- * 
- * @experimental Subject to API changes  
- */
-export interface ConfigSaveResult {
-  /** Save operation success */
-  ok: boolean;
-  /** Bytes written to storage (if successful) */
-  bytes?: number;
-  /** Error message (if failed) */
-  error?: string;
-  /** Whether save was skipped (no changes) */
-  skipped?: boolean;
-}
-
-/**
- * Log inspector capabilities discovery.
- * 
- * @experimental API under development
- */
-export interface LogInspectorCapabilities {
-  /** Supported filter keys */
-  filters: Array<'branch' | 'level' | 'time' | 'text' | 'type'>;
-  /** Supported export formats (future) */
-  exports?: Array<'json' | 'ndjson' | 'csv'>;
-  /** Maximum query limit */
-  maxLimit: number;
-  /** Ring buffer capacity */
-  bufferCapacity: number;
-}
+// LogInspectorCapabilities removed - use return type inference from logInspector.capabilities()

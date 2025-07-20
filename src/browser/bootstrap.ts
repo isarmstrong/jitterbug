@@ -478,16 +478,36 @@ export function initializeJitterbug(global: Window = window): void {
   }
 
   // Configuration persistence methods (Task 3.4)
-  function saveConfig(): Promise<{ ok: boolean; bytes?: number; error?: string; skipped?: boolean; }> {
-    return configPersistence.save();
+  async function saveConfig() {
+    const result = await configPersistence.save();
+    return {
+      kind: 'save' as const,
+      status: result.ok ? (result.skipped ? 'skipped' as const : 'saved' as const) : 'error' as const,
+      bytes: result.bytes,
+      error: result.error
+    };
   }
 
   function loadConfig() {
-    return configPersistence.load();
+    const result = configPersistence.load();
+    return {
+      kind: 'load' as const,
+      status: result.status,
+      config: result.config,
+      migrated: result.migrated,
+      errors: result.errors
+    };
   }
 
   function resetConfig() {
-    return configPersistence.reset();
+    const result = configPersistence.reset();
+    return {
+      kind: 'load' as const, // Reset returns load-like result
+      status: result.status,
+      config: result.config,
+      migrated: result.migrated,
+      errors: result.errors
+    };
   }
 
   // Early error capture setup

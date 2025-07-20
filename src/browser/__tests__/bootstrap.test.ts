@@ -186,7 +186,7 @@ describe('Jitterbug Bootstrap', () => {
     expect(limitedEvents.length).toBe(2);
   });
 
-  it('should provide configuration persistence methods (Task 3.4)', () => {
+  it('should provide configuration persistence methods (Task 3.4)', async () => {
     initializeJitterbug(mockWindow);
     const api: JitterbugGlobal = mockWindow.jitterbug;
     
@@ -208,17 +208,24 @@ describe('Jitterbug Bootstrap', () => {
     expect(resetHelp).toContain('Reset configuration');
     expect(resetHelp).toContain('resetConfig()');
     
-    // Test that methods return expected structure
+    // Test that methods return expected discriminated union structure
     const loadResult = api.loadConfig();
+    expect(loadResult).toHaveProperty('kind', 'load');
     expect(loadResult).toHaveProperty('status');
     expect(loadResult).toHaveProperty('config');
     
     const resetResult = api.resetConfig();
+    expect(resetResult).toHaveProperty('kind', 'load'); // Reset returns load-like result
     expect(resetResult).toHaveProperty('status');
     expect(resetResult).toHaveProperty('config');
     
-    // Test that saveConfig returns a Promise
+    // Test that saveConfig returns a Promise with discriminated union
     const saveResult = api.saveConfig();
     expect(saveResult).toBeInstanceOf(Promise);
+    
+    // Test the resolved save result structure
+    const resolvedSave = await saveResult;
+    expect(resolvedSave).toHaveProperty('kind', 'save');
+    expect(resolvedSave).toHaveProperty('status');
   });
 });

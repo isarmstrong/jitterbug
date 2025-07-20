@@ -28,9 +28,7 @@ export { logInspector } from './public-logs.js';
 // Public type facades (surface control)
 export type {
   DebugConfigPublic,
-  ConfigLoadResult, 
-  ConfigSaveResult,
-  LogInspectorCapabilities
+  ConfigIOResult
 } from './public-types.js';
 
 // Essential type definitions for TypeScript consumers

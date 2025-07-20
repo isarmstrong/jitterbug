@@ -6,7 +6,6 @@
  */
 
 import { queryLogs } from './logs/internal/attach.js';
-import type { LogInspectorCapabilities } from './public-types.js';
 
 const coerceLimit = (n?: number): number | undefined =>
   !n ? undefined : Math.min(Math.max(n, 1), 5000);
@@ -61,11 +60,11 @@ export const logInspector = {
    * Get current log inspector capabilities
    * @experimental Forward-compatibility discovery
    */
-  capabilities(): LogInspectorCapabilities {
+  capabilities() {
     const raw = queryLogs();
     return {
-      filters: ['branch', 'level', 'time', 'type'],
-      exports: ['json', 'ndjson'], // Future Phase 3
+      filters: ['branch', 'level', 'time', 'type'] as const,
+      exports: ['json', 'ndjson'] as const, // Future Phase 3
       maxLimit: 5000,
       bufferCapacity: raw.stats.capacity
     };
