@@ -4,7 +4,9 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { experimentalEmojiConsole } from '../transports/emoji-console.js';
-import type { EmojiConsoleController } from '../transports/emoji-console.js';
+
+// Use structural typing for controller
+type EmojiConsoleController = ReturnType<typeof experimentalEmojiConsole>;
 
 // Mock console methods
 const mockConsole = {

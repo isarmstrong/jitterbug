@@ -297,9 +297,9 @@ const DEFAULT_OPTIONS: EmojiConsoleOptions = {
 
 /**
  * Controller interface for emoji console transport
- * @experimental Subject to change without SemVer guarantees.
+ * @internal - Use structural typing or ReturnType<typeof experimentalEmojiConsole>
  */
-export interface EmojiConsoleController {
+interface EmojiConsoleController {
   stop(): void;
   update(opts: Partial<EmojiConsoleOptions>): void;
   options(): Readonly<Required<EmojiConsoleOptions>>;
@@ -355,10 +355,6 @@ function createController(): EmojiConsoleController {
   };
 }
 
-// Internal factory for backward compatibility within this file
-function createEmojiConsole(options?: EmojiConsoleOptions): EmojiConsoleInstance {
-  return new EmojiConsoleTransport(options);
-}
 
 // Export types for external use
 export type { EmojiConsoleOptions, LogLevel };

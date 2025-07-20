@@ -24,7 +24,7 @@ import { experimentalDebug } from './debug-control.js';
 import { configPersistence } from './config-persistence.js';
 import { attachLogCapture } from './logs/internal/attach.js';
 import { experimentalEmojiConsole } from './transports/emoji-console.js';
-import type { EmojiConsoleOptions, EmojiConsoleController } from './transports/emoji-console.js';
+import type { EmojiConsoleOptions } from './transports/emoji-console.js';
 
 // Simple ULID-like ID generator (simplified for bootstrap)
 function generateId(): string {
