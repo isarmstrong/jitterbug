@@ -106,6 +106,13 @@ export interface JitterbugGlobal {
   loadConfig(): import('./public-types.js').ConfigIOResult;
   resetConfig(): import('./public-types.js').ConfigIOResult;
 
+  /** Console transport methods @experimental */
+  console: {
+    start(options?: import('./transports/emoji-console.js').EmojiConsoleOptions): void;
+    stop(): void;
+    getOptions(): Readonly<Required<import('./transports/emoji-console.js').EmojiConsoleOptions>> | null;
+  };
+
   /** Symbol: internal (not enumerable) to guard private state (optional). */
   [INTERNAL]?: never;
 }
@@ -116,7 +123,7 @@ export interface HelpEntry {
   signature: string;
   since: string;
   example?: string;
-  category: 'core' | 'events' | 'config' | 'branch' | 'logs' | 'debug';
+  category: 'core' | 'events' | 'config' | 'branch' | 'logs' | 'debug' | 'console';
 }
 
 // Internal symbol for state encapsulation

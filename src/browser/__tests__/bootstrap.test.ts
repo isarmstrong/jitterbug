@@ -186,6 +186,31 @@ describe('Jitterbug Bootstrap', () => {
     expect(limitedEvents.length).toBe(2);
   });
 
+  it('should provide emoji console transport methods (Task 4)', () => {
+    initializeJitterbug(mockWindow);
+    const api: JitterbugGlobal = mockWindow.jitterbug;
+    
+    // Check that console methods exist
+    expect(typeof api.console).toBe('object');
+    expect(typeof api.console.start).toBe('function');
+    expect(typeof api.console.stop).toBe('function');
+    expect(typeof api.console.getOptions).toBe('function');
+    
+    // Test help topics are available
+    const startHelp = api.help('console.start');
+    expect(startHelp).toContain('Start beautiful emoji console transport');
+    expect(startHelp).toContain('console.start');
+    
+    const stopHelp = api.help('console.stop');
+    expect(stopHelp).toContain('Stop emoji console transport');
+    expect(stopHelp).toContain('console.stop');
+    
+    // Test that methods are callable
+    expect(() => api.console.start()).not.toThrow();
+    expect(() => api.console.stop()).not.toThrow();
+    expect(() => api.console.getOptions()).not.toThrow();
+  });
+
   it('should provide configuration persistence methods (Task 3.4)', async () => {
     initializeJitterbug(mockWindow);
     const api: JitterbugGlobal = mockWindow.jitterbug;

@@ -23,6 +23,8 @@ import { experimentalBranches } from './branch-manager.js';
 import { experimentalDebug } from './debug-control.js';
 import { configPersistence } from './config-persistence.js';
 import { attachLogCapture } from './logs/internal/attach.js';
+import { startEmojiConsole, stopEmojiConsole, getEmojiConsoleOptions } from './transports/emoji-console.js';
+import type { EmojiConsoleOptions } from './transports/emoji-console.js';
 
 // Simple ULID-like ID generator (simplified for bootstrap)
 function generateId(): string {
@@ -228,6 +230,23 @@ const HELP_REGISTRY: HelpEntry[] = [
     since: '0.2',
     category: 'logs',
     example: 'logInspector.query({ branch: "main", level: "error", limit: 50 })'
+  },
+  // Emoji Console Transport help entries (Task 4)
+  {
+    name: 'console.start',
+    summary: 'Start beautiful emoji console transport',
+    signature: 'console.start(options?) → void',
+    since: '0.2',
+    category: 'console',
+    example: 'jitterbug.console.start({ minLevel: "debug", useGroups: true })'
+  },
+  {
+    name: 'console.stop',
+    summary: 'Stop emoji console transport',
+    signature: 'console.stop() → void',
+    since: '0.2',
+    category: 'console',
+    example: 'jitterbug.console.stop()'
   }
 ];
 
@@ -408,6 +427,7 @@ export function initializeJitterbug(global: Window = window): void {
         '  Branch: createBranch(), getBranches(), setActiveBranch(), getActiveBranch()',
         '  Debug: debug.enable(), debug.disable(), debug.isEnabled(), debug.setLevel(n), debug.getLevel(), debug.levels',
         '  Logs: logInspector.query() - experimental log inspection',
+        '  Console: console.start(), console.stop() - beautiful emoji console transport',
         '  System: ready(), diagnostics(), help(topic)',
         '  Config: saveConfig(), loadConfig(), resetConfig() - localStorage persistence',
         'Future: exportLogs()',
@@ -578,6 +598,12 @@ export function initializeJitterbug(global: Window = window): void {
     // Debug control methods (Task 3.3) @experimental
     debug: {
       ...experimentalDebug
+    },
+    // Emoji Console Transport methods (Task 4) @experimental
+    console: {
+      start: (options?: EmojiConsoleOptions) => startEmojiConsole(options),
+      stop: stopEmojiConsole,
+      getOptions: getEmojiConsoleOptions
     }
   };
 
@@ -590,6 +616,9 @@ export function initializeJitterbug(global: Window = window): void {
   // Attach log capture for Task 3.5 log inspection
   const bufferSize = configPersistence.snapshot().logs?.bufferSize ?? 1000;
   attachLogCapture(bufferSize);
+
+  // Start emoji console transport for Task 4 (auto-detects development mode)
+  startEmojiConsole();
 
   // Load and apply configuration before ready
   const configResult = configPersistence._loadConfig();
