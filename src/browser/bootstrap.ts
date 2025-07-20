@@ -20,7 +20,7 @@ import { INTERNAL } from './types.js';
 import type { EventType } from './schema-registry.js';
 import { validateEventPayload, eventSchemas, setGlobalEmitFn } from './schema-registry.js';
 import { experimentalBranches } from './branch-manager.js';
-import { experimentalDebug, guardedEmit, emitWithAutoLevel } from './debug-control.js';
+import { experimentalDebug } from './debug-control.js';
 
 // Simple ULID-like ID generator (simplified for bootstrap)
 function generateId(): string {

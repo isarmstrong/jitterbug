@@ -5,8 +5,8 @@
  * validation, idempotence, and integration with event emission.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { experimentalDebug, emitWithAutoLevel, guardedEmit } from '../debug-control.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { experimentalDebug } from '../debug-control.js';
 import { __resetDebugState, DebugLevels } from '../debug-state.js';
 import { initializeJitterbug } from '../bootstrap.js';
 import type { JitterbugGlobal } from '../types.js';

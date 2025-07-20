@@ -72,7 +72,8 @@ const defaultEventLevels: Record<string, number> = {
 /**
  * Emit event with automatic level assignment and gating
  */
-export function emitWithAutoLevel(eventName: string, payload: any): void {
+/** @internal */
+function emitWithAutoLevel(eventName: string, payload: any): void {
   const eventLevel = defaultEventLevels[eventName] ?? DebugLevels.INFO;
   guardedEmit(eventLevel, eventName, payload);
 }
@@ -80,7 +81,8 @@ export function emitWithAutoLevel(eventName: string, payload: any): void {
 /**
  * Core gating function - checks if event should be emitted based on debug state
  */
-export function guardedEmit(eventLevel: number, eventName: string, payload: any): void {
+/** @internal */
+function guardedEmit(eventLevel: number, eventName: string, payload: any): void {
   const { enabled, level } = getDebugState();
   
   // Always emit validation failures and debug control events (bypass gating for diagnostics)
@@ -90,20 +92,21 @@ export function guardedEmit(eventLevel: number, eventName: string, payload: any)
   if (!enabled && !isDebugControl && !isValidationError) return;
   if (eventLevel > level && !isDebugControl && !isValidationError) return;
   
-  safeEmit(eventName, payload);
+  safeEmit(eventName as any, payload);
 }
 
 /**
  * Direct emit bypass for critical diagnostic events
  */
 function emitBypassGate(eventName: string, payload: any): void {
-  safeEmit(eventName, payload);
+  safeEmit(eventName as any, payload);
 }
 
 /**
  * Experimental debug control API
  * @experimental Subject to change without SemVer guarantees
  */
+/** @experimental Subject to change without SemVer guarantees */
 export const experimentalDebug = {
   /**
    * Enable debug event emission

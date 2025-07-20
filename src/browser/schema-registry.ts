@@ -733,6 +733,7 @@ export type PayloadOf<T extends EventType> = ReturnType<(typeof eventSchemas)[T]
 // Global emit function reference (set by bootstrap)
 let globalEmitFn: ((type: string, payload: any, opts?: any) => string) | undefined;
 
+/** @internal - For bootstrap integration only */
 export function setGlobalEmitFn(emitFn: (type: string, payload: any, opts?: any) => string): void {
   globalEmitFn = emitFn;
 }

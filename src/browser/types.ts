@@ -109,7 +109,7 @@ export interface HelpEntry {
   signature: string;
   since: string;
   example?: string;
-  category: 'core' | 'events' | 'config' | 'branch' | 'logs';
+  category: 'core' | 'events' | 'config' | 'branch' | 'logs' | 'debug';
 }
 
 // Internal symbol for state encapsulation
