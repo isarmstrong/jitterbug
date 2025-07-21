@@ -6,6 +6,8 @@ import { RingBuffer } from '../internal/ring-buffer.js';
 import { TokenBucket, DEFAULT_TOKEN_BUCKET_CONFIG, type TokenBucketConfig } from '../internal/token-bucket.js';
 import { PushResult, type PushAdapter } from '../adapters/ssePushAdapter.js';
 import { getRegistry, type AnyPushFrame } from '../emitters/registry.js';
+import { createHmacSigner, type FrameSigner } from '../security/hmacSigner.js';
+import { type SecurityConfig, DEFAULT_SECURITY_CONFIG } from '../security/signed-frame.js';
 
 export interface PushOrchestratorConfig {
   readonly fps: number;
@@ -14,6 +16,7 @@ export interface PushOrchestratorConfig {
   readonly backoffMultiplier: number;
   readonly maxBackoffMs: number;
   readonly tokenBucket: TokenBucketConfig;
+  readonly security: SecurityConfig;
 }
 
 export const DEFAULT_ORCHESTRATOR_CONFIG: PushOrchestratorConfig = {
@@ -22,7 +25,8 @@ export const DEFAULT_ORCHESTRATOR_CONFIG: PushOrchestratorConfig = {
   maxFramesPerTick: 10,
   backoffMultiplier: 1.5,
   maxBackoffMs: 30_000,
-  tokenBucket: DEFAULT_TOKEN_BUCKET_CONFIG
+  tokenBucket: DEFAULT_TOKEN_BUCKET_CONFIG,
+  security: DEFAULT_SECURITY_CONFIG
 } as const;
 interface ConnectionState {
   readonly adapter: PushAdapter;
@@ -50,6 +54,7 @@ export class PushOrchestratorV2 {
   private readonly config: PushOrchestratorConfig;
   private readonly connections = new Map<string, ConnectionState>();
   private readonly emitterStates = new Map<string, EmitterState>();
+  private readonly frameSigner?: FrameSigner;
   private readonly metrics: PushMetrics = {
     framesSent: 0,
     framesDropped: 0,
@@ -69,6 +74,24 @@ export class PushOrchestratorV2 {
     }
     if (this.config.maxFramesPerTick > 50) {
       throw new Error('maxFramesPerTick cannot exceed 50 for DoS protection');
+    }
+    
+    // Initialize HMAC signer if enabled
+    if (this.config.security.frameHmac.enabled) {
+      const { keyId, secret, algorithm, clockSkewToleranceMs } = this.config.security.frameHmac;
+      
+      if (!keyId || !secret) {
+        throw new Error('HMAC enabled but missing keyId or secret');
+      }
+      
+      this.frameSigner = createHmacSigner({
+        keyId,
+        secret,
+        algorithm: algorithm || 'sha256',
+        clockSkewToleranceMs: clockSkewToleranceMs || 10_000
+      });
+      
+      console.log(`[PushOrchestratorV2] Frame HMAC enabled with key ${keyId}`);
     }
   }
   start(): void {
@@ -218,7 +241,10 @@ export class PushOrchestratorV2 {
       const frame = state.buffer.dequeue();
       if (!frame) break;
 
-      const result = await state.adapter.send(frame);
+      // Apply frame signing if HMAC enabled
+      const finalFrame = this.frameSigner ? this.frameSigner.sign(frame) : frame;
+
+      const result = await state.adapter.send(finalFrame);
       
       switch (result) {
         case PushResult.SUCCESS:

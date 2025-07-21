@@ -6,6 +6,7 @@
  */
 
 import type { AnyPushFrame } from '../emitters/registry.js';
+import type { SignedPushFrame } from '../security/signed-frame.js';
 
 export enum PushResult {
   SUCCESS = 'success',
@@ -14,7 +15,7 @@ export enum PushResult {
 }
 
 export interface PushAdapter {
-  send(frame: AnyPushFrame): Promise<PushResult>;
+  send(frame: AnyPushFrame | SignedPushFrame): Promise<PushResult>;
   isConnected(): boolean;
   getConnectionId(): string;
 }
