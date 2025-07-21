@@ -889,7 +889,7 @@ describe('P4.2-c.1: Predicate Correctness & Replay Protection', () => {
       });
 
       // Verify each connection received only its expected logs
-      connections.forEach(({ id }, index) => {
+      connections.forEach(({ id }) => {
         const client = hub.getClient(id);
         expect(client).toBeDefined();
         expect(client!.stats.sent).toBe(expectedLogsPerClient);
@@ -908,7 +908,7 @@ describe('P4.2-c.1: Predicate Correctness & Replay Protection', () => {
         op: 'filter:update' as const,
         tag: generateUUID(),
         ts: Date.now(),
-        spec: { kind: 'branches-levels', branches: ['core'] }
+        spec: { kind: 'branches-levels' as const, branches: ['core'] }
       };
       hub.handleFilterUpdate(clientId, frame);
 
@@ -921,10 +921,10 @@ describe('P4.2-c.1: Predicate Correctness & Replay Protection', () => {
 
       // Update filter mid-stream: switch to 'ui' branch
       frame = {
-        op: 'filter:update',
+        op: 'filter:update' as const,
         tag: generateUUID(),
         ts: Date.now(),
-        spec: { kind: 'branches-levels', branches: ['ui'] }
+        spec: { kind: 'branches-levels' as const, branches: ['ui'] }
       };
       hub.handleFilterUpdate(clientId, frame);
 
@@ -949,7 +949,7 @@ describe('P4.2-c.1: Predicate Correctness & Replay Protection', () => {
         op: 'filter:update' as const,
         tag: duplicateTag,
         ts: Date.now(),
-        spec: { kind: 'branches-levels', branches: ['core'] }
+        spec: { kind: 'branches-levels' as const, branches: ['core'] }
       };
 
       // Send first update - should succeed
@@ -981,14 +981,14 @@ describe('P4.2-c.1: Predicate Correctness & Replay Protection', () => {
         op: 'filter:update' as const,
         tag: sharedTag,
         ts: Date.now(),
-        spec: { kind: 'branches-levels', branches: ['core'] }
+        spec: { kind: 'branches-levels' as const, branches: ['core'] }
       };
       
       const frame2 = {
         op: 'filter:update' as const,
         tag: sharedTag, // Same tag, different connection
         ts: Date.now(),
-        spec: { kind: 'branches-levels', branches: ['ui'] }
+        spec: { kind: 'branches-levels' as const, branches: ['ui'] }
       };
 
       hub.handleFilterUpdate(clientId1, frame1);
@@ -1017,7 +1017,7 @@ describe('P4.2-c.1: Predicate Correctness & Replay Protection', () => {
         op: 'filter:update' as const,
         tag: reusedTag,
         ts: Date.now(),
-        spec: { kind: 'branches-levels', branches: ['core'] }
+        spec: { kind: 'branches-levels' as const, branches: ['core'] }
       };
       hub.handleFilterUpdate(clientId, frame);
       
@@ -1030,7 +1030,7 @@ describe('P4.2-c.1: Predicate Correctness & Replay Protection', () => {
         op: 'filter:update' as const,
         tag: reusedTag, // Previously used tag
         ts: Date.now(),
-        spec: { kind: 'branches-levels', branches: ['ui'] }
+        spec: { kind: 'branches-levels' as const, branches: ['ui'] }
       };
       hub.handleFilterUpdate(clientId, frame2);
       
@@ -1068,7 +1068,7 @@ describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
           op: 'filter:update' as const,
           tag: generateUUID(),
           ts: Date.now(),
-          spec: { kind: 'branches-levels', branches: [`branch-${i}`] }
+          spec: { kind: 'branches-levels' as const, branches: [`branch-${i}`] }
         };
         hub.handleFilterUpdate(clientId, frame);
       }
@@ -1082,7 +1082,7 @@ describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
         op: 'filter:update' as const,
         tag: generateUUID(),
         ts: Date.now(),
-        spec: { kind: 'branches-levels', branches: ['overflow'] }
+        spec: { kind: 'branches-levels' as const, branches: ['overflow'] }
       };
       hub.handleFilterUpdate(clientId, overflowFrame);
 
@@ -1111,7 +1111,7 @@ describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
             op: 'filter:update' as const,
             tag: generateUUID(),
             ts: mockTime,
-            spec: { kind: 'branches-levels', branches: [`test-${i}`] }
+            spec: { kind: 'branches-levels' as const, branches: [`test-${i}`] }
           };
           hub.handleFilterUpdate(clientId, frame);
         }
@@ -1124,7 +1124,7 @@ describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
           op: 'filter:update' as const,
           tag: generateUUID(),
           ts: mockTime,
-          spec: { kind: 'branches-levels', branches: ['success'] }
+          spec: { kind: 'branches-levels' as const, branches: ['success'] }
         };
         hub.handleFilterUpdate(clientId, successFrame);
 
@@ -1160,7 +1160,7 @@ describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
             op: 'filter:update' as const,
             tag,
             ts: time,
-            spec: { kind: 'branches-levels', branches: ['test'] }
+            spec: { kind: 'branches-levels' as const, branches: ['test'] }
           };
           hub.handleFilterUpdate(clientId, frame);
         });
@@ -1173,7 +1173,7 @@ describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
           op: 'filter:update' as const,
           tag: generateUUID(),
           ts: mockTime,
-          spec: { kind: 'branches-levels', branches: ['new'] }
+          spec: { kind: 'branches-levels' as const, branches: ['new'] }
         };
         hub.handleFilterUpdate(clientId, newFrame);
 
@@ -1194,7 +1194,7 @@ describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
       const clientId = 'fuzz-client';
       hub.addClient(clientId);
 
-      const invalidSpecs = [
+      const invalidSpecs: any[] = [
         // Type errors
         null,
         undefined,
@@ -1230,7 +1230,7 @@ describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
 
       // Test each invalid spec - should not throw and should not apply invalid filters
       invalidSpecs.forEach((spec, index) => {
-        const frame = {
+        const frame: any = {
           op: 'filter:update' as const,
           tag: `invalid-${index}-${generateUUID()}`,
           ts: Date.now(),
@@ -1256,7 +1256,7 @@ describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
       const clientId = 'boundary-client';
       hub.addClient(clientId);
 
-      const validBoundarySpecs = [
+      const validBoundarySpecs: any[] = [
         // Exactly at limits
         { kind: 'branches-levels', branches: new Array(32).fill('branch') }, // exactly MAX_BRANCHES
         { kind: 'branches-levels', levels: new Array(8).fill('level') },     // exactly MAX_LEVELS
@@ -1268,7 +1268,7 @@ describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
       ];
 
       validBoundarySpecs.forEach((spec, index) => {
-        const frame = {
+        const frame: any = {
           op: 'filter:update' as const,
           tag: `valid-${index}-${generateUUID()}`,
           ts: Date.now(),
@@ -1291,7 +1291,7 @@ describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
       const clientId = 'security-client';
       hub.addClient(clientId);
 
-      const maliciousSpecs = [
+      const maliciousSpecs: any[] = [
         // Prototype pollution attempts
         { kind: 'branches-levels', '__proto__': { polluted: true } },
         { kind: 'branches-levels', 'constructor': { prototype: { polluted: true } } },
@@ -1306,7 +1306,7 @@ describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
       ];
 
       maliciousSpecs.forEach((spec, index) => {
-        const frame = {
+        const frame: any = {
           op: 'filter:update' as const,
           tag: `malicious-${index}-${generateUUID()}`,
           ts: Date.now(),
@@ -1325,7 +1325,7 @@ describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
 
     // P4.2-c.3: Advanced injection safety tests using Epic Web patterns
     describe('Advanced injection safety (Epic Web patterns)', () => {
-      let testClient: SSEClient;
+      let testClient: any;
       
       beforeEach(() => {
         testClient = hub.addClient('injection-test-client');
@@ -1521,14 +1521,14 @@ describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
           op: 'filter:update',
           tag: 'isolation-client1',
           ts: Date.now(),
-          spec: { kind: 'keyword', keywords: ['client1-filter'] }
+          spec: { kind: 'keyword' as const, keywords: ['client1-filter'] }
         });
 
         hub.handleFilterUpdate('isolation-client-2', {
           op: 'filter:update',
           tag: 'isolation-client2',
           ts: Date.now(),
-          spec: { kind: 'keyword', keywords: ['client2-filter'] }
+          spec: { kind: 'keyword' as const, keywords: ['client2-filter'] }
         });
 
         // Verify proper isolation: each client gets their own response
