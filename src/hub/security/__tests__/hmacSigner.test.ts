@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createHmacSigner, parseHmacKeys } from '../hmacSigner.js';
+import { createHmacSigner, parseHmacKeys } from '../_internal/hmac.js';
 import type { AnyPushFrame } from '../../emitters/registry.js';
 
 describe('HMAC Signer - P4.4-a', () => {
@@ -96,14 +96,34 @@ describe('HMAC Signer - P4.4-a', () => {
       expect(() => signer.verify(wrongKey)).toThrow('unknown key ID');
     });
 
-    it('should reject frames with clock skew', () => {
-      const frame: AnyPushFrame = { t: 'hb', ts: Date.now() };
+    it('should reject frames with clock skew (future)', () => {
+      const now = Date.now();
+      const frame: AnyPushFrame = { t: 'hb', ts: now };
+      
+      // Create frame in the "future" relative to verification time
+      vi.setSystemTime(now + 15_000);
       const signed = signer.sign(frame);
       
-      // Mock future time beyond tolerance
-      vi.setSystemTime(Date.now() + 15_000);
+      // Verify from "past" perspective (15s difference = skew)
+      vi.setSystemTime(now);
       
       expect(() => signer.verify(signed)).toThrow('timestamp skew');
+      
+      vi.useRealTimers();
+    });
+
+    it('should reject old frames (replay protection)', () => {
+      const now = Date.now();
+      const frame: AnyPushFrame = { t: 'hb', ts: now };
+      
+      // Create frame at specific time
+      vi.setSystemTime(now);
+      const signed = signer.sign(frame);
+      
+      // Move far into future to trigger replay protection
+      vi.setSystemTime(now + 25_000); // Well beyond 10s tolerance
+      
+      expect(() => signer.verify(signed)).toThrow('too old (replay protection)');
       
       vi.useRealTimers();
     });

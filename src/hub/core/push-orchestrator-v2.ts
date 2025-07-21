@@ -6,7 +6,7 @@ import { RingBuffer } from '../internal/ring-buffer.js';
 import { TokenBucket, DEFAULT_TOKEN_BUCKET_CONFIG, type TokenBucketConfig } from '../internal/token-bucket.js';
 import { PushResult, type PushAdapter } from '../adapters/ssePushAdapter.js';
 import { getRegistry, type AnyPushFrame } from '../emitters/registry.js';
-import { createHmacSigner, type FrameSigner } from '../security/hmacSigner.js';
+import { createHmacSigner, type FrameSigner } from '../security/_internal/hmac.js';
 import { type SecurityConfig, DEFAULT_SECURITY_CONFIG } from '../security/signed-frame.js';
 
 export interface PushOrchestratorConfig {

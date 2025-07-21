@@ -1,27 +1,23 @@
 /**
- * Frame HMAC Signer - P4.4-a Signing Plumbing
- * Provides cryptographic integrity for push frames
+ * HMAC Internal Helpers - P4.4-a Security Internals
+ * @internal - Not for external usage
  */
 
 import { createHmac, randomBytes } from 'node:crypto';
-import type { AnyPushFrame } from '../emitters/registry.js';
+import type { AnyPushFrame } from '../../emitters/registry.js';
+import type { SignedPushFrame } from '../signed-frame.js';
 
-export interface SignedPushFrame {
-  kid: string;          // key id
-  ts: number;           // unix ms
-  nonce: string;        // base64url-12 (96-bit random)
-  payload: AnyPushFrame; // original frame
-  sig: string;          // base64url-encoded HMAC
-}
-
+/** @internal */
 export interface FrameSigner {
   sign(frame: AnyPushFrame): SignedPushFrame;
 }
 
+/** @internal */
 export interface FrameVerifier {
   verify(raw: unknown): asserts raw is SignedPushFrame;
 }
 
+/** @internal */
 export interface HmacConfig {
   keyId: string;
   secret: Uint8Array;
@@ -29,6 +25,7 @@ export interface HmacConfig {
   clockSkewToleranceMs: number;
 }
 
+/** @internal - Example only, do not use in production */
 export const DEFAULT_HMAC_CONFIG: Partial<HmacConfig> = {
   algorithm: 'sha256',
   clockSkewToleranceMs: 10_000 // ±10 seconds
@@ -92,11 +89,18 @@ export function createHmacSigner(config: HmacConfig): FrameSigner & FrameVerifie
       throw new Error(`Invalid frame: unknown key ID ${frame.kid}`);
     }
 
-    // Timestamp validation (clock skew tolerance)
+    // Enhanced timestamp validation with replay protection
     const now = Date.now();
+    
+    // Replay window enforcement - reject frames older than tolerance
+    if (frame.ts < (now - clockSkewToleranceMs)) {
+      throw new Error(`Invalid frame: timestamp ${frame.ts} too old (replay protection)`);
+    }
+    
+    // Clock skew validation - reject frames too far in future/past
     const timeDiff = Math.abs(now - frame.ts);
     if (timeDiff > clockSkewToleranceMs) {
-      throw new Error(`Invalid frame: timestamp skew ${timeDiff}ms exceeds tolerance`);
+      throw new Error(`Invalid frame: timestamp skew ${timeDiff}ms exceeds tolerance ${clockSkewToleranceMs}ms`);
     }
 
     // Signature verification
@@ -116,7 +120,7 @@ export function createHmacSigner(config: HmacConfig): FrameSigner & FrameVerifie
 }
 
 /**
- * Utility to parse HMAC keys from environment variable
+ * @internal - Utility to parse HMAC keys from environment variable
  * Format: "keyId1:base64Secret1,keyId2:base64Secret2"
  */
 export function parseHmacKeys(envValue: string): Map<string, Uint8Array> {

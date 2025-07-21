@@ -13,6 +13,7 @@ export interface SignedPushFrame {
   readonly sig: string;          // Base64url-encoded HMAC signature
 }
 
+/** @internal - Orchestrator security configuration */
 export interface SecurityConfig {
   frameHmac: {
     enabled: boolean;
@@ -23,6 +24,7 @@ export interface SecurityConfig {
   };
 }
 
+/** @internal - Default security config (HMAC disabled) */
 export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
   frameHmac: {
     enabled: false,
