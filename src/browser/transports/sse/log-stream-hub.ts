@@ -69,7 +69,7 @@ interface SSEClient {
 }
 
 interface BroadcastMessage {
-  type: 'log' | 'heartbeat' | 'ready';
+  type: 'log' | 'heartbeat' | 'ready' | 'push';
   data: unknown;
   timestamp: number;
 }
@@ -324,6 +324,17 @@ class LogStreamHub {
       this.clients.get(id)?.isActive
     );
   }
+
+  /**
+   * P4.3: Handle server-originated push events
+   */
+  onPush = (event: any): void => {
+    this.broadcast({
+      type: 'push',
+      data: { frame: 'push', event },
+      timestamp: Date.now()
+    });
+  };
 
   /**
    * Get hub diagnostics

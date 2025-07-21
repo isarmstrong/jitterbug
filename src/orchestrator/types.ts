@@ -132,6 +132,79 @@ export function createEventType(type: string): EventType {
   return type as EventType;
 }
 
+// Server push event interfaces - P4.3
+export interface ServerHeartbeatEvent {
+  readonly type: 'server.heartbeat';
+  readonly payload: {
+    readonly ts: number;
+    readonly serverUptime: number;
+    readonly stats?: {
+      readonly activeConnections: number;
+      readonly memoryUsage: number;
+    };
+  };
+  readonly metadata: {
+    readonly emitter: 'heartbeat';
+    readonly version: string;
+  };
+}
+
+export interface TelemetryUpdateEvent {
+  readonly type: 'telemetry.update';
+  readonly payload: {
+    readonly timestamp: number;
+    readonly system: {
+      readonly memoryUsage: number;
+      readonly cpuUsage: number;
+      readonly uptime: number;
+    };
+    readonly application: {
+      readonly activeConnections: number;
+      readonly totalEvents: number;
+      readonly errorCount: number;
+    };
+  };
+  readonly metadata: {
+    readonly emitter: 'telemetry';
+    readonly version: string;
+    readonly process?: {
+      readonly pid: number;
+      readonly nodeVersion: string;
+    };
+  };
+}
+
+export interface UserActivityUpdateEvent {
+  readonly type: 'user_activity.update';
+  readonly payload: {
+    readonly totalUsers: number;
+    readonly activeConnections: number;
+    readonly recentActivity: readonly UserActivity[];
+    readonly topActions: readonly { action: string; count: number }[];
+  };
+  readonly metadata: {
+    readonly emitter: 'user_activity';
+    readonly version: string;
+    readonly generatedAt: number;
+    readonly detailed?: {
+      readonly sessionCount: number;
+      readonly totalActivityRecords: number;
+    };
+  };
+}
+
+export interface UserActivity {
+  readonly sessionId: string;
+  readonly activityType: 'page_view' | 'filter_change' | 'debug_toggle' | 'connection_event';
+  readonly timestamp: number;
+  readonly metadata: Record<string, unknown>;
+}
+
+export type ServerPushEvent = 
+  | ServerHeartbeatEvent 
+  | TelemetryUpdateEvent 
+  | UserActivityUpdateEvent;
+
 // Built-in event types
 export const BUILTIN_EVENTS = {
   BRANCH_REGISTERED: createEventType('branch:registered'),
@@ -139,6 +212,10 @@ export const BUILTIN_EVENTS = {
   BRANCH_STATE_CHANGED: createEventType('branch:state_changed'),
   ORCHESTRATOR_ERROR: createEventType('orchestrator:error'),
   ROUTING_FAILED: createEventType('routing:failed'),
+  // P4.3 server push events
+  SERVER_HEARTBEAT: createEventType('server.heartbeat'),
+  TELEMETRY_UPDATE: createEventType('telemetry.update'),
+  USER_ACTIVITY_UPDATE: createEventType('user_activity.update'),
 } as const;
 
 // Built-in branch names
