@@ -105,7 +105,7 @@ export function isSignedFrame(parsed: unknown): parsed is SignedPushFrame {
 }
 
 /**
- * Process frame - verify if signed, pass through if unsigned
+ * Process frame - verify signature (all frames must be signed)
  * @internal
  */
 export function processFrame(parsed: unknown): AnyPushFrame {
@@ -113,10 +113,9 @@ export function processFrame(parsed: unknown): AnyPushFrame {
     throw new Error('Invalid frame: must be an object');
   }
   
-  if (isSignedFrame(parsed)) {
-    return verifyFrame(parsed);
+  if (!isSignedFrame(parsed)) {
+    throw new Error('Invalid frame: all frames must be signed (no unsigned frames allowed)');
   }
   
-  // Pass through unsigned frame unchanged (backward compatibility)
-  return parsed as AnyPushFrame;
+  return verifyFrame(parsed);
 }

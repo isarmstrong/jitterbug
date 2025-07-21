@@ -55,6 +55,8 @@ archive_2025_01_19/
 # MCP configuration with secrets
 .mcp.json
 
+# Generated reports and digests
+scripts/digest/reports/
 
 # Logs
 logs

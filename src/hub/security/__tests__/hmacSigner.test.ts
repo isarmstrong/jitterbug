@@ -128,7 +128,7 @@ describe('HMAC Signer - P4.4-a', () => {
       
       // Verify from "current" time perspective (6s in past relative to signed frame)
       withMockClock(baseTime, () => {
-        expect(() => signer.verify(signed)).toThrow('too far in future (clock skew)');
+        expect(() => signer.verify(signed)).toThrow('too far in future (clock skew protection)');
       });
     });
 
@@ -141,7 +141,7 @@ describe('HMAC Signer - P4.4-a', () => {
         
         // Move 15s into future (beyond 10s replay window)
         withMockClock(baseTime + 15_000, () => {
-          expect(() => signer.verify(signed)).toThrow('too old (replay protection)');
+          expect(() => signer.verify(signed)).toThrow('too old (replay/clock skew protection)');
         });
       });
     });
@@ -161,12 +161,12 @@ describe('HMAC Signer - P4.4-a', () => {
         
         // 7s in past: should fail clock skew but would pass replay check
         withMockClock(baseTime + 7_000, () => {
-          expect(() => signer.verify(signed)).toThrow('too far in past (clock skew)');
+          expect(() => signer.verify(signed)).toThrow('too old (replay/clock skew protection)');
         });
         
         // 12s in past: should fail replay protection
         withMockClock(baseTime + 12_000, () => {
-          expect(() => signer.verify(signed)).toThrow('too old (replay protection)');
+          expect(() => signer.verify(signed)).toThrow('too old (replay/clock skew protection)');
         });
       });
     });

@@ -3,7 +3,7 @@
  * @internal - Not for external usage
  */
 
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { AnyPushFrame } from '../../emitters/registry.js';
 import type { SignedPushFrame } from '../signed-frame.js';
 
@@ -26,12 +26,33 @@ export interface HmacConfig {
   replayWindowMs: number;
 }
 
+/** @internal - Distinct security boundaries */
+const REPLAY_WINDOW_MS = 2_000;      // 2 seconds - reject very old frames (replay protection)
+const CLOCK_SKEW_TOLERANCE_MS = 5_000; // 5 seconds - allow for clock differences
+
 /** @internal - Example only, do not use in production */
 export const DEFAULT_HMAC_CONFIG: Partial<HmacConfig> = {
   algorithm: 'sha256', // Secure default - SHA-256 minimum
-  clockSkewToleranceMs: 5_000, // ±5 seconds for clock skew
-  replayWindowMs: 10_000 // 10 seconds replay protection window
+  clockSkewToleranceMs: CLOCK_SKEW_TOLERANCE_MS,
+  replayWindowMs: REPLAY_WINDOW_MS
 };
+
+/**
+ * Constant-time string comparison to prevent timing attacks
+ * @internal
+ */
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  
+  // Convert strings to buffers for timing-safe comparison
+  const bufferA = Buffer.from(a, 'utf8');
+  const bufferB = Buffer.from(b, 'utf8');
+  
+  // Use Node.js crypto.timingSafeEqual for constant-time comparison
+  return timingSafeEqual(bufferA, bufferB);
+}
 
 export function createHmacSigner(config: HmacConfig): FrameSigner & FrameVerifier {
   const { keyId, secret, algorithm, clockSkewToleranceMs, replayWindowMs } = {
@@ -104,22 +125,21 @@ export function createHmacSigner(config: HmacConfig): FrameSigner & FrameVerifie
       throw new Error(`Invalid frame: unsupported algorithm ${frame.alg}, expected ${expectedAlg}`);
     }
 
-    // Enhanced timestamp validation with separate windows
+    // Timestamp validation with distinct security boundaries
     const now = Date.now();
     
-    // Primary replay window enforcement - reject very old frames
+    // 1. Replay protection - reject very old frames
     if (frame.ts < (now - replayWindowMs)) {
-      throw new Error(`Invalid frame: timestamp ${frame.ts} too old (replay protection)`);
+      throw new Error(`Invalid frame: timestamp ${frame.ts} too old (replay/clock skew protection)`);
     }
     
-    // Future clock skew validation - reject frames too far in future
+    // 2. Clock skew protection - reject frames too far in future or past beyond tolerance
     if (frame.ts > (now + clockSkewToleranceMs)) {
-      throw new Error(`Invalid frame: timestamp ${frame.ts} too far in future (clock skew)`);
+      throw new Error(`Invalid frame: timestamp ${frame.ts} too far in future (clock skew protection)`);
     }
     
-    // Past clock skew validation - reject frames with excessive past skew (within replay window)
-    if (frame.ts < (now - clockSkewToleranceMs) && frame.ts >= (now - replayWindowMs)) {
-      throw new Error(`Invalid frame: timestamp ${frame.ts} too far in past (clock skew)`);
+    if (frame.ts < (now - clockSkewToleranceMs)) {
+      throw new Error(`Invalid frame: timestamp ${frame.ts} too old (replay/clock skew protection)`);
     }
 
     // Signature verification
@@ -130,7 +150,8 @@ export function createHmacSigner(config: HmacConfig): FrameSigner & FrameVerifie
     hmac.update(message, 'utf8');
     const expectedSig = hmac.digest('base64url');
     
-    if (frame.sig !== expectedSig) {
+    // Use constant-time comparison to prevent timing attacks
+    if (!constantTimeEqual(frame.sig, expectedSig)) {
       throw new Error('Invalid frame: signature verification failed');
     }
   }

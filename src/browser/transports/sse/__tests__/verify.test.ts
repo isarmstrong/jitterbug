@@ -104,6 +104,11 @@ describe('P4.4-b-2: HMAC Verification Fuzzing', () => {
       expect(() => processFrame(mutated as any)).toThrow();
     }), { numRuns: 10 });
   });
+
+  it('rejects unsigned frames with security error', () => {
+    const unsignedFrame = { type: 'test', data: 'payload' };
+    expect(() => processFrame(unsignedFrame)).toThrow('Invalid frame: all frames must be signed (no unsigned frames allowed)');
+  });
 });
 
 function genPayload(): fc.Arbitrary<AnyPushFrame> {
