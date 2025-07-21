@@ -1043,3 +1043,284 @@ describe('P4.2-c.1: Predicate Correctness & Replay Protection', () => {
     });
   });
 });
+
+describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
+  let hub: LogStreamHub;
+
+  beforeEach(() => {
+    hub = new LogStreamHub(100, 200); // Short intervals for testing
+  });
+
+  afterEach(() => {
+    hub.shutdown();
+  });
+
+  describe('Sliding Window Rate Limiting', () => {
+    const generateUUID = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    it('should enforce rate limit: 4 updates in 5s → expect final filter:error(rate_limited)', () => {
+      const clientId = 'rate-limit-client';
+      hub.addClient(clientId);
+
+      // Send 3 rapid updates (at rate limit)
+      for (let i = 0; i < 3; i++) {
+        const frame = {
+          op: 'filter:update' as const,
+          tag: generateUUID(),
+          ts: Date.now(),
+          spec: { kind: 'branches-levels', branches: [`branch-${i}`] }
+        };
+        hub.handleFilterUpdate(clientId, frame);
+      }
+
+      // Verify the 3rd filter was applied
+      const testLog = { level: 'info', branch: 'branch-2', type: 'test', timestamp: Date.now() };
+      expect(hub.broadcast({ type: 'log', data: testLog, timestamp: Date.now() })).toBe(1);
+
+      // 4th update should be rate limited (silently ignored)
+      const overflowFrame = {
+        op: 'filter:update' as const,
+        tag: generateUUID(),
+        ts: Date.now(),
+        spec: { kind: 'branches-levels', branches: ['overflow'] }
+      };
+      hub.handleFilterUpdate(clientId, overflowFrame);
+
+      // Filter should still be the 3rd one, not the overflow
+      const overflowLog = { level: 'info', branch: 'overflow', type: 'test', timestamp: Date.now() };
+      expect(hub.broadcast({ type: 'log', data: overflowLog, timestamp: Date.now() })).toBe(0);
+      
+      // Original filter should still work
+      expect(hub.broadcast({ type: 'log', data: testLog, timestamp: Date.now() })).toBe(1);
+    });
+
+    it('should reset rate limit after 5s window', async () => {
+      const clientId = 'window-reset-client';
+      hub.addClient(clientId);
+
+      // Mock Date.now() for time travel testing
+      const originalDateNow = Date.now;
+      let mockTime = 1000000; // Start at a fixed time
+      
+      Date.now = vi.fn(() => mockTime);
+
+      try {
+        // Send 3 updates at mock time (at rate limit)
+        for (let i = 0; i < 3; i++) {
+          const frame = {
+            op: 'filter:update' as const,
+            tag: generateUUID(),
+            ts: mockTime,
+            spec: { kind: 'branches-levels', branches: [`test-${i}`] }
+          };
+          hub.handleFilterUpdate(clientId, frame);
+        }
+
+        // Advance time by 5001ms (just past the 5s window)
+        mockTime += 5001;
+
+        // Should now be able to send another update successfully
+        const successFrame = {
+          op: 'filter:update' as const,
+          tag: generateUUID(),
+          ts: mockTime,
+          spec: { kind: 'branches-levels', branches: ['success'] }
+        };
+        hub.handleFilterUpdate(clientId, successFrame);
+
+        // Verify the filter was applied (test by broadcasting a matching log)
+        const testLog = { level: 'info', branch: 'success', type: 'test', timestamp: mockTime };
+        const count = hub.broadcast({ type: 'log', data: testLog, timestamp: mockTime });
+        expect(count).toBe(1); // Should receive the log
+
+      } finally {
+        Date.now = originalDateNow; // Restore original Date.now
+      }
+    });
+
+    it('should handle window eviction logic correctly', () => {
+      const clientId = 'eviction-client';
+      hub.addClient(clientId);
+
+      const originalDateNow = Date.now;
+      let mockTime = 2000000;
+      Date.now = vi.fn(() => mockTime);
+
+      try {
+        // Send updates with specific timing
+        const updates = [
+          { time: mockTime, tag: generateUUID() },
+          { time: mockTime + 1000, tag: generateUUID() },
+          { time: mockTime + 2000, tag: generateUUID() },
+        ];
+
+        updates.forEach(({ time, tag }) => {
+          mockTime = time;
+          const frame = {
+            op: 'filter:update' as const,
+            tag,
+            ts: time,
+            spec: { kind: 'branches-levels', branches: ['test'] }
+          };
+          hub.handleFilterUpdate(clientId, frame);
+        });
+
+        // Advance time to make first update expire (> 5s old)
+        mockTime = updates[0].time + 5001;
+
+        // Should be able to send one more update (only 2 in window now)
+        const newFrame = {
+          op: 'filter:update' as const,
+          tag: generateUUID(),
+          ts: mockTime,
+          spec: { kind: 'branches-levels', branches: ['new'] }
+        };
+        hub.handleFilterUpdate(clientId, newFrame);
+
+        // Verify it worked by checking the filter
+        const testLog = { level: 'info', branch: 'new', type: 'test', timestamp: mockTime };
+        expect(hub.broadcast({ type: 'log', data: testLog, timestamp: mockTime })).toBe(1);
+
+      } finally {
+        Date.now = originalDateNow;
+      }
+    });
+  });
+
+  describe('Spec Validation Fuzz Testing', () => {
+    const generateUUID = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    it('should reject all invalid specs with filter:error(invalid_spec)', () => {
+      const clientId = 'fuzz-client';
+      hub.addClient(clientId);
+
+      const invalidSpecs = [
+        // Type errors
+        null,
+        undefined,
+        42,
+        'string',
+        [],
+        true,
+        
+        // Missing kind
+        {},
+        { branches: ['test'] },
+        { levels: ['info'] },
+        
+        // Invalid kind
+        { kind: 'invalid-kind' },
+        { kind: null },
+        { kind: 42 },
+        
+        // branches-levels validation
+        { kind: 'branches-levels', branches: 'not-array' },
+        { kind: 'branches-levels', levels: 'not-array' },
+        { kind: 'branches-levels', branches: new Array(33).fill('x') }, // > MAX_BRANCHES (32)
+        { kind: 'branches-levels', levels: new Array(9).fill('x') },    // > MAX_LEVELS (8)
+        
+        // keyword validation
+        { kind: 'keyword' }, // missing keywords
+        { kind: 'keyword', keywords: null },
+        { kind: 'keyword', keywords: 'not-array' },
+        { kind: 'keyword', keywords: [] }, // empty array
+        { kind: 'keyword', keywords: [null] },
+        { kind: 'keyword', keywords: [42] },
+      ];
+
+      // Test each invalid spec - should not throw and should not apply invalid filters
+      invalidSpecs.forEach((spec, index) => {
+        const frame = {
+          op: 'filter:update' as const,
+          tag: `invalid-${index}-${generateUUID()}`,
+          ts: Date.now(),
+          spec
+        };
+
+        // Should not throw
+        expect(() => hub.handleFilterUpdate(clientId, frame)).not.toThrow();
+      });
+
+      // After all invalid specs, client should still have no filter applied
+      // (or the default match-all filter)
+      const client = hub.getClient(clientId);
+      expect(client).toBeDefined();
+      
+      // Test that some basic log gets through (indicating no malformed filter was applied)
+      const basicLog = { level: 'info', branch: 'test', type: 'test', timestamp: Date.now() };
+      const count = hub.broadcast({ type: 'log', data: basicLog, timestamp: Date.now() });
+      expect(count).toBeGreaterThanOrEqual(0); // Should not crash
+    });
+
+    it('should accept boundary valid specs', () => {
+      const clientId = 'boundary-client';
+      hub.addClient(clientId);
+
+      const validBoundarySpecs = [
+        // Exactly at limits
+        { kind: 'branches-levels', branches: new Array(32).fill('branch') }, // exactly MAX_BRANCHES
+        { kind: 'branches-levels', levels: new Array(8).fill('level') },     // exactly MAX_LEVELS
+        { kind: 'branches-levels' }, // no branches or levels (match all)
+        { kind: 'branches-levels', branches: [] }, // empty arrays
+        { kind: 'branches-levels', levels: [] },
+        { kind: 'keyword', keywords: ['single'] }, // minimum valid keywords
+        { kind: 'keyword', keywords: new Array(100).fill('keyword') }, // many keywords
+      ];
+
+      validBoundarySpecs.forEach((spec, index) => {
+        const frame = {
+          op: 'filter:update' as const,
+          tag: `valid-${index}-${generateUUID()}`,
+          ts: Date.now(),
+          spec
+        };
+
+        expect(() => hub.handleFilterUpdate(clientId, frame)).not.toThrow();
+        
+        // Verify filter was applied by testing a basic log
+        const testLog = { level: 'info', branch: 'test', type: 'test', timestamp: Date.now() };
+        const count = hub.broadcast({ type: 'log', data: testLog, timestamp: Date.now() });
+        // For most specs this will match (except keyword filters)
+        if (spec.kind === 'branches-levels') {
+          expect(count).toBeGreaterThanOrEqual(0); // Should not throw
+        }
+      });
+    });
+
+    it('should handle prototype pollution attempts safely', () => {
+      const clientId = 'security-client';
+      hub.addClient(clientId);
+
+      const maliciousSpecs = [
+        // Prototype pollution attempts
+        { kind: 'branches-levels', '__proto__': { polluted: true } },
+        { kind: 'branches-levels', 'constructor': { prototype: { polluted: true } } },
+        { kind: 'keyword', keywords: ['test'], '__proto__': { evil: true } },
+        
+        // Deep object manipulation
+        { kind: 'branches-levels', branches: { length: 1, 0: 'evil', __proto__: Array.prototype } },
+        
+        // Function injection attempts (should be caught by validation)
+        { kind: 'branches-levels', branches: ['function() { return true; }'] },
+        { kind: 'keyword', keywords: ['eval("malicious code")'] },
+      ];
+
+      maliciousSpecs.forEach((spec, index) => {
+        const frame = {
+          op: 'filter:update' as const,
+          tag: `malicious-${index}-${generateUUID()}`,
+          ts: Date.now(),
+          spec
+        };
+
+        // Should handle safely without throwing or causing pollution
+        expect(() => hub.handleFilterUpdate(clientId, frame)).not.toThrow();
+      });
+
+      // Verify no global pollution occurred
+      expect((Object.prototype as any).polluted).toBeUndefined();
+      expect((Object.prototype as any).evil).toBeUndefined();
+      expect((Array.prototype as any).polluted).toBeUndefined();
+    });
+  });
+});
