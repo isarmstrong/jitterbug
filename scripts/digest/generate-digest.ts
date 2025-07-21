@@ -191,8 +191,8 @@ class DigestGenerator {
       }
 
       return stats;
-    } catch {
-      return { changed: 0, added: 0, deleted: 0, modified: 0 };
+    } catch (error) {
+      throw new Error(`Failed to get file changes since ${this.since}: ${error}`);
     }
   }
 
@@ -213,8 +213,8 @@ class DigestGenerator {
       }
 
       return { added, deleted, net: added - deleted };
-    } catch {
-      return { added: 0, deleted: 0, net: 0 };
+    } catch (error) {
+      throw new Error(`Failed to get line changes since ${this.since}: ${error}`);
     }
   }
 
@@ -268,8 +268,8 @@ class DigestGenerator {
       }
 
       return { added, removed, modified };
-    } catch {
-      return { added: [], removed: [], modified: [] };
+    } catch (error) {
+      throw new Error(`Failed to get export changes: ${error}`);
     }
   }
 
@@ -281,8 +281,8 @@ class DigestGenerator {
       });
       
       return this.parseExportsFromContent(content);
-    } catch {
-      return [];
+    } catch (error) {
+      throw new Error(`Failed to extract exports from ${file} at ${ref}: ${error}`);
     }
   }
 
@@ -347,8 +347,8 @@ class DigestGenerator {
       }
 
       return { added, removed };
-    } catch {
-      return { added: [], removed: [] };
+    } catch (error) {
+      throw new Error(`Failed to get export changes from diff for ${file}: ${error}`);
     }
   }
 
@@ -402,10 +402,12 @@ class DigestGenerator {
         const graphHash = this.simpleHash(graphData);
 
         return { cycles, graphHash };
-      } catch {
+      } catch (error) {
+        console.warn(`Dependency analysis failed: ${error}`);
         return { cycles: [], graphHash: 'unavailable' };
       }
-    } catch {
+    } catch (error) {
+      console.warn(`Dependency info collection failed: ${error}`);
       return { cycles: [], graphHash: 'error' };
     }
   }
@@ -480,8 +482,8 @@ class DigestGenerator {
       }
 
       return { new: newFiles, deleted: deletedFiles, modified: modifiedFiles };
-    } catch {
-      return { new: [], deleted: [], modified: [] };
+    } catch (error) {
+      throw new Error(`Failed to get module changes: ${error}`);
     }
   }
 
@@ -951,7 +953,8 @@ class DigestGenerator {
       }).trim();
 
       return { currentCommit, branch, lastCommitMessage };
-    } catch {
+    } catch (error) {
+      console.warn(`Failed to get git info: ${error}`);
       return { currentCommit: 'unknown', branch: 'unknown', lastCommitMessage: '' };
     }
   }
@@ -994,7 +997,8 @@ class DigestGenerator {
           change: '(unchanged)'
         }
       };
-    } catch {
+    } catch (error) {
+      console.warn(`Graph stats collection failed: ${error}`);
       return {
         nodes: 0,
         nodesDelta: 0,
@@ -1029,7 +1033,8 @@ class DigestGenerator {
         previous: previousSymbols,
         drift
       };
-    } catch {
+    } catch (error) {
+      console.warn(`Symbol drift analysis failed: ${error}`);
       return { current: [], previous: [], drift: [] };
     }
   }
@@ -1057,8 +1062,8 @@ class DigestGenerator {
           // File might not exist in this ref
         }
       }
-    } catch {
-      // Git ref might not exist
+    } catch (error) {
+      console.warn(`Failed to extract symbols from ref ${ref}: ${error}`);
     }
     
     return symbols;
@@ -1246,7 +1251,8 @@ class DigestGenerator {
              commitMsg.includes('contract exports') ||
              commitMsg.includes('prune exports') ||
              commitMsg.includes('comprehensive stabilization');
-    } catch {
+    } catch (error) {
+      console.warn(`Failed to check if internalization commit: ${error}`);
       return false;
     }
   }
@@ -1403,7 +1409,8 @@ class DigestGenerator {
           else if (currentTier === 'internal') counts.internal++;
         }
       }
-    } catch {
+    } catch (error) {
+      console.warn(`Failed to parse stability tiers from ${indexPath}: ${error}`);
       // Fallback counting: manual hardcoding for reliability
       counts.stable = 2; // initializeJitterbug, ensureJitterbugReady
       counts.experimental = 2; // emitJitterbugEvent, experimentalSafeEmit
@@ -1484,8 +1491,8 @@ class DigestGenerator {
         );
         names.forEach(name => exports.add(name));
       }
-    } catch {
-      // Fallback
+    } catch (error) {
+      console.warn(`Failed to parse exports from index ${indexPath}: ${error}`);
     }
 
     return exports;
@@ -1878,7 +1885,8 @@ class DigestGenerator {
       }
       
       return coverage.hasOwnProperty('runtime-core') ? coverage : { 'runtime-core': 0, 'debugger-lifecycle': 0 };
-    } catch {
+    } catch (error) {
+      console.warn(`Failed to get previous coverage: ${error}`);
       return { 'runtime-core': 0, 'debugger-lifecycle': 0 };
     }
   }

@@ -14,7 +14,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const CONFIG_FILE = path.join(__dirname, 'public-exports.json');
-const PUBLIC_BARREL = path.join(__dirname, '..', '..', 'src', 'browser', 'public.ts');
+const PUBLIC_BARREL = path.join(__dirname, '..', '..', 'src', 'index.ts');
 
 function main() {
   try {
@@ -25,7 +25,7 @@ function main() {
     console.log('🔍 Checking export allow-list compliance...');
     console.log(`📋 Allowed exports (${config.allowed.length}/${config.maxCount}):`, config.allowed);
     
-    // Extract exports from public.ts barrel
+    // Extract exports from index.ts barrel
     const publicContent = fs.readFileSync(PUBLIC_BARREL, 'utf8');
     const actualExports = extractExports(publicContent);
     

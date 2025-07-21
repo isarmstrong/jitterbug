@@ -80,7 +80,8 @@ class DomainSnapshotGenerator {
         cwd: this.projectRoot,
         encoding: 'utf8',
       }).trim();
-    } catch {
+    } catch (error) {
+      console.warn(`Failed to get git hash: ${error}`);
       return 'unknown';
     }
   }
@@ -91,7 +92,8 @@ class DomainSnapshotGenerator {
         readFileSync(join(this.projectRoot, 'package.json'), 'utf8')
       );
       return packageJson.version || '0.0.0';
-    } catch {
+    } catch (error) {
+      console.warn(`Failed to get version from package.json: ${error}`);
       return '0.0.0';
     }
   }
