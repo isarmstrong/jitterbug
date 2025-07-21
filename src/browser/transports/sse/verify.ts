@@ -51,6 +51,7 @@ function computeDigest(frame: SignedPushFrame): string {
 
 /**
  * Verify signed push frame on client side
+ * @internal
  */
 export function verifyFrame(frame: SignedPushFrame): AnyPushFrame {
   const keyRegistry = getKeyRegistry();
@@ -92,6 +93,7 @@ export function verifyFrame(frame: SignedPushFrame): AnyPushFrame {
 
 /**
  * Check if frame appears to be signed (heuristic detection)
+ * @internal
  */
 export function isSignedFrame(parsed: unknown): parsed is SignedPushFrame {
   return (
@@ -104,6 +106,7 @@ export function isSignedFrame(parsed: unknown): parsed is SignedPushFrame {
 
 /**
  * Process frame - verify if signed, pass through if unsigned
+ * @internal
  */
 export function processFrame(parsed: unknown): AnyPushFrame {
   if (!parsed || typeof parsed !== 'object') {

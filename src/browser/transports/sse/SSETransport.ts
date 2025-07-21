@@ -20,6 +20,7 @@ const DEFAULT_CONFIG: Required<SSEClientConfig> = {
   maxReconnectAttempts: 5
 };
 
+/** @internal */
 export class SSETransport {
   private eventSource: EventSource | null = null;
   private reconnectAttempts = 0;
@@ -218,6 +219,7 @@ let sseTransport: SSETransport | null = null;
 
 /**
  * Get or create SSE transport instance
+ * @internal
  */
 export function getSSETransport(config?: SSEClientConfig): SSETransport {
   if (!sseTransport) {
@@ -228,6 +230,7 @@ export function getSSETransport(config?: SSEClientConfig): SSETransport {
 
 /**
  * Connect to server push stream
+ * Public API entry point for P4.4-b-1 client-side verification
  */
 export function connectPushStream(config?: SSEClientConfig): SSETransport {
   const transport = getSSETransport(config);

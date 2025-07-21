@@ -5,6 +5,7 @@
 
 import { parseHmacKeys } from '../../hub/security/_internal/hmac.js';
 
+/** @internal */
 export interface KeyRegistryEntry {
   readonly kid: string;
   readonly secret: Uint8Array;
@@ -67,6 +68,7 @@ class BrowserKeyRegistry {
 // Singleton instance
 const registry = new BrowserKeyRegistry();
 
+/** @internal */
 export function getKeyRegistry(): BrowserKeyRegistry {
   return registry;
 }
