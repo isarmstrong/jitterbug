@@ -821,3 +821,225 @@ describe('SSETransport Integration', () => {
     });
   });
 });
+
+describe('P4.2-c.1: Predicate Correctness & Replay Protection', () => {
+  let hub: LogStreamHub;
+
+  beforeEach(() => {
+    hub = new LogStreamHub(100, 200); // Short intervals for testing
+  });
+
+  afterEach(() => {
+    hub.shutdown();
+  });
+
+  describe('Concurrent Predicate Isolation', () => {
+    const generateUUID = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    it('should maintain predicate isolation across N parallel connections', () => {
+      const N = 4; // Reduced N for simpler debugging
+      const connections: Array<{ id: string; spec: any; expectedCount: number }> = [];
+      
+      // Create N connections with different filter specs
+      for (let i = 0; i < N; i++) {
+        const clientId = `client-${i}`;
+        const spec = { kind: 'branches-levels', branches: [`branch-${i}`] };
+        
+        hub.addClient(clientId);
+        connections.push({ id: clientId, spec, expectedCount: 0 });
+      }
+
+      // Apply filters via handleFilterUpdate
+      connections.forEach(({ id, spec }) => {
+        const frame = {
+          op: 'filter:update' as const,
+          tag: generateUUID(),
+          ts: Date.now(),
+          spec
+        };
+        hub.handleFilterUpdate(id, frame);
+      });
+
+      // Generate test logs - ensure each branch gets some logs
+      const testLogs = [];
+      for (let i = 0; i < 100; i++) {
+        const branchIndex = i % N;
+        testLogs.push({
+          id: `log-${i}`,
+          type: 'test.event',
+          timestamp: Date.now() + i,
+          level: 'info',
+          branch: `branch-${branchIndex}`,
+          payload: { message: `Test log ${i}` }
+        });
+      }
+
+      // Each client should receive 25 logs (100 logs / 4 branches)
+      const expectedLogsPerClient = 100 / N;
+      
+      // Broadcast all logs
+      let totalSent = 0;
+      testLogs.forEach(log => {
+        const count = hub.broadcast({
+          type: 'log',
+          data: log,
+          timestamp: log.timestamp
+        });
+        totalSent += count;
+      });
+
+      // Verify each connection received only its expected logs
+      connections.forEach(({ id }, index) => {
+        const client = hub.getClient(id);
+        expect(client).toBeDefined();
+        expect(client!.stats.sent).toBe(expectedLogsPerClient);
+      });
+
+      // Total messages sent should equal N * expectedLogsPerClient
+      expect(totalSent).toBe(N * expectedLogsPerClient);
+    });
+
+    it('should handle dynamic predicate updates mid-stream', () => {
+      const clientId = 'dynamic-client';
+      hub.addClient(clientId);
+
+      // Initial filter: only 'core' branch
+      let frame = {
+        op: 'filter:update' as const,
+        tag: generateUUID(),
+        ts: Date.now(),
+        spec: { kind: 'branches-levels', branches: ['core'] }
+      };
+      hub.handleFilterUpdate(clientId, frame);
+
+      // Send logs that should match initial filter
+      const coreLog = { level: 'info', branch: 'core', type: 'test', timestamp: Date.now() };
+      const uiLog = { level: 'info', branch: 'ui', type: 'test', timestamp: Date.now() };
+      
+      expect(hub.broadcast({ type: 'log', data: coreLog, timestamp: Date.now() })).toBe(1);
+      expect(hub.broadcast({ type: 'log', data: uiLog, timestamp: Date.now() })).toBe(0);
+
+      // Update filter mid-stream: switch to 'ui' branch
+      frame = {
+        op: 'filter:update',
+        tag: generateUUID(),
+        ts: Date.now(),
+        spec: { kind: 'branches-levels', branches: ['ui'] }
+      };
+      hub.handleFilterUpdate(clientId, frame);
+
+      // Verify predicate swap worked
+      expect(hub.broadcast({ type: 'log', data: coreLog, timestamp: Date.now() })).toBe(0);
+      expect(hub.broadcast({ type: 'log', data: uiLog, timestamp: Date.now() })).toBe(1);
+
+      const client = hub.getClient(clientId);
+      expect(client!.stats.sent).toBe(2); // One from each filter state
+    });
+  });
+
+  describe('Replay Protection & Tag Deduplication', () => {
+    const generateUUID = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    it('should ignore duplicate filter update tags within same connection', () => {
+      const clientId = 'replay-test-client';
+      hub.addClient(clientId);
+      
+      const duplicateTag = generateUUID();
+      const frame = {
+        op: 'filter:update' as const,
+        tag: duplicateTag,
+        ts: Date.now(),
+        spec: { kind: 'branches-levels', branches: ['core'] }
+      };
+
+      // Send first update - should succeed
+      hub.handleFilterUpdate(clientId, frame);
+      
+      // Send exact same update - should be ignored (no ACK/error sent)
+      hub.handleFilterUpdate(clientId, frame);
+      
+      // Verify only one filter application
+      const client = hub.getClient(clientId);
+      expect(client).toBeDefined();
+      
+      // Test that filter is active by broadcasting a matching log
+      const matchingLog = { level: 'info', branch: 'core', type: 'test', timestamp: Date.now() };
+      expect(hub.broadcast({ type: 'log', data: matchingLog, timestamp: Date.now() })).toBe(1);
+      expect(client!.stats.sent).toBe(1); // Only one log sent
+    });
+
+    it('should allow reusing tags across different connections', () => {
+      const clientId1 = 'client-1';
+      const clientId2 = 'client-2';
+      hub.addClient(clientId1);
+      hub.addClient(clientId2);
+
+      const sharedTag = generateUUID();
+      
+      // Both clients use the same tag - should both succeed
+      const frame1 = {
+        op: 'filter:update' as const,
+        tag: sharedTag,
+        ts: Date.now(),
+        spec: { kind: 'branches-levels', branches: ['core'] }
+      };
+      
+      const frame2 = {
+        op: 'filter:update' as const,
+        tag: sharedTag, // Same tag, different connection
+        ts: Date.now(),
+        spec: { kind: 'branches-levels', branches: ['ui'] }
+      };
+
+      hub.handleFilterUpdate(clientId1, frame1);
+      hub.handleFilterUpdate(clientId2, frame2);
+
+      // Verify both filters are active
+      const coreLog = { level: 'info', branch: 'core', type: 'test', timestamp: Date.now() };
+      const uiLog = { level: 'info', branch: 'ui', type: 'test', timestamp: Date.now() };
+      
+      expect(hub.broadcast({ type: 'log', data: coreLog, timestamp: Date.now() })).toBe(1); // Only client1
+      expect(hub.broadcast({ type: 'log', data: uiLog, timestamp: Date.now() })).toBe(1);   // Only client2
+
+      const client1 = hub.getClient(clientId1);
+      const client2 = hub.getClient(clientId2);
+      expect(client1!.stats.sent).toBe(1);
+      expect(client2!.stats.sent).toBe(1);
+    });
+
+    it('should reset tag isolation after reconnect (simulated)', () => {
+      const clientId = 'reconnect-client';
+      const reusedTag = generateUUID();
+      
+      // First connection
+      hub.addClient(clientId);
+      const frame = {
+        op: 'filter:update' as const,
+        tag: reusedTag,
+        ts: Date.now(),
+        spec: { kind: 'branches-levels', branches: ['core'] }
+      };
+      hub.handleFilterUpdate(clientId, frame);
+      
+      // Simulate disconnect/reconnect by removing and re-adding client
+      hub.removeClient(clientId);
+      hub.addClient(clientId);
+      
+      // Should be able to reuse the same tag after reconnect
+      const frame2 = {
+        op: 'filter:update' as const,
+        tag: reusedTag, // Previously used tag
+        ts: Date.now(),
+        spec: { kind: 'branches-levels', branches: ['ui'] }
+      };
+      hub.handleFilterUpdate(clientId, frame2);
+      
+      // Verify new filter is active (should receive ui logs, not core)
+      const coreLog = { level: 'info', branch: 'core', type: 'test', timestamp: Date.now() };
+      const uiLog = { level: 'info', branch: 'ui', type: 'test', timestamp: Date.now() };
+      
+      expect(hub.broadcast({ type: 'log', data: coreLog, timestamp: Date.now() })).toBe(0);
+      expect(hub.broadcast({ type: 'log', data: uiLog, timestamp: Date.now() })).toBe(1);
+    });
+  });
+});
