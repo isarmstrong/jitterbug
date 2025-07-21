@@ -37,44 +37,63 @@ export async function emitTelemetryUpdate(
   ctx: HubContext, 
   config: TelemetryConfig = DEFAULT_TELEMETRY_CONFIG
 ): Promise<void> {
-  const memUsage = process.memoryUsage();
-  
-  // P4.3: Privacy-safe metrics to prevent leaking local machine stats
-  const rawMemoryMB = Math.round(memUsage.rss / 1024 / 1024);
-  const rawCpuUsage = config.collectCpuMetrics ? await getCpuUsage() : 0;
-  
-  const metrics: TelemetryMetrics = {
-    timestamp: Date.now(),
-    system: {
-      memoryUsage: config.privacySafeMode 
-        ? Math.min(100, Math.round(rawMemoryMB / 10)) // Normalized 0-100 range
-        : rawMemoryMB,
-      cpuUsage: config.privacySafeMode
-        ? Math.round(rawCpuUsage / 10) * 10 // Rounded to nearest 10%
-        : rawCpuUsage,
-      uptime: Math.round(process.uptime())
-    },
-    application: {
-      activeConnections: ctx.connectionCount || 0,
-      totalEvents: ctx.eventCount || 0,
-      errorCount: ctx.errorCount || 0
+  try {
+    const memUsage = process.memoryUsage();
+    
+    // RT-5: Safely collect CPU metrics with error handling
+    let rawCpuUsage = 0;
+    if (config.collectCpuMetrics) {
+      try {
+        rawCpuUsage = await getCpuUsage();
+      } catch (error) {
+        console.warn('Failed to collect CPU metrics:', error);
+        // Continue with rawCpuUsage = 0
+      }
     }
-  };
+    
+    // RT-3: Enhanced privacy-safe metrics to prevent device fingerprinting
+    const rawMemoryMB = Math.round(memUsage.rss / 1024 / 1024);
+    const rawUptime = Math.round(process.uptime());
+  
+    const metrics: TelemetryMetrics = {
+      timestamp: Date.now(),
+      system: {
+        memoryUsage: config.privacySafeMode 
+          ? Math.floor(rawMemoryMB / 50) * 25 // Coarse quartiles: 0, 25, 50, 75, 100+
+          : rawMemoryMB,
+        cpuUsage: config.privacySafeMode
+          ? 0 // RT-3: Drop CPU entirely in privacy mode to prevent fingerprinting
+          : rawCpuUsage,
+        uptime: config.privacySafeMode
+          ? (rawUptime < 3600 ? 0 : rawUptime < 43200 ? 1 : 2) // Coarse buckets: <1h, 1-12h, >12h
+          : rawUptime
+      },
+      application: {
+        activeConnections: ctx.connectionCount || 0,
+        totalEvents: ctx.eventCount || 0,
+        errorCount: ctx.errorCount || 0
+      }
+    };
 
-  await ctx.emit({
-    type: 'telemetry.update',
-    payload: metrics,
-    metadata: {
-      emitter: 'telemetry',
-      version: '1.0.0',
-      ...(config.includeProcessInfo && {
-        process: {
-          pid: process.pid,
-          nodeVersion: process.version
-        }
-      })
-    }
-  });
+    await ctx.emit({
+      type: 'telemetry.update',
+      payload: metrics,
+      metadata: {
+        emitter: 'telemetry',
+        version: '1.0.0',
+        ...(config.includeProcessInfo && {
+          process: {
+            pid: process.pid,
+            nodeVersion: process.version
+          }
+        })
+      }
+    });
+  } catch (error) {
+    // RT-5: Handle telemetry emission failures gracefully
+    console.error('Failed to emit telemetry update:', error);
+    // Don't re-throw - telemetry failures shouldn't crash the orchestrator
+  }
 }
 
 async function getCpuUsage(): Promise<number> {

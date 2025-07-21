@@ -45,7 +45,17 @@ export class PushOrchestrator {
 
   constructor(hubContext: HubContext, config: Partial<PushOrchestratorConfig> = {}) {
     this.hubContext = hubContext;
-    this.config = { ...DEFAULT_ORCHESTRATOR_CONFIG, ...config };
+    
+    // RT-2: Freeze schedules to prevent runtime mutation DoS attacks
+    const schedules = (config.schedules || DEFAULT_PUSH_SCHEDULES).map(schedule => Object.freeze({ ...schedule }));
+    Object.freeze(schedules);
+    
+    this.config = { 
+      ...DEFAULT_ORCHESTRATOR_CONFIG, 
+      ...config,
+      schedules
+    };
+    
     this.registry = new EmitterRegistry(this.config.emitterConfig);
   }
 
@@ -72,11 +82,12 @@ export class PushOrchestrator {
   private startScheduledEmitter(schedule: PushSchedule): void {
     const { emitterType, immediate } = schedule;
     
-    // P4.3: Clamp interval to safe range (DoS prevention)
-    const intervalMs = Math.max(MIN_INTERVAL_MS, Math.min(MAX_INTERVAL_MS, schedule.intervalMs));
+    // RT-2: Copy interval to local variable to prevent mutation after clamping
+    const originalInterval = schedule.intervalMs;
+    const intervalMs = Math.max(MIN_INTERVAL_MS, Math.min(MAX_INTERVAL_MS, originalInterval));
     
-    if (intervalMs !== schedule.intervalMs) {
-      console.warn(`Clamped ${emitterType} interval from ${schedule.intervalMs}ms to ${intervalMs}ms for safety`);
+    if (intervalMs !== originalInterval) {
+      console.warn(`Clamped ${emitterType} interval from ${originalInterval}ms to ${intervalMs}ms for safety`);
     }
 
     if (!this.registry.hasEmitter(emitterType)) {
@@ -130,18 +141,18 @@ export class PushOrchestrator {
 
   public async stop(): Promise<void> {
     if (!this.isRunning) {
-      return;
+      return; // RT-4: Idempotent - safe to call multiple times
     }
 
     console.log('Stopping PushOrchestrator...');
     this.isRunning = false;
 
-    // Clear all intervals
+    // RT-4: Clear all intervals and ensure Map is emptied for GC
     for (const [emitterType, interval] of this.intervals) {
       clearInterval(interval);
       console.log(`Stopped ${emitterType} schedule`);
     }
-    this.intervals.clear();
+    this.intervals.clear(); // This already empties the Map properly
 
     // Final emission with a timeout
     try {

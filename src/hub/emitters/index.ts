@@ -19,10 +19,4 @@ export type { HeartbeatConfig } from './heartbeatEmitter.js';
 export type { TelemetryConfig } from './telemetryEmitter.js';
 export type { UserActivityConfig } from './userActivityEmitter.js';
 
-// Mark all implementation details as internal
-/** @internal */
-export { createHeartbeatEmitter } from './heartbeatEmitter.js';
-/** @internal */
-export { createTelemetryEmitter } from './telemetryEmitter.js';
-/** @internal */
-export { createUserActivityEmitter } from './userActivityEmitter.js';
+// Implementation details are NOT exported (internalized)

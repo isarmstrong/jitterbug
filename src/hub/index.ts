@@ -25,6 +25,4 @@ export {
 // Core types
 export type { HubContext } from './types.js';
 
-// Mark internal implementation as such
-/** @internal */
-export { PushOrchestratorClass } from './push-orchestrator.js';
+// PushOrchestratorClass is NOT exported (internalized)
