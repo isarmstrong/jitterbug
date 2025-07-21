@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jitterbug E2E Test Page</title>
+</head>
+<body>
+    <h1>Jitterbug E2E Test Environment</h1>
+    <div id="status">Loading...</div>
+    
+    <script>
+        // Mock Jitterbug for E2E testing
+        window.jitterbug = {
+            debug: {
+                sse: {
+                    setFilters: async function(spec) {
+                        const controlUrl = window.__JBUG_TEST_CONTROL_URL__ || '/control';
+                        const tag = 'test-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                        
+                        const response = await fetch(controlUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                type: 'filter:update',
+                                tag: tag,
+                                spec: spec
+                            })
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (!response.ok) {
+                            throw new Error(result.reason || 'Filter update failed');
+                        }
+                        
+                        return result;
+                    },
+                    
+                    getConnectionCount: function() {
+                        // Mock implementation
+                        return 1;
+                    }
+                }
+            }
+        };
+        
+        document.getElementById('status').textContent = 'Jitterbug E2E Ready';
+    </script>
+</body>
+</html>

@@ -25,6 +25,11 @@ pnpm-debug.log*
 coverage/
 .nyc_output/
 
+# E2E test artifacts
+test-results/
+playwright-report/
+e2e-teardown.json
+
 # Environment variables
 .env
 .env.local
