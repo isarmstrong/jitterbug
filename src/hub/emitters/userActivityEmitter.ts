@@ -140,6 +140,7 @@ export async function emitUserActivityUpdate(
   });
 }
 
+/** @deprecated Use bootstrapPushSystem() instead */
 export function createUserActivityEmitter(config: Partial<UserActivityConfig> = {}) {
   const finalConfig = { ...DEFAULT_USER_ACTIVITY_CONFIG, ...config };
   

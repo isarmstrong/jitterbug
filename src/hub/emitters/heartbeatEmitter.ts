@@ -37,6 +37,7 @@ export async function emitHeartbeat(ctx: HubContext, config: HeartbeatConfig = D
   });
 }
 
+/** @deprecated Use bootstrapPushSystem() instead */
 export function createHeartbeatEmitter(config: Partial<HeartbeatConfig> = {}) {
   const finalConfig = { ...DEFAULT_HEARTBEAT_CONFIG, ...config };
   

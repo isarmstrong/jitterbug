@@ -106,6 +106,7 @@ async function getCpuUsage(): Promise<number> {
   return Math.min(100, (totalUsage / 100) * 100); // Normalize to percentage
 }
 
+/** @deprecated Use bootstrapPushSystem() instead */
 export function createTelemetryEmitter(config: Partial<TelemetryConfig> = {}) {
   const finalConfig = { ...DEFAULT_TELEMETRY_CONFIG, ...config };
   

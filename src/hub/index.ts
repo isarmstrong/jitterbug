@@ -33,31 +33,41 @@ function createUserActivityEmitter(config?: { intervalMs?: number; batchSize?: n
   return new UserActivityEmitter(config);
 }
 
+export interface BootstrapOptions {
+  heartbeat?: boolean | { intervalMs?: number };
+  telemetry?: boolean | { intervalMs?: number };
+  activity?: boolean | { intervalMs?: number; batchSize?: number; maxQueueSize?: number };
+}
+
 // Bootstrap function with built-in emitters (auto-seals registry)
-export function bootstrapPushSystem(options?: {
-  enableHeartbeat?: boolean;
-  enableTelemetry?: boolean; 
-  enableUserActivity?: boolean;
-}): void {
-  const { enableHeartbeat = true, enableTelemetry = true, enableUserActivity = true } = options || {};
+export function bootstrapPushSystem(options: BootstrapOptions = {}): void {
+  const { heartbeat = true, telemetry = true, activity = true } = options;
   
-  if (!getRegistry().isSealed()) {
-    // Register default emitters
-    if (enableHeartbeat) {
-      const heartbeat = createHeartbeatEmitter();
-      registerEmitter(heartbeat);
-    }
-    if (enableTelemetry) {
-      const telemetry = createTelemetryEmitter();
-      registerEmitter(telemetry);
-    }
-    if (enableUserActivity) {
-      const userActivity = createUserActivityEmitter();
-      registerEmitter(userActivity);
-    }
-    
-    sealRegistry();
+  if (getRegistry().isSealed()) {
+    console.warn('[jitterbug] push system already initialised – ignoring');
+    return;
   }
+
+  // Register emitters with config support
+  if (heartbeat) {
+    const hbConfig = typeof heartbeat === 'object' ? heartbeat : {};
+    const heartbeatEmitter = createHeartbeatEmitter(hbConfig);
+    registerEmitter(heartbeatEmitter);
+  }
+  
+  if (telemetry) {
+    const tmConfig = typeof telemetry === 'object' ? telemetry : {};
+    const telemetryEmitter = createTelemetryEmitter(tmConfig);
+    registerEmitter(telemetryEmitter);
+  }
+  
+  if (activity) {
+    const actConfig = typeof activity === 'object' ? activity : {};
+    const activityEmitter = createUserActivityEmitter(actConfig);
+    registerEmitter(activityEmitter);
+  }
+  
+  sealRegistry();
 }
 
 // Type exports (minimal)

@@ -13,7 +13,7 @@ describe('Built-in Emitters - P4.3 Micro-Task C', () => {
     let emitter: HeartbeatEmitter;
 
     beforeEach(() => {
-      emitter = new HeartbeatEmitter();
+      emitter = new HeartbeatEmitter({ intervalMs: 1000 }); // 1 second for testing
     });
 
     it('should create heartbeat frames', () => {
@@ -53,7 +53,7 @@ describe('Built-in Emitters - P4.3 Micro-Task C', () => {
     let emitter: TelemetryEmitter;
 
     beforeEach(() => {
-      emitter = new TelemetryEmitter();
+      emitter = new TelemetryEmitter({ intervalMs: 2000 }); // 2 seconds for testing
     });
 
     it('should create telemetry frames', () => {
@@ -146,8 +146,8 @@ describe('Built-in Emitters - P4.3 Micro-Task C', () => {
       
       emitter.addActivity({ type: 'old', userId: 'user1' });
       
-      // Advance time beyond maxAgeMs
-      vi.setSystemTime(now + 15000);
+      // Advance time beyond maxAgeMs (default 30s)
+      vi.setSystemTime(now + 35000);
       emitter.addActivity({ type: 'new', userId: 'user2' });
       
       const frame = emitter.createFrame();
