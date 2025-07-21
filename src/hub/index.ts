@@ -6,33 +6,56 @@
  */
 
 import { PushOrchestratorV2, type PushOrchestratorConfig as V2Config } from './core/push-orchestrator-v2.js';
-import { getRegistry, sealRegistry } from './emitters/registry.js';
+import { getRegistry, sealRegistry, registerEmitter } from './emitters/registry.js';
 import { HeartbeatEmitter } from './emitters/heartbeat.js';
 import { TelemetryEmitter } from './emitters/telemetry.js';
 import { UserActivityEmitter } from './emitters/user-activity.js';
 
 // === P4.3 Production-Grade Push (NEW) ===
 
-// Factory functions (recommended API)
+// Main factory function (recommended API)
 export function createPushOrchestrator(config?: Partial<V2Config>): PushOrchestratorV2 {
   return new PushOrchestratorV2(config);
 }
 
-export function createHeartbeatEmitter(config?: { intervalMs?: number }): HeartbeatEmitter {
+/** @internal Low-level emitter factory */
+function createHeartbeatEmitter(config?: { intervalMs?: number }): HeartbeatEmitter {
   return new HeartbeatEmitter(config);
 }
 
-export function createTelemetryEmitter(config?: { intervalMs?: number }): TelemetryEmitter {
+/** @internal Low-level emitter factory */
+function createTelemetryEmitter(config?: { intervalMs?: number }): TelemetryEmitter {
   return new TelemetryEmitter(config);
 }
 
-export function createUserActivityEmitter(config?: { intervalMs?: number; batchSize?: number }): UserActivityEmitter {
+/** @internal Low-level emitter factory */
+function createUserActivityEmitter(config?: { intervalMs?: number; batchSize?: number }): UserActivityEmitter {
   return new UserActivityEmitter(config);
 }
 
-// Bootstrap function (auto-seals registry)
-export function bootstrapPushSystem(): void {
+// Bootstrap function with built-in emitters (auto-seals registry)
+export function bootstrapPushSystem(options?: {
+  enableHeartbeat?: boolean;
+  enableTelemetry?: boolean; 
+  enableUserActivity?: boolean;
+}): void {
+  const { enableHeartbeat = true, enableTelemetry = true, enableUserActivity = true } = options || {};
+  
   if (!getRegistry().isSealed()) {
+    // Register default emitters
+    if (enableHeartbeat) {
+      const heartbeat = createHeartbeatEmitter();
+      registerEmitter(heartbeat);
+    }
+    if (enableTelemetry) {
+      const telemetry = createTelemetryEmitter();
+      registerEmitter(telemetry);
+    }
+    if (enableUserActivity) {
+      const userActivity = createUserActivityEmitter();
+      registerEmitter(userActivity);
+    }
+    
     sealRegistry();
   }
 }
