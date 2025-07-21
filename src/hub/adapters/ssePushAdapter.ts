@@ -57,6 +57,13 @@ export class SSEPushAdapter implements PushAdapter {
 
     try {
       const serialized = safeJsonStringify(frame);
+      
+      // Hard cap: reject frames > 1KB (DoS protection)
+      if (serialized.length > 1024) {
+        console.warn(`[SSEPushAdapter] Frame size ${serialized.length} bytes exceeds 1KB limit, dropping`);
+        return PushResult.ERROR;
+      }
+      
       const startTime = Date.now();
       
       // Use existing SSE transport to send frame

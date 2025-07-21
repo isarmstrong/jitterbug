@@ -8,12 +8,14 @@ export interface UserActivityConfig {
   intervalMs: number;
   batchSize: number;
   maxAgeMs: number;
+  maxQueueSize: number; // Hard limit to prevent OOM
 }
 
 export const DEFAULT_USER_ACTIVITY_CONFIG: UserActivityConfig = {
   intervalMs: 10_000,
   batchSize: 50,
-  maxAgeMs: 30_000
+  maxAgeMs: 30_000,
+  maxQueueSize: 1000 // Hard limit: drop oldest if exceeded
 };
 
 export interface ActivityEvent {
@@ -44,6 +46,12 @@ export class UserActivityEmitter implements PushEmitter<UserActivityFrame> {
 
   addActivity(activity: Omit<ActivityEvent, 'timestamp'>): void {
     const now = Date.now();
+    
+    // Hard limit protection against OOM
+    if (this.activities.length >= this.config.maxQueueSize) {
+      console.warn(`[UserActivityEmitter] Queue at max size ${this.config.maxQueueSize}, dropping oldest activities`);
+      this.activities.splice(0, Math.floor(this.config.maxQueueSize * 0.1)); // Drop 10%
+    }
     
     this.activities.push({ ...activity, timestamp: now });
     this.cleanupActivities(now);
@@ -82,12 +90,12 @@ export class UserActivityEmitter implements PushEmitter<UserActivityFrame> {
       .slice(0, 5)
       .map(([type, count]) => ({ type, count }));
     const timestamps = this.activities.map(a => a.timestamp);
-    const meta = {
+    const meta = this.redactPII({
       total: this.activities.length,
       unique_users: uniqueUsers.size,
       top_activities: topActivities,
       time_range: { start: Math.min(...timestamps), end: Math.max(...timestamps) }
-    };
+    });
     this.activities.length = 0;
     return { t: 'ua', ts: now, meta };
   }
@@ -118,5 +126,38 @@ export class UserActivityEmitter implements PushEmitter<UserActivityFrame> {
     if (i > 0) {
       this.activities.splice(0, i);
     }
+  }
+
+  /**
+   * Redact PII from metadata - strips sensitive fields
+   */
+  private redactPII(meta: Record<string, any>): Record<string, any> {
+    const redacted = { ...meta };
+    
+    // Strip any fields that might contain PII
+    const piiFields = ['user_data', 'personal_info', 'email', 'phone', 'address', 'ip', 'session_id'];
+    for (const field of piiFields) {
+      if (field in redacted) {
+        redacted[field] = '[REDACTED]';
+      }
+    }
+    
+    // Redact nested objects in top_activities
+    if (redacted.top_activities && Array.isArray(redacted.top_activities)) {
+      redacted.top_activities = redacted.top_activities.map((activity: any) => {
+        if (typeof activity === 'object' && activity) {
+          const cleaned = { ...activity };
+          for (const field of piiFields) {
+            if (field in cleaned) {
+              cleaned[field] = '[REDACTED]';
+            }
+          }
+          return cleaned;
+        }
+        return activity;
+      });
+    }
+    
+    return redacted;
   }
 }

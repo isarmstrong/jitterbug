@@ -3,6 +3,7 @@
  */
 
 import { RingBuffer } from '../internal/ring-buffer.js';
+import { TokenBucket, DEFAULT_TOKEN_BUCKET_CONFIG, type TokenBucketConfig } from '../internal/token-bucket.js';
 import { PushResult, type PushAdapter } from '../adapters/ssePushAdapter.js';
 import { getRegistry, type AnyPushFrame } from '../emitters/registry.js';
 
@@ -12,6 +13,7 @@ export interface PushOrchestratorConfig {
   readonly maxFramesPerTick: number;
   readonly backoffMultiplier: number;
   readonly maxBackoffMs: number;
+  readonly tokenBucket: TokenBucketConfig;
 }
 
 export const DEFAULT_ORCHESTRATOR_CONFIG: PushOrchestratorConfig = {
@@ -19,11 +21,13 @@ export const DEFAULT_ORCHESTRATOR_CONFIG: PushOrchestratorConfig = {
   frameCapacityPerConnection: 100,
   maxFramesPerTick: 10,
   backoffMultiplier: 1.5,
-  maxBackoffMs: 30_000
+  maxBackoffMs: 30_000,
+  tokenBucket: DEFAULT_TOKEN_BUCKET_CONFIG
 } as const;
 interface ConnectionState {
   readonly adapter: PushAdapter;
   readonly buffer: RingBuffer<AnyPushFrame>;
+  readonly rateLimiter: TokenBucket;
   backoffMs: number;
   lastFlushTime: number;
   nextFlushTime: number;
@@ -39,6 +43,7 @@ interface PushMetrics {
   framesDropped: number;
   backoffEvents: number;
   emissionErrors: number;
+  rateLimitEvents: number;
 }
 
 export class PushOrchestratorV2 {
@@ -49,7 +54,8 @@ export class PushOrchestratorV2 {
     framesSent: 0,
     framesDropped: 0,
     backoffEvents: 0,
-    emissionErrors: 0
+    emissionErrors: 0,
+    rateLimitEvents: 0
   };
   
   private tickInterval?: NodeJS.Timeout;
@@ -99,11 +105,13 @@ export class PushOrchestratorV2 {
     }
 
     const buffer = new RingBuffer<AnyPushFrame>(this.config.frameCapacityPerConnection);
+    const rateLimiter = new TokenBucket(this.config.tokenBucket);
     const now = Date.now();
     
     this.connections.set(connectionId, {
       adapter,
       buffer,
+      rateLimiter,
       backoffMs: 0,
       lastFlushTime: now,
       nextFlushTime: now
@@ -192,7 +200,7 @@ export class PushOrchestratorV2 {
     }
   }
 
-  private async flushConnection(_connectionId: string, state: ConnectionState, now: number): Promise<number> {
+  private async flushConnection(connectionId: string, state: ConnectionState, now: number): Promise<number> {
     if (now < state.nextFlushTime || state.buffer.isEmpty()) {
       return 0;
     }
@@ -200,6 +208,13 @@ export class PushOrchestratorV2 {
     let framesSent = 0;
     let shouldBackoff = false;
     while (!state.buffer.isEmpty() && framesSent < this.config.maxFramesPerTick) {
+      // Rate limiting check - consume token before sending
+      if (!state.rateLimiter.consume()) {
+        console.warn(`[PushOrchestratorV2] Rate limit exceeded for connection ${connectionId}`);
+        this.metrics.rateLimitEvents++;
+        break; // Skip this connection's remaining frames for this tick
+      }
+
       const frame = state.buffer.dequeue();
       if (!frame) break;
 
@@ -259,13 +274,14 @@ export class PushOrchestratorV2 {
     };
   }
 
-  getConnectionStats(): Array<{ id: string; bufferStats: any; backoffMs: number }> {
+  getConnectionStats(): Array<{ id: string; bufferStats: any; backoffMs: number; tokens: number }> {
     const stats = [];
     for (const [id, state] of this.connections) {
       stats.push({
         id,
         bufferStats: state.buffer.getStats(),
-        backoffMs: state.backoffMs
+        backoffMs: state.backoffMs,
+        tokens: state.rateLimiter.getTokens()
       });
     }
     return stats;

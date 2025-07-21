@@ -99,8 +99,12 @@ class EmitterRegistryImpl {
     return entry?.emitter as PushEmitter<T> | undefined;
   }
 
-  // Get all emitters
+  // Get all emitters (auto-seals on first access)
   getAll(): ReadonlyArray<PushEmitter<AnyPushFrame>> {
+    if (!this.sealed) {
+      console.warn('[Registry] Auto-sealing registry on first access');
+      this.seal();
+    }
     return Array.from(this.emitters.values()).map(entry => entry.emitter as PushEmitter<AnyPushFrame>);
   }
 
