@@ -17,7 +17,7 @@
         "README.md"
     ],
     "scripts": {
-        "build": "npm run clean && tsc",
+        "build": "npm run clean && npm run verify:api && tsc",
         "clean": "rm -rf dist",
         "dev": "tsc --watch",
         "test": "vitest run",
@@ -29,10 +29,11 @@
         "format": "prettier --write \"src/**/*.ts\"",
         "format:check": "prettier --check \"src/**/*.ts\"",
         "typecheck": "tsc --noEmit",
-        "check-barrel": "node scripts/check-barrel-exports.js",
+        "check-exports": "node scripts/digest/check-export-allowlist.js",
+        "verify:api": "npx tsx scripts/digest/verify-api-surface.ts",
         "digest": "npx tsx scripts/digest/generate-digest.ts",
         "domain-snapshot": "npx tsx scripts/digest/generate-domain-snapshot.ts",
-        "prepublishOnly": "npm run build"
+        "prepublishOnly": "npm run verify:api && npm run build"
     },
     "keywords": [
         "edge",
