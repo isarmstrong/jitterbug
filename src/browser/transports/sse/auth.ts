@@ -5,13 +5,14 @@
 
 import type { LiveFilterSpec } from './filter-spec';
 
-export interface AuthResult {
+// Internal types - not exported to avoid public surface bloat
+interface AuthResult {
   ok: boolean;
   userId?: string;
   reason?: string;
 }
 
-export interface AuthRequest {
+interface AuthRequest {
   headers: Record<string, string>;
   method: string;
   url: string;
