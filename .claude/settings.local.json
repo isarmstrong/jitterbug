@@ -45,7 +45,9 @@
       "Bash(pnpm test:*)",
       "Bash(npx @isarmstrong/digest@latest:*)",
       "Bash(cat:*)",
-      "Bash(pnpm tsc:*)"
+      "Bash(pnpm tsc:*)",
+      "Bash(npm test -- --reporter=verbose --run src/browser/__tests__/sse-transport.test.ts -t \"P4.2-c.2\")",
+      "Bash(pnpm run:*)"
     ],
     "deny": []
   },
