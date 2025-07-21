@@ -27,6 +27,7 @@
         "format": "prettier --write \"src/**/*.ts\"",
         "format:check": "prettier --check \"src/**/*.ts\"",
         "typecheck": "tsc --noEmit",
+        "check-barrel": "node scripts/check-barrel-exports.js",
         "digest": "npx tsx scripts/digest/generate-digest.ts",
         "domain-snapshot": "npx tsx scripts/digest/generate-domain-snapshot.ts",
         "prepublishOnly": "npm run build"
