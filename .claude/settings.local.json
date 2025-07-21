@@ -48,7 +48,8 @@
       "Bash(pnpm tsc:*)",
       "Bash(npm test -- --reporter=verbose --run src/browser/__tests__/sse-transport.test.ts -t \"P4.2-c.2\")",
       "Bash(pnpm run:*)",
-      "Bash(npx playwright test:*)"
+      "Bash(npx playwright test:*)",
+      "Bash(npx eslint:*)"
     ],
     "deny": []
   },
