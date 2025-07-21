@@ -19,6 +19,10 @@ export interface PushOrchestratorConfig {
   readonly gracefulShutdownTimeoutMs?: number;
 }
 
+// P4.3: Runtime safety constants
+const MIN_INTERVAL_MS = 1_000; // Minimum 1 second to prevent DoS
+const MAX_INTERVAL_MS = 24 * 60 * 60 * 1_000; // Maximum 24 hours
+
 export const DEFAULT_PUSH_SCHEDULES: PushSchedule[] = [
   { emitterType: 'heartbeat', intervalMs: 10_000, immediate: true },
   { emitterType: 'telemetry', intervalMs: 30_000, immediate: false },
@@ -66,7 +70,14 @@ export class PushOrchestrator {
   }
 
   private startScheduledEmitter(schedule: PushSchedule): void {
-    const { emitterType, intervalMs, immediate } = schedule;
+    const { emitterType, immediate } = schedule;
+    
+    // P4.3: Clamp interval to safe range (DoS prevention)
+    const intervalMs = Math.max(MIN_INTERVAL_MS, Math.min(MAX_INTERVAL_MS, schedule.intervalMs));
+    
+    if (intervalMs !== schedule.intervalMs) {
+      console.warn(`Clamped ${emitterType} interval from ${schedule.intervalMs}ms to ${intervalMs}ms for safety`);
+    }
 
     if (!this.registry.hasEmitter(emitterType)) {
       console.warn(`Emitter type '${emitterType}' not found in registry, skipping schedule`);

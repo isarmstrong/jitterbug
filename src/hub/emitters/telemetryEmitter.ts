@@ -23,12 +23,14 @@ export interface TelemetryConfig {
   readonly collectCpuMetrics: boolean;
   readonly collectMemoryMetrics: boolean;
   readonly includeProcessInfo: boolean;
+  readonly privacySafeMode: boolean; // P4.3: Prevent leaking local machine stats
 }
 
 export const DEFAULT_TELEMETRY_CONFIG: TelemetryConfig = {
   collectCpuMetrics: true,
   collectMemoryMetrics: true,
-  includeProcessInfo: false
+  includeProcessInfo: false,
+  privacySafeMode: true // P4.3: Default to privacy-safe mode
 } as const;
 
 export async function emitTelemetryUpdate(
@@ -37,11 +39,19 @@ export async function emitTelemetryUpdate(
 ): Promise<void> {
   const memUsage = process.memoryUsage();
   
+  // P4.3: Privacy-safe metrics to prevent leaking local machine stats
+  const rawMemoryMB = Math.round(memUsage.rss / 1024 / 1024);
+  const rawCpuUsage = config.collectCpuMetrics ? await getCpuUsage() : 0;
+  
   const metrics: TelemetryMetrics = {
     timestamp: Date.now(),
     system: {
-      memoryUsage: Math.round(memUsage.rss / 1024 / 1024),
-      cpuUsage: config.collectCpuMetrics ? await getCpuUsage() : 0,
+      memoryUsage: config.privacySafeMode 
+        ? Math.min(100, Math.round(rawMemoryMB / 10)) // Normalized 0-100 range
+        : rawMemoryMB,
+      cpuUsage: config.privacySafeMode
+        ? Math.round(rawCpuUsage / 10) * 10 // Rounded to nearest 10%
+        : rawCpuUsage,
       uptime: Math.round(process.uptime())
     },
     application: {
