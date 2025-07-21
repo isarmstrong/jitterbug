@@ -1183,6 +1183,145 @@ export const eventSchemas = {
     },
     level: 'debug' as const,
     description: 'SSE filter successfully applied'
+  },
+
+  // P4.4-b-1 SSE signature verification events
+  'orchestrator.sse.signature.verified': {
+    validate: (payload: unknown): { clientId: string; kid: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        clientId: validateString(p.clientId, 'clientId'),
+        kid: validateString(p.kid, 'kid')
+      };
+    },
+    level: 'debug' as const,
+    description: 'SSE frame signature successfully verified'
+  },
+
+  'orchestrator.sse.signature.invalid': {
+    validate: (payload: unknown): { clientId: string; kid: string; error: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        clientId: validateString(p.clientId, 'clientId'),
+        kid: validateString(p.kid, 'kid'),
+        error: validateString(p.error, 'error')
+      };
+    },
+    level: 'warn' as const,
+    description: 'SSE frame signature verification failed'
+  },
+
+  'orchestrator.sse.signature.key_missing': {
+    validate: (payload: unknown): { clientId: string; kid: string; error: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        clientId: validateString(p.clientId, 'clientId'),
+        kid: validateString(p.kid, 'kid'),
+        error: validateString(p.error, 'error')
+      };
+    },
+    level: 'error' as const,
+    description: 'SSE frame signature verification failed due to missing key'
+  },
+
+  // P4.4-b-1 SSE client connection events
+  'orchestrator.sse.client.connecting': {
+    validate: (payload: unknown): { url: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        url: validateString(p.url, 'url')
+      };
+    },
+    level: 'debug' as const,
+    description: 'SSE client attempting to connect'
+  },
+
+  'orchestrator.sse.client.connected': {
+    validate: (payload: unknown): { url: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        url: validateString(p.url, 'url')
+      };
+    },
+    level: 'info' as const,
+    description: 'SSE client successfully connected'
+  },
+
+  'orchestrator.sse.client.error': {
+    validate: (payload: unknown): { error: string; readyState?: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        error: validateString(p.error, 'error'),
+        readyState: p.readyState !== undefined ? validateNumber(p.readyState, 'readyState') : undefined
+      };
+    },
+    level: 'warn' as const,
+    description: 'SSE client connection error'
+  },
+
+  'orchestrator.sse.client.reconnecting': {
+    validate: (payload: unknown): { attempt: number; delayMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        attempt: validateNumber(p.attempt, 'attempt'),
+        delayMs: validateNumber(p.delayMs, 'delayMs')
+      };
+    },
+    level: 'info' as const,
+    description: 'SSE client attempting reconnection'
+  },
+
+  'orchestrator.sse.client.failed': {
+    validate: (payload: unknown): { attempts: number; maxAttempts: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        attempts: validateNumber(p.attempts, 'attempts'),
+        maxAttempts: validateNumber(p.maxAttempts, 'maxAttempts')
+      };
+    },
+    level: 'error' as const,
+    description: 'SSE client connection permanently failed'
+  },
+
+  // P4.4-b-1 Push frame events
+  'orchestrator.push.frame.received': {
+    validate: (payload: unknown): { type: string; timestamp: number; source: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        type: validateString(p.type, 'type'),
+        timestamp: validateNumber(p.timestamp, 'timestamp'),
+        source: validateString(p.source, 'source')
+      };
+    },
+    level: 'debug' as const,
+    description: 'Push frame successfully received and processed'
   }
 } as const;
 
