@@ -1,8 +1,13 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('P4.2-c.6: Authentication E2E', () => {
+  test.beforeEach(async () => {
+    // Reset mock server state before each test
+    await fetch('http://localhost:5177/reset', { method: 'POST' });
+  });
+
   test('auth failure shows login overlay', async ({ page }) => {
-    await page.goto('http://localhost:5173');
+    await page.goto('http://localhost:5173/dev-server.html');
     
     await page.waitForFunction(() => 
       typeof window.jitterbug !== 'undefined' && 
@@ -44,7 +49,7 @@ test.describe('P4.2-c.6: Authentication E2E', () => {
   });
 
   test('successful auth allows filter updates', async ({ page }) => {
-    await page.goto('http://localhost:5173');
+    await page.goto('http://localhost:5173/dev-server.html');
     
     await page.waitForFunction(() => 
       typeof window.jitterbug !== 'undefined' && 

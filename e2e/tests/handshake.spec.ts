@@ -1,9 +1,14 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('P4.2-c.6: SSE handshake E2E', () => {
+  test.beforeEach(async () => {
+    // Reset mock server state before each test
+    await fetch('http://localhost:5177/reset', { method: 'POST' });
+  });
+
   test('live-filter handshake happy path', async ({ page }) => {
     // Navigate to development server
-    await page.goto('http://localhost:5173');
+    await page.goto('http://localhost:5173/dev-server.html');
     
     // Wait for Jitterbug to be available
     await page.waitForFunction(() => 
@@ -43,7 +48,7 @@ test.describe('P4.2-c.6: SSE handshake E2E', () => {
   });
 
   test('connection cleanup on tab close', async ({ page }) => {
-    await page.goto('http://localhost:5173');
+    await page.goto('http://localhost:5173/dev-server.html');
     
     await page.waitForFunction(() => 
       typeof window.jitterbug !== 'undefined'

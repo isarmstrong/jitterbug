@@ -1,7 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-  testDir: './e2e/tests',
+  testDir: './tests',
+  testMatch: /.*\.spec\.ts$/,
+  testIgnore: ['**/node_modules/**', '../src/**'],
+  timeout: 30_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -25,11 +28,11 @@ export default defineConfig({
     },
   ],
 
-  globalSetup: require.resolve('./fixtures/global-setup.ts'),
-  globalTeardown: require.resolve('./fixtures/global-teardown.ts'),
+  globalSetup: './fixtures/global-setup.ts',
+  globalTeardown: './fixtures/global-teardown.ts',
 
   webServer: {
-    command: 'pnpm dev',
+    command: 'npx http-server ./fixtures -p 5173 --cors',
     port: 5173,
     reuseExistingServer: !process.env.CI,
   },

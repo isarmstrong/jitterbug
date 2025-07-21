@@ -28,8 +28,7 @@ interface FilterErrorMessage {
   reason: string;
 }
 
-let updateCount = 0;
-let lastUpdateTime = 0;
+const rateLimitState = new Map<string, { count: number; lastUpdate: number }>();
 const RATE_LIMIT_WINDOW_MS = 5000;
 const RATE_LIMIT_MAX = 3;
 
@@ -72,6 +71,12 @@ export async function startMockHub(port = 5177): Promise<() => Promise<void>> {
     });
   });
 
+  // Reset endpoint for clearing state between tests
+  app.post('/reset', (req, res) => {
+    rateLimitState.clear();
+    res.json({ status: 'reset' });
+  });
+
   // Filter control endpoint
   app.post('/control', (req, res) => {
     const message = req.body as FilterUpdateMessage;
@@ -85,16 +90,21 @@ export async function startMockHub(port = 5177): Promise<() => Promise<void>> {
       return;
     }
 
-    // Rate limiting logic
+    // Rate limiting logic (per client/tag to avoid cross-test contamination)
+    const clientKey = req.ip || 'default';
     const now = Date.now();
-    if (now - lastUpdateTime < RATE_LIMIT_WINDOW_MS) {
-      updateCount++;
+    const state = rateLimitState.get(clientKey) || { count: 0, lastUpdate: 0 };
+    
+    if (now - state.lastUpdate < RATE_LIMIT_WINDOW_MS) {
+      state.count++;
     } else {
-      updateCount = 1;
-      lastUpdateTime = now;
+      state.count = 1;
+      state.lastUpdate = now;
     }
+    
+    rateLimitState.set(clientKey, state);
 
-    if (updateCount > RATE_LIMIT_MAX) {
+    if (state.count > RATE_LIMIT_MAX) {
       res.status(429).json({
         type: 'filter:error',
         tag: message.tag,
