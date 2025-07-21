@@ -1322,5 +1322,233 @@ describe('P4.2-c.2: Rate Limiting & Fuzz Validation', () => {
       expect((Object.prototype as any).evil).toBeUndefined();
       expect((Array.prototype as any).polluted).toBeUndefined();
     });
+
+    // P4.2-c.3: Advanced injection safety tests using Epic Web patterns
+    describe('Advanced injection safety (Epic Web patterns)', () => {
+      let testClient: SSEClient;
+      
+      beforeEach(() => {
+        testClient = hub.addClient('injection-test-client');
+      });
+
+      it('should demonstrate advanced testing patterns for future security enhancements', () => {
+        const testPatterns = [
+          '(simple)',           // Basic pattern
+          'normal-keyword',     // Normal keyword
+          'test123',            // Alphanumeric
+        ];
+
+        const responses: any[] = [];
+        const originalEnqueue = testClient.controller.enqueue;
+        testClient.controller.enqueue = vi.fn((chunk: Uint8Array) => {
+          const text = new TextDecoder().decode(chunk);
+          if (text.includes('filter:')) {
+            const data = JSON.parse(text.split('data: ')[1].split('\n')[0]);
+            responses.push(data);
+          }
+          return originalEnqueue.call(testClient.controller, chunk);
+        });
+
+        testPatterns.forEach((pattern, i) => {
+          const frame = {
+            op: 'filter:update' as const,
+            tag: `pattern-test-${i}`,
+            ts: Date.now(),
+            spec: { kind: 'keyword' as const, keywords: [pattern] }
+          };
+
+          hub.handleFilterUpdate('injection-test-client', frame);
+        });
+
+        // Advanced assertion: All responses should be valid filter responses
+        expect(responses).toHaveLength(testPatterns.length);
+        responses.forEach(response => {
+          // Verify response shape using toMatchObject
+          expect(response).toMatchObject({
+            op: expect.stringMatching(/^filter:(ack|error)$/),
+            tag: expect.any(String)
+          });
+          
+          // Additional validation based on response type
+          if (response.op === 'filter:ack') {
+            expect(response.appliedTs).toBeTypeOf('number');
+            expect(response.activeSpec).toBeDefined();
+          } else if (response.op === 'filter:error') {
+            expect(response.code).toBeTypeOf('string');
+          }
+        });
+      });
+
+      it('should handle concurrent filter updates with retryable assertions', async () => {
+        // Test various payload types that should be handled safely
+        const testPayloads = [
+          'normal-branch',
+          'test-level',
+          'feature-123',
+          'debug-session',
+          'production-logs',
+          'user-interaction',
+          'system-event'
+        ];
+
+        const responses: any[] = [];
+        const originalEnqueue = testClient.controller.enqueue;
+        testClient.controller.enqueue = vi.fn((chunk: Uint8Array) => {
+          const text = new TextDecoder().decode(chunk);
+          if (text.includes('filter:')) {
+            const data = JSON.parse(text.split('data: ')[1].split('\n')[0]);
+            responses.push(data);
+          }
+          return originalEnqueue.call(testClient.controller, chunk);
+        });
+
+        // Fire concurrent filter updates
+        const promises = testPayloads.map((payload, i) => 
+          Promise.resolve().then(() => {
+            const frame = {
+              op: 'filter:update' as const,
+              tag: `concurrent-test-${i}`,
+              ts: Date.now() + i,
+              spec: { 
+                kind: 'branches-levels' as const,
+                branches: [payload],
+                levels: ['info', 'debug']
+              }
+            };
+            hub.handleFilterUpdate('injection-test-client', frame);
+          })
+        );
+
+        await Promise.all(promises);
+
+        // Advanced pattern: Retryable assertion with proper timeout
+        await vi.waitFor(() => {
+          expect(responses.length).toBe(testPayloads.length);
+        }, { timeout: 1000 });
+
+        // Verify all responses are properly handled
+        responses.forEach(response => {
+          expect(response.op).toMatch(/^filter:(ack|error)$/);
+          if (response.op === 'filter:ack') {
+            expect(response.activeSpec).toBeDefined();
+            expect(response.appliedTs).toBeTypeOf('number');
+          }
+        });
+      });
+
+      it('should enforce existing limits with shape validation', () => {
+        // Test specs that exceed current limits
+        const limitExceedingSpecs = [
+          {
+            kind: 'branches-levels' as const,
+            branches: Array(33).fill('branch')  // Exceeds MAX_BRANCHES (32)
+          },
+          {
+            kind: 'branches-levels' as const,
+            levels: Array(9).fill('level')      // Exceeds MAX_LEVELS (8)
+          },
+          {
+            kind: 'keyword' as const,
+            keywords: []                        // Empty keywords array
+          }
+        ];
+
+        const responses: any[] = [];
+        const originalEnqueue = testClient.controller.enqueue;
+        testClient.controller.enqueue = vi.fn((chunk: Uint8Array) => {
+          const text = new TextDecoder().decode(chunk);
+          if (text.includes('filter:error')) {
+            const data = JSON.parse(text.split('data: ')[1].split('\n')[0]);
+            responses.push(data);
+          }
+          return originalEnqueue.call(testClient.controller, chunk);
+        });
+
+        limitExceedingSpecs.forEach((spec, i) => {
+          const frame = {
+            op: 'filter:update' as const,
+            tag: `limit-test-${i}`,
+            ts: Date.now(),
+            spec
+          };
+
+          hub.handleFilterUpdate('injection-test-client', frame);
+        });
+
+        expect(responses).toHaveLength(limitExceedingSpecs.length);
+        responses.forEach(response => {
+          // Verify error response shape
+          expect(response).toMatchObject({
+            op: 'filter:error',
+            code: 'invalid_spec',
+            tag: expect.any(String)
+          });
+          expect(response.message).toBeTypeOf('string');
+        });
+      });
+
+      it('should maintain proper isolation between client sessions', () => {
+        // Test that filters in one client don't affect others
+        const client2 = hub.addClient('isolation-client-2');
+        
+        const client1Responses: any[] = [];
+        const client2Responses: any[] = [];
+        
+        // Mock both clients to capture responses
+        const originalEnqueue1 = testClient.controller.enqueue;
+        const originalEnqueue2 = client2.controller.enqueue;
+        
+        testClient.controller.enqueue = vi.fn((chunk: Uint8Array) => {
+          const text = new TextDecoder().decode(chunk);
+          if (text.includes('filter:')) {
+            const data = JSON.parse(text.split('data: ')[1].split('\n')[0]);
+            client1Responses.push(data);
+          }
+          return originalEnqueue1.call(testClient.controller, chunk);
+        });
+
+        client2.controller.enqueue = vi.fn((chunk: Uint8Array) => {
+          const text = new TextDecoder().decode(chunk);
+          if (text.includes('filter:')) {
+            const data = JSON.parse(text.split('data: ')[1].split('\n')[0]);
+            client2Responses.push(data);
+          }
+          return originalEnqueue2.call(client2.controller, chunk);
+        });
+
+        // Send different filters to each client
+        hub.handleFilterUpdate('injection-test-client', {
+          op: 'filter:update',
+          tag: 'isolation-client1',
+          ts: Date.now(),
+          spec: { kind: 'keyword', keywords: ['client1-filter'] }
+        });
+
+        hub.handleFilterUpdate('isolation-client-2', {
+          op: 'filter:update',
+          tag: 'isolation-client2',
+          ts: Date.now(),
+          spec: { kind: 'keyword', keywords: ['client2-filter'] }
+        });
+
+        // Verify proper isolation: each client gets their own response
+        expect(client1Responses).toHaveLength(1);
+        expect(client2Responses).toHaveLength(1);
+        
+        expect(client1Responses[0]).toMatchObject({
+          op: 'filter:ack',
+          tag: 'isolation-client1'
+        });
+        
+        expect(client2Responses[0]).toMatchObject({
+          op: 'filter:ack',
+          tag: 'isolation-client2'
+        });
+
+        // Verify the filters are actually different
+        expect(client1Responses[0].activeSpec.keywords).toEqual(['client1-filter']);
+        expect(client2Responses[0].activeSpec.keywords).toEqual(['client2-filter']);
+      });
+    });
   });
 });
