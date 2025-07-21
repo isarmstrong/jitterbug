@@ -78,7 +78,7 @@ export class PushOrchestratorV2 {
     
     // Initialize HMAC signer if enabled
     if (this.config.security.frameHmac.enabled) {
-      const { keyId, secret, algorithm, clockSkewToleranceMs } = this.config.security.frameHmac;
+      const { keyId, secret, algorithm, clockSkewToleranceMs, replayWindowMs } = this.config.security.frameHmac;
       
       if (!keyId || !secret) {
         throw new Error('HMAC enabled but missing keyId or secret');
@@ -88,7 +88,8 @@ export class PushOrchestratorV2 {
         keyId,
         secret,
         algorithm: algorithm || 'sha256',
-        clockSkewToleranceMs: clockSkewToleranceMs || 10_000
+        clockSkewToleranceMs: clockSkewToleranceMs || 5_000,
+        replayWindowMs: replayWindowMs || 10_000
       });
       
       console.log(`[PushOrchestratorV2] Frame HMAC enabled with key ${keyId}`);

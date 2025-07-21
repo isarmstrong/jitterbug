@@ -23,16 +23,18 @@ export interface HmacConfig {
   secret: Uint8Array;
   algorithm: 'sha256' | 'sha512';
   clockSkewToleranceMs: number;
+  replayWindowMs: number;
 }
 
 /** @internal - Example only, do not use in production */
 export const DEFAULT_HMAC_CONFIG: Partial<HmacConfig> = {
-  algorithm: 'sha256',
-  clockSkewToleranceMs: 10_000 // ±10 seconds
+  algorithm: 'sha256', // Secure default - SHA-256 minimum
+  clockSkewToleranceMs: 5_000, // ±5 seconds for clock skew
+  replayWindowMs: 10_000 // 10 seconds replay protection window
 };
 
 export function createHmacSigner(config: HmacConfig): FrameSigner & FrameVerifier {
-  const { keyId, secret, algorithm, clockSkewToleranceMs } = {
+  const { keyId, secret, algorithm, clockSkewToleranceMs, replayWindowMs } = {
     ...DEFAULT_HMAC_CONFIG,
     ...config
   };
@@ -41,9 +43,12 @@ export function createHmacSigner(config: HmacConfig): FrameSigner & FrameVerifie
     const ts = Date.now();
     const nonce = randomBytes(12).toString('base64url');
     
-    // Create canonical message for signing: kid|ts|nonce|payload
+    // Map algorithm to standard identifier
+    const algId = algorithm === 'sha256' ? 'HS256' : 'HS512';
+    
+    // Create canonical message for signing: kid|ts|nonce|alg|payload
     const payloadJson = JSON.stringify(frame);
-    const message = `${keyId}|${ts}|${nonce}|${payloadJson}`;
+    const message = `${keyId}|${ts}|${nonce}|${algId}|${payloadJson}`;
     
     // Generate HMAC signature
     const hmac = createHmac(algorithm, secret);
@@ -54,6 +59,7 @@ export function createHmacSigner(config: HmacConfig): FrameSigner & FrameVerifie
       kid: keyId,
       ts,
       nonce,
+      alg: algId,
       payload: frame,
       sig
     };
@@ -77,6 +83,9 @@ export function createHmacSigner(config: HmacConfig): FrameSigner & FrameVerifie
     if (typeof frame.nonce !== 'string') {
       throw new Error('Invalid frame: missing or invalid nonce');
     }
+    if (typeof frame.alg !== 'string') {
+      throw new Error('Invalid frame: missing or invalid alg');
+    }
     if (typeof frame.sig !== 'string') {
       throw new Error('Invalid frame: missing or invalid sig');
     }
@@ -88,24 +97,34 @@ export function createHmacSigner(config: HmacConfig): FrameSigner & FrameVerifie
     if (frame.kid !== keyId) {
       throw new Error(`Invalid frame: unknown key ID ${frame.kid}`);
     }
+    
+    // Algorithm validation
+    const expectedAlg = algorithm === 'sha256' ? 'HS256' : 'HS512';
+    if (frame.alg !== expectedAlg) {
+      throw new Error(`Invalid frame: unsupported algorithm ${frame.alg}, expected ${expectedAlg}`);
+    }
 
-    // Enhanced timestamp validation with replay protection
+    // Enhanced timestamp validation with separate windows
     const now = Date.now();
     
-    // Replay window enforcement - reject frames older than tolerance
-    if (frame.ts < (now - clockSkewToleranceMs)) {
+    // Primary replay window enforcement - reject very old frames
+    if (frame.ts < (now - replayWindowMs)) {
       throw new Error(`Invalid frame: timestamp ${frame.ts} too old (replay protection)`);
     }
     
-    // Clock skew validation - reject frames too far in future/past
-    const timeDiff = Math.abs(now - frame.ts);
-    if (timeDiff > clockSkewToleranceMs) {
-      throw new Error(`Invalid frame: timestamp skew ${timeDiff}ms exceeds tolerance ${clockSkewToleranceMs}ms`);
+    // Future clock skew validation - reject frames too far in future
+    if (frame.ts > (now + clockSkewToleranceMs)) {
+      throw new Error(`Invalid frame: timestamp ${frame.ts} too far in future (clock skew)`);
+    }
+    
+    // Past clock skew validation - reject frames with excessive past skew (within replay window)
+    if (frame.ts < (now - clockSkewToleranceMs) && frame.ts >= (now - replayWindowMs)) {
+      throw new Error(`Invalid frame: timestamp ${frame.ts} too far in past (clock skew)`);
     }
 
     // Signature verification
     const payloadJson = JSON.stringify(frame.payload);
-    const message = `${frame.kid}|${frame.ts}|${frame.nonce}|${payloadJson}`;
+    const message = `${frame.kid}|${frame.ts}|${frame.nonce}|${frame.alg}|${payloadJson}`;
     
     const hmac = createHmac(algorithm, secret);
     hmac.update(message, 'utf8');
@@ -125,6 +144,7 @@ export function createHmacSigner(config: HmacConfig): FrameSigner & FrameVerifie
  */
 export function parseHmacKeys(envValue: string): Map<string, Uint8Array> {
   const keys = new Map<string, Uint8Array>();
+  const seenKeyIds = new Set<string>();
   
   if (!envValue.trim()) {
     return keys;
@@ -135,6 +155,17 @@ export function parseHmacKeys(envValue: string): Map<string, Uint8Array> {
     if (!keyId || !secretB64) {
       throw new Error(`Invalid HMAC key format: ${keyPair}`);
     }
+    
+    // Validate key ID format: alphanumeric, underscore, dash, 4-32 chars
+    if (!/^[A-Za-z0-9_-]{4,32}$/.test(keyId)) {
+      throw new Error(`Invalid key ID "${keyId}": must be 4-32 alphanumeric/underscore/dash characters`);
+    }
+    
+    // Check for duplicate key IDs
+    if (seenKeyIds.has(keyId)) {
+      throw new Error(`Duplicate key ID: ${keyId}`);
+    }
+    seenKeyIds.add(keyId);
     
     try {
       const secret = Buffer.from(secretB64, 'base64');

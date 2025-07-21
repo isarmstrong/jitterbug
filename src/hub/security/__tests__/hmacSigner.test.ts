@@ -7,6 +7,22 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createHmacSigner, parseHmacKeys } from '../_internal/hmac.js';
 import type { AnyPushFrame } from '../../emitters/registry.js';
 
+/**
+ * Test helper for mocking system clock during tests
+ * Prevents global clock mutations and provides clean scoping
+ */
+function withMockClock<T>(fixedTime: number, testFn: () => T): T {
+  const originalDateNow = Date.now;
+  try {
+    vi.useFakeTimers();
+    vi.setSystemTime(fixedTime);
+    return testFn();
+  } finally {
+    vi.useRealTimers();
+    Date.now = originalDateNow;
+  }
+}
+
 describe('HMAC Signer - P4.4-a', () => {
   const testSecret = new Uint8Array(32).fill(0x42); // 32-byte test key
   const testKeyId = 'test-key-001';
@@ -18,7 +34,8 @@ describe('HMAC Signer - P4.4-a', () => {
       keyId: testKeyId,
       secret: testSecret,
       algorithm: 'sha256',
-      clockSkewToleranceMs: 10_000
+      clockSkewToleranceMs: 5_000,
+      replayWindowMs: 10_000
     });
   });
 
@@ -31,6 +48,7 @@ describe('HMAC Signer - P4.4-a', () => {
       expect(signed.kid).toBe(testKeyId);
       expect(signed.ts).toBeGreaterThan(Date.now() - 1000);
       expect(signed.nonce).toHaveLength(16); // base64url of 12 bytes
+      expect(signed.alg).toBe('HS256'); // Algorithm field verification
       expect(signed.payload).toEqual(frame);
       expect(signed.sig).toMatch(/^[A-Za-z0-9_-]+$/); // base64url pattern
     });
@@ -96,36 +114,61 @@ describe('HMAC Signer - P4.4-a', () => {
       expect(() => signer.verify(wrongKey)).toThrow('unknown key ID');
     });
 
-    it('should reject frames with clock skew (future)', () => {
-      const now = Date.now();
-      const frame: AnyPushFrame = { t: 'hb', ts: now };
+    it('should reject frames with excessive future clock skew', () => {
+      const baseTime = Date.now();
       
-      // Create frame in the "future" relative to verification time
-      vi.setSystemTime(now + 15_000);
-      const signed = signer.sign(frame);
+      // Create a frame manually with future timestamp (beyond clock skew tolerance)
+      const futureTime = baseTime + 6_000; // 6s future > 5s tolerance
+      const frame: AnyPushFrame = { t: 'hb', ts: futureTime };
       
-      // Verify from "past" perspective (15s difference = skew)
-      vi.setSystemTime(now);
+      let signed: any;
+      withMockClock(futureTime, () => {
+        signed = signer.sign(frame);
+      });
       
-      expect(() => signer.verify(signed)).toThrow('timestamp skew');
-      
-      vi.useRealTimers();
+      // Verify from "current" time perspective (6s in past relative to signed frame)
+      withMockClock(baseTime, () => {
+        expect(() => signer.verify(signed)).toThrow('too far in future (clock skew)');
+      });
     });
 
     it('should reject old frames (replay protection)', () => {
-      const now = Date.now();
-      const frame: AnyPushFrame = { t: 'hb', ts: now };
+      const baseTime = Date.now();
       
-      // Create frame at specific time
-      vi.setSystemTime(now);
-      const signed = signer.sign(frame);
+      withMockClock(baseTime, () => {
+        const frame: AnyPushFrame = { t: 'hb', ts: baseTime };
+        const signed = signer.sign(frame);
+        
+        // Move 15s into future (beyond 10s replay window)
+        withMockClock(baseTime + 15_000, () => {
+          expect(() => signer.verify(signed)).toThrow('too old (replay protection)');
+        });
+      });
+    });
+
+    it('should properly separate clock skew and replay windows', () => {
+      const baseTime = Date.now();
       
-      // Move far into future to trigger replay protection
-      vi.setSystemTime(now + 25_000); // Well beyond 10s tolerance
-      
-      expect(() => signer.verify(signed)).toThrow('too old (replay protection)');
-      
-      vi.useRealTimers();
+      withMockClock(baseTime, () => {
+        // Frame signed at baseTime should be valid within skew window (±5s)
+        const frame: AnyPushFrame = { t: 'hb', ts: baseTime };
+        const signed = signer.sign(frame);
+        
+        // 4s in past: should pass both checks
+        withMockClock(baseTime + 4_000, () => {
+          expect(() => signer.verify(signed)).not.toThrow();
+        });
+        
+        // 7s in past: should fail clock skew but would pass replay check
+        withMockClock(baseTime + 7_000, () => {
+          expect(() => signer.verify(signed)).toThrow('too far in past (clock skew)');
+        });
+        
+        // 12s in past: should fail replay protection
+        withMockClock(baseTime + 12_000, () => {
+          expect(() => signer.verify(signed)).toThrow('too old (replay protection)');
+        });
+      });
     });
 
     it('should reject malformed frames', () => {
@@ -201,6 +244,29 @@ describe('HMAC Signer - P4.4-a', () => {
     it('should handle empty key string', () => {
       const keys = parseHmacKeys('');
       expect(keys.size).toBe(0);
+    });
+
+    it('should validate key ID format with regex', () => {
+      const validSecret = Buffer.from(new Uint8Array(32).fill(0x42)).toString('base64');
+      
+      // Valid key IDs
+      expect(() => parseHmacKeys(`key1:${validSecret}`)).not.toThrow();
+      expect(() => parseHmacKeys(`key_2:${validSecret}`)).not.toThrow();
+      expect(() => parseHmacKeys(`key-3:${validSecret}`)).not.toThrow();
+      expect(() => parseHmacKeys(`abCD1234_-:${validSecret}`)).not.toThrow();
+      
+      // Invalid key IDs
+      expect(() => parseHmacKeys(`abc:${validSecret}`)).toThrow('must be 4-32 alphanumeric'); // too short
+      expect(() => parseHmacKeys(`key@id:${validSecret}`)).toThrow('must be 4-32 alphanumeric'); // invalid char
+      expect(() => parseHmacKeys(`key id:${validSecret}`)).toThrow('must be 4-32 alphanumeric'); // space
+      expect(() => parseHmacKeys(`key.id:${validSecret}`)).toThrow('must be 4-32 alphanumeric'); // period
+    });
+
+    it('should detect duplicate key IDs', () => {
+      const secret1 = Buffer.from(new Uint8Array(32).fill(0x11)).toString('base64');
+      const secret2 = Buffer.from(new Uint8Array(32).fill(0x22)).toString('base64');
+      
+      expect(() => parseHmacKeys(`key1:${secret1},key1:${secret2}`)).toThrow('Duplicate key ID: key1');
     });
   });
 });

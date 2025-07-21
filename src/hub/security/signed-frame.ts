@@ -9,6 +9,7 @@ export interface SignedPushFrame {
   readonly kid: string;          // Key ID for signature verification
   readonly ts: number;           // Unix timestamp (ms) - replay protection
   readonly nonce: string;        // Base64url-encoded 96-bit random nonce
+  readonly alg: string;          // Algorithm identifier (e.g., "HS256", "HS512")
   readonly payload: AnyPushFrame; // Original push frame
   readonly sig: string;          // Base64url-encoded HMAC signature
 }
@@ -21,6 +22,7 @@ export interface SecurityConfig {
     secret?: Uint8Array;
     algorithm?: 'sha256' | 'sha512';
     clockSkewToleranceMs?: number;
+    replayWindowMs?: number;
   };
 }
 
@@ -29,7 +31,8 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
   frameHmac: {
     enabled: false,
     algorithm: 'sha256',
-    clockSkewToleranceMs: 10_000
+    clockSkewToleranceMs: 5_000,
+    replayWindowMs: 10_000
   }
 };
 
