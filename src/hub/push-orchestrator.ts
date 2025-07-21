@@ -43,6 +43,13 @@ export class PushOrchestrator {
   private readonly hubContext: HubContext;
   private isRunning = false;
 
+  // RT-7: Internal warning utility (low priority - infrastructure warnings)
+  private logWarning(message: string, data?: unknown): void {
+    // For hub infrastructure, console.warn is still appropriate
+    // Future enhancement: could emit to hubContext if structured events are needed
+    console.warn(`[PushOrchestrator] ${message}`, data);
+  }
+
   constructor(hubContext: HubContext, config: Partial<PushOrchestratorConfig> = {}) {
     this.hubContext = hubContext;
     
@@ -61,7 +68,7 @@ export class PushOrchestrator {
 
   public start(): void {
     if (this.isRunning) {
-      console.warn('PushOrchestrator is already running');
+      this.logWarning('Already running - ignoring start() call');
       return;
     }
 
@@ -87,11 +94,11 @@ export class PushOrchestrator {
     const intervalMs = Math.max(MIN_INTERVAL_MS, Math.min(MAX_INTERVAL_MS, originalInterval));
     
     if (intervalMs !== originalInterval) {
-      console.warn(`Clamped ${emitterType} interval from ${originalInterval}ms to ${intervalMs}ms for safety`);
+      this.logWarning(`Clamped ${emitterType} interval from ${originalInterval}ms to ${intervalMs}ms for safety`);
     }
 
     if (!this.registry.hasEmitter(emitterType)) {
-      console.warn(`Emitter type '${emitterType}' not found in registry, skipping schedule`);
+      this.logWarning(`Emitter type '${emitterType}' not found in registry, skipping schedule`);
       return;
     }
 

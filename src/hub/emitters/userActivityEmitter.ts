@@ -35,7 +35,40 @@ export const DEFAULT_USER_ACTIVITY_CONFIG: UserActivityConfig = {
 const activityStore = new Map<string, UserActivity[]>();
 const sessionStore = new Set<string>();
 
+// RT-6: Schema validation for UserActivity to prevent malformed data injection
+function validateUserActivity(activity: UserActivity): { valid: boolean; error?: string } {
+  // Validate sessionId
+  if (!activity.sessionId || typeof activity.sessionId !== 'string' || activity.sessionId.trim().length === 0) {
+    return { valid: false, error: 'sessionId must be a non-empty string' };
+  }
+  
+  // Validate activityType enum
+  const validActivityTypes = ['page_view', 'filter_change', 'debug_toggle', 'connection_event'];
+  if (!validActivityTypes.includes(activity.activityType)) {
+    return { valid: false, error: `activityType must be one of: ${validActivityTypes.join(', ')}` };
+  }
+  
+  // Validate timestamp
+  if (!Number.isFinite(activity.timestamp) || activity.timestamp <= 0) {
+    return { valid: false, error: 'timestamp must be a positive finite number' };
+  }
+  
+  // Validate metadata is an object
+  if (!activity.metadata || typeof activity.metadata !== 'object' || Array.isArray(activity.metadata)) {
+    return { valid: false, error: 'metadata must be a non-array object' };
+  }
+  
+  return { valid: true };
+}
+
 export function trackUserActivity(activity: UserActivity): void {
+  // RT-6: Validate activity before processing
+  const validation = validateUserActivity(activity);
+  if (!validation.valid) {
+    console.warn(`[UserActivityEmitter] Invalid UserActivity rejected: ${validation.error}`, activity);
+    return; // Silently reject invalid activities
+  }
+  
   const { sessionId } = activity;
   
   if (!activityStore.has(sessionId)) {
