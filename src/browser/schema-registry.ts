@@ -1134,6 +1134,55 @@ export const eventSchemas = {
     },
     level: 'warn' as const,
     description: 'SSE filter update timed out'
+  },
+
+  'orchestrator.sse.filters.rate_limited': {
+    validate: (payload: unknown): { clientId: string; tag: string; windowMs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        clientId: validateString(p.clientId, 'clientId'),
+        tag: validateString(p.tag, 'tag'),
+        windowMs: validateNumber(p.windowMs, 'windowMs')
+      };
+    },
+    level: 'warn' as const,
+    description: 'SSE filter update rate limited'
+  },
+
+  'orchestrator.sse.filters.validation_error': {
+    validate: (payload: unknown): { clientId: string; tag: string; error: string } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        clientId: validateString(p.clientId, 'clientId'),
+        tag: validateString(p.tag, 'tag'),
+        error: validateString(p.error, 'error')
+      };
+    },
+    level: 'warn' as const,
+    description: 'SSE filter spec validation failed'
+  },
+
+  'orchestrator.sse.filters.applied': {
+    validate: (payload: unknown): { clientId: string; tag: string; spec: unknown; appliedTs: number } => {
+      if (!payload || typeof payload !== 'object') {
+        throw new TypeError('payload must be an object');
+      }
+      const p = payload as Record<string, unknown>;
+      return {
+        clientId: validateString(p.clientId, 'clientId'),
+        tag: validateString(p.tag, 'tag'),
+        spec: p.spec,
+        appliedTs: validateNumber(p.appliedTs, 'appliedTs')
+      };
+    },
+    level: 'debug' as const,
+    description: 'SSE filter successfully applied'
   }
 } as const;
 

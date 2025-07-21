@@ -94,16 +94,44 @@ class SSEEndpoint {
       };
     }
 
-    // Only allow GET for SSE
-    if (request.method !== 'GET') {
-      return {
-        status: 405,
-        headers: { 'Allow': 'GET' },
-        body: 'Method Not Allowed'
-      };
+    // Handle GET requests for SSE stream
+    if (request.method === 'GET') {
+      return this.createSSEResponse(request);
     }
 
-    return this.createSSEResponse(request);
+    // P4.2-b: Handle POST requests for filter updates and client ingestion
+    if (request.method === 'POST') {
+      return this.handleControlMessage(request);
+    }
+
+    // Method not allowed
+    return {
+      status: 405,
+      headers: { 'Allow': 'GET, POST' },
+      body: 'Method Not Allowed'
+    };
+  }
+
+  /**
+   * P4.2-b: Handle control messages (filter updates, client ingestion)
+   */
+  private handleControlMessage(_request: SSERequest): SSEResponse {
+    try {
+      // TODO: Parse request body to get control frames
+      // For now, return success - this will be implemented when we integrate with transport
+      return {
+        status: 202,
+        headers: this.config.cors ? { 'Access-Control-Allow-Origin': '*' } : {},
+        body: 'Accepted'
+      };
+    } catch (error) {
+      console.error('Failed to handle control message:', error);
+      return {
+        status: 500,
+        headers: {},
+        body: 'Internal Server Error'
+      };
+    }
   }
 
   /**
@@ -114,8 +142,8 @@ class SSEEndpoint {
       status: 204,
       headers: {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Cache-Control',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Cache-Control, Content-Type',
         'Access-Control-Max-Age': '86400'
       }
     };

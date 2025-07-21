@@ -3,12 +3,53 @@
  * 
  * Manages multiple SSE connections and broadcasts log events to active clients.
  * Handles connection lifecycle, heartbeats, and graceful cleanup.
+ * P4.2-b: Added server-side filter update handling with ACK/error protocol.
  */
 
 import { safeEmit } from '../../schema-registry.js';
 
-// P3: Filter predicate type
+// P3: Filter predicate type (legacy)
 type LogFilterPredicate = (entry: { level: string; branch?: string }) => boolean;
+
+// P4.2-b: Import types from sse-transport
+type LiveFilterSpec = 
+  | { kind: 'branches-levels'; branches?: string[]; levels?: string[] }
+  | { kind: 'keyword'; keywords: string[] };
+
+interface FilterUpdateFrame {
+  op: 'filter:update';
+  tag: string;
+  ts: number;
+  spec: LiveFilterSpec;
+}
+
+interface FilterAckFrame {
+  op: 'filter:ack';
+  tag: string;
+  appliedTs: number;
+  activeSpec: LiveFilterSpec;
+}
+
+interface FilterErrFrame {
+  op: 'filter:error';
+  tag: string;
+  code: 'invalid_spec' | 'auth_failed' | 'rate_limited' | 'internal';
+  message?: string;
+}
+
+// P4.2-b: Rate limiting constants
+const RATE_LIMIT_WINDOW_MS = 5000; // 5 seconds
+const RATE_LIMIT_MAX = 3; // 3 updates per window
+const MAX_BRANCHES = 32;
+const MAX_LEVELS = 8;
+
+// P4.2-b: Filter context for each connection
+interface FilterContext {
+  spec: LiveFilterSpec;
+  predicate: LogFilterPredicate;
+  tsWindow: number[];        // sliding window of update timestamps
+  seenTags: Set<string>;     // dedupe tags within connection
+}
 
 interface SSEClient {
   readonly id: string;
@@ -17,7 +58,7 @@ interface SSEClient {
   readonly connectedAt: number;
   lastHeartbeat: number;
   isActive: boolean;
-  // P3: Optional filter predicate for this client
+  // P3: Optional filter predicate for this client (legacy)
   filter?: LogFilterPredicate;
   // P3: Filter stats
   stats: {
@@ -46,6 +87,9 @@ class LogStreamHub {
   private messagesDispatched = 0;
   private readonly startTime = Date.now();
   private heartbeatInterval?: NodeJS.Timeout;
+  
+  // P4.2-b: Filter state management
+  private filters = new Map<string, FilterContext>();
   
   constructor(
     private readonly heartbeatMs = 30000,
@@ -127,6 +171,9 @@ class LogStreamHub {
     }
 
     this.clients.delete(clientId);
+
+    // P4.2-b: Clean up filter context
+    this.cleanupClientFilter(clientId);
 
     // Emit disconnection event
     safeEmit('orchestrator.sse.connection.closed', {
@@ -305,6 +352,220 @@ class LogStreamHub {
     }
 
     this.clients.clear();
+    
+    // P4.2-b: Clean up filter contexts
+    this.filters.clear();
+  }
+
+  // P4.2-b: Handle filter update frames from clients
+  handleFilterUpdate(clientId: string, frame: FilterUpdateFrame): void {
+    const client = this.clients.get(clientId);
+    if (!client || !client.isActive) {
+      return; // Client not found or inactive
+    }
+
+    // Get or initialize filter context
+    let ctx = this.filters.get(clientId);
+    if (!ctx) {
+      ctx = this.initFilterContext();
+      this.filters.set(clientId, ctx);
+    }
+
+    // 1. Replay protection - ignore duplicate tags
+    if (ctx.seenTags.has(frame.tag)) {
+      return;
+    }
+    ctx.seenTags.add(frame.tag);
+
+    // 2. Rate limiting check
+    if (this.isRateLimited(ctx)) {
+      const errorFrame: FilterErrFrame = {
+        op: 'filter:error',
+        tag: frame.tag,
+        code: 'rate_limited',
+        message: `Rate limit exceeded: max ${RATE_LIMIT_MAX} updates per ${RATE_LIMIT_WINDOW_MS}ms`
+      };
+      this.sendFrameToClient(client, errorFrame);
+      
+      // Emit telemetry
+      safeEmit('orchestrator.sse.filters.rate_limited', {
+        clientId,
+        tag: frame.tag,
+        windowMs: RATE_LIMIT_WINDOW_MS
+      }, { level: 'warn' });
+      return;
+    }
+
+    // 3. Validate spec
+    const validation = this.validateFilterSpec(frame.spec);
+    if (!validation.ok) {
+      const errorFrame: FilterErrFrame = {
+        op: 'filter:error',
+        tag: frame.tag,
+        code: 'invalid_spec',
+        message: validation.error
+      };
+      this.sendFrameToClient(client, errorFrame);
+      
+      // Emit telemetry
+      safeEmit('orchestrator.sse.filters.validation_error', {
+        clientId,
+        tag: frame.tag,
+        error: validation.error
+      }, { level: 'warn' });
+      return;
+    }
+
+    // 4. Authorization check (placeholder - always allow for now)
+    if (!this.authorizeFilter(clientId, validation.spec)) {
+      const errorFrame: FilterErrFrame = {
+        op: 'filter:error',
+        tag: frame.tag,
+        code: 'auth_failed',
+        message: 'Not authorized to set this filter'
+      };
+      this.sendFrameToClient(client, errorFrame);
+      return;
+    }
+
+    // 5. Success - apply filter and send ACK
+    ctx.spec = validation.spec;
+    ctx.predicate = this.compileFilterPredicate(validation.spec);
+    
+    // Update legacy filter for P3 compatibility
+    client.filter = ctx.predicate;
+
+    const ackFrame: FilterAckFrame = {
+      op: 'filter:ack',
+      tag: frame.tag,
+      appliedTs: Date.now(),
+      activeSpec: validation.spec
+    };
+    this.sendFrameToClient(client, ackFrame);
+
+    // Emit telemetry
+    safeEmit('orchestrator.sse.filters.applied', {
+      clientId,
+      tag: frame.tag,
+      spec: validation.spec,
+      appliedTs: ackFrame.appliedTs
+    }, { level: 'debug' });
+  }
+
+  // P4.2-b: Initialize filter context with defaults
+  private initFilterContext(): FilterContext {
+    return {
+      spec: { kind: 'branches-levels' }, // Default: match all
+      predicate: () => true,
+      tsWindow: [],
+      seenTags: new Set()
+    };
+  }
+
+  // P4.2-b: Rate limiting with sliding window
+  private isRateLimited(ctx: FilterContext): boolean {
+    const now = Date.now();
+    
+    // Remove timestamps outside the window
+    ctx.tsWindow = ctx.tsWindow.filter(ts => now - ts < RATE_LIMIT_WINDOW_MS);
+    
+    // Add current timestamp
+    ctx.tsWindow.push(now);
+    
+    // Check if limit exceeded
+    return ctx.tsWindow.length > RATE_LIMIT_MAX;
+  }
+
+  // P4.2-b: Validate LiveFilterSpec
+  private validateFilterSpec(spec: unknown): 
+    { ok: true; spec: LiveFilterSpec } | { ok: false; error: string } {
+    
+    if (!spec || typeof spec !== 'object') {
+      return { ok: false, error: 'Spec must be an object' };
+    }
+
+    const s = spec as Record<string, unknown>;
+    
+    switch (s.kind) {
+      case 'branches-levels':
+        if (s.branches && (!Array.isArray(s.branches) || s.branches.length > MAX_BRANCHES)) {
+          return { ok: false, error: `Invalid branches: max ${MAX_BRANCHES} allowed` };
+        }
+        if (s.levels && (!Array.isArray(s.levels) || s.levels.length > MAX_LEVELS)) {
+          return { ok: false, error: `Invalid levels: max ${MAX_LEVELS} allowed` };
+        }
+        return { ok: true, spec: spec as LiveFilterSpec };
+        
+      case 'keyword':
+        if (!Array.isArray(s.keywords) || s.keywords.length === 0) {
+          return { ok: false, error: 'Keywords must be non-empty array' };
+        }
+        return { ok: true, spec: spec as LiveFilterSpec };
+        
+      default:
+        return { ok: false, error: `Unknown filter kind: ${s.kind}` };
+    }
+  }
+
+  // P4.2-b: Compile LiveFilterSpec to predicate function
+  private compileFilterPredicate(spec: LiveFilterSpec): LogFilterPredicate {
+    switch (spec.kind) {
+      case 'branches-levels': {
+        const branchSet = spec.branches ? new Set(spec.branches.map(b => b.toLowerCase())) : undefined;
+        const levelSet = spec.levels ? new Set(spec.levels) : undefined;
+        
+        return (entry) => {
+          if (branchSet) {
+            const branch = entry.branch?.toLowerCase() ?? '';
+            if (!branchSet.has(branch)) return false;
+          }
+          
+          if (levelSet && !levelSet.has(entry.level)) return false;
+          
+          return true;
+        };
+      }
+      
+      case 'keyword': {
+        const keywords = spec.keywords.map(k => k.toLowerCase());
+        return (entry) => {
+          const searchText = `${entry.level} ${entry.branch || ''}`.toLowerCase();
+          return keywords.some(keyword => searchText.includes(keyword));
+        };
+      }
+      
+      default:
+        return () => true; // Match all as fallback
+    }
+  }
+
+  // P4.2-b: Authorization check (placeholder)
+  private authorizeFilter(_clientId: string, _spec: LiveFilterSpec): boolean {
+    // TODO: Implement actual authorization logic
+    // For now, allow all filters
+    return true;
+  }
+
+  // P4.2-b: Send frame to specific client
+  private sendFrameToClient(client: SSEClient, frame: FilterAckFrame | FilterErrFrame): void {
+    try {
+      const sseData = `event: ${frame.op}\ndata: ${JSON.stringify(frame)}\nid: ${Date.now()}\n\n`;
+      const encoder = new TextEncoder();
+      client.controller.enqueue(encoder.encode(sseData));
+    } catch (error) {
+      console.warn(`Failed to send filter frame to client ${client.id}:`, error);
+      client.isActive = false;
+    }
+  }
+
+  // P4.2-b: Get active filter for a client (for reconnect replay)
+  getClientFilter(clientId: string): LiveFilterSpec | undefined {
+    return this.filters.get(clientId)?.spec;
+  }
+
+  // P4.2-b: Clean up filter context when client disconnects
+  private cleanupClientFilter(clientId: string): void {
+    this.filters.delete(clientId);
   }
 }
 

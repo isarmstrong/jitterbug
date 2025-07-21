@@ -207,7 +207,7 @@ describe('SSEEndpoint', () => {
 
       expect(response.status).toBe(204);
       expect(response.headers['Access-Control-Allow-Origin']).toBe('*');
-      expect(response.headers['Access-Control-Allow-Methods']).toBe('GET, OPTIONS');
+      expect(response.headers['Access-Control-Allow-Methods']).toBe('GET, POST, OPTIONS');
     });
 
     it('should return 404 for wrong path', () => {
@@ -225,7 +225,7 @@ describe('SSEEndpoint', () => {
 
     it('should return 405 for wrong method', () => {
       const request: SSERequest = {
-        method: 'POST',
+        method: 'PUT',
         url: 'http://localhost/test-sse',
         headers: {}
       };
@@ -233,7 +233,7 @@ describe('SSEEndpoint', () => {
       const response = endpoint.handleRequest(request);
 
       expect(response.status).toBe(405);
-      expect(response.headers['Allow']).toBe('GET');
+      expect(response.headers['Allow']).toBe('GET, POST');
     });
 
     it('should create SSE response for valid requests', () => {
@@ -250,6 +250,19 @@ describe('SSEEndpoint', () => {
       expect(response.headers['Cache-Control']).toBe('no-cache');
       expect(response.headers['Connection']).toBe('keep-alive');
       expect(response.body).toBeInstanceOf(ReadableStream);
+    });
+
+    it('should handle POST requests for control messages (P4.2-b)', () => {
+      const request: SSERequest = {
+        method: 'POST',
+        url: 'http://localhost/test-sse',
+        headers: { 'Content-Type': 'application/json' }
+      };
+
+      const response = endpoint.handleRequest(request);
+
+      expect(response.status).toBe(202);
+      expect(response.body).toBe('Accepted');
     });
   });
 
