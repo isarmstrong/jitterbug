@@ -1,237 +1,121 @@
 /**
- * Browser Frame Verification Tests - P4.4-b-1
- * Tests for client-side HMAC verification
+ * P4.4-b-2: Fuzz & Mutation Testing of HMAC Verification
  */
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { verifyFrame, isSignedFrame, processFrame } from '../verify.js';
-import { getKeyRegistry } from '../../../crypto/keyRegistry.js';
-import type { SignedPushFrame } from '../../../../hub/security/signed-frame.js';
+import fc from 'fast-check';
+import { createHmacSigner } from '../../../../hub/security/_internal/hmac.js';
 import type { AnyPushFrame } from '../../../../hub/emitters/registry.js';
 
-// Mock the key registry
+const testKeys = {
+  key1: new Uint8Array(32).fill(0x11),
+  key2: new Uint8Array(32).fill(0x22),
+};
+
+// -- 2) Mock the real keyRegistry **before** importing processFrame
 vi.mock('../../../crypto/keyRegistry.js', () => ({
-  getKeyRegistry: vi.fn()
+  getKeyRegistry: () => ({
+    getKey: (kid: string) => {
+      const secret = (testKeys as any)[kid];
+      return secret ? { kid, secret, algorithm: 'sha256' } : null;
+    },
+  }),
 }));
 
-describe('Browser Frame Verification - P4.4-b-1', () => {
-  const testSecret = new Uint8Array(32).fill(0x42); // 32-byte test key
-  const testKeyId = 'test-key-001';
-  
-  const mockKeyRegistry = {
-    getKey: vi.fn()
-  };
+// -- 3) Now import the thing under test
+import { processFrame } from '../verify.js';
+
+describe('P4.4-b-2: HMAC Verification Fuzzing', () => {
+  let signer: ReturnType<typeof createHmacSigner>;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(getKeyRegistry).mockReturnValue(mockKeyRegistry as any);
-    
-    // Mock successful key lookup
-    mockKeyRegistry.getKey.mockReturnValue({
-      kid: testKeyId,
-      secret: testSecret,
-      algorithm: 'sha256' as const
+    signer = createHmacSigner({
+      keyId: 'key1',
+      secret: testKeys.key1,
+      algorithm: 'sha256',
+      clockSkewToleranceMs: 5_000,
+      replayWindowMs: 10_000,
     });
   });
 
-  describe('Frame Type Detection', () => {
-    it('should detect signed frames by sig field presence', () => {
-      const signedFrame = {
-        kid: 'test-key',
-        ts: Date.now(),
-        nonce: 'abc123',
-        alg: 'HS256',
-        payload: { t: 'hb', ts: Date.now() },
-        sig: 'signature'
-      };
-
-      expect(isSignedFrame(signedFrame)).toBe(true);
-    });
-
-    it('should not detect unsigned frames as signed', () => {
-      const unsignedFrame = { t: 'hb', ts: Date.now() };
-      expect(isSignedFrame(unsignedFrame)).toBe(false);
-    });
-
-    it('should handle malformed objects gracefully', () => {
-      expect(isSignedFrame(null)).toBe(false);
-      expect(isSignedFrame(undefined)).toBe(false);
-      expect(isSignedFrame('string')).toBe(false);
-      expect(isSignedFrame({ notASig: 'value' })).toBe(false);
-    });
-  });
-
-  describe('Key Registry Integration', () => {
-    it('should throw error for unknown key ID', () => {
-      mockKeyRegistry.getKey.mockReturnValue(null);
-
-      const signedFrame: SignedPushFrame = {
-        kid: 'unknown-key',
-        ts: Date.now(),
-        nonce: 'abc123',
-        alg: 'HS256',
-        payload: { t: 'hb', ts: Date.now() },
-        sig: 'invalid-signature'
-      };
-
-      expect(() => verifyFrame(signedFrame)).toThrow('Unknown key ID: unknown-key');
-    });
-
-    it('should use key from registry for verification', () => {
-      // This test verifies the key lookup, but actual signature verification
-      // will fail due to invalid signature - that's expected
-      const signedFrame: SignedPushFrame = {
-        kid: testKeyId,
-        ts: Date.now(),
-        nonce: 'abc123',
-        alg: 'HS256',
-        payload: { t: 'hb', ts: Date.now() },
-        sig: 'invalid-signature'
-      };
-
-      expect(() => verifyFrame(signedFrame)).toThrow(); // Should fail on signature, not key lookup
-      expect(mockKeyRegistry.getKey).toHaveBeenCalledWith(testKeyId);
-    });
-  });
-
-  describe('Clock Skew Handling', () => {
-    it('should reject frames with excessive future timestamps', () => {
-      const futureTime = Date.now() + 10_000; // 10s in future > 5s tolerance
-      const signedFrame: SignedPushFrame = {
-        kid: testKeyId,
-        ts: futureTime,
-        nonce: 'abc123',
-        alg: 'HS256',
-        payload: { t: 'hb', ts: futureTime },
-        sig: 'signature'
-      };
-
-      expect(() => verifyFrame(signedFrame)).toThrow('too far in future');
-    });
-
-    it('should reject frames with excessive past timestamps', () => {
-      const pastTime = Date.now() - 15_000; // 15s in past > 10s replay window
-      const signedFrame: SignedPushFrame = {
-        kid: testKeyId,
-        ts: pastTime,
-        nonce: 'abc123',
-        alg: 'HS256',
-        payload: { t: 'hb', ts: pastTime },
-        sig: 'signature'
-      };
-
-      expect(() => verifyFrame(signedFrame)).toThrow('too old (replay protection)');
-    });
-  });
-
-  describe('Replay Protection', () => {
-    it('should detect replay attacks using signature digest', () => {
-      const now = Date.now();
-      const signedFrame: SignedPushFrame = {
-        kid: testKeyId,
-        ts: now,
-        nonce: 'abc123',
-        alg: 'HS256',
-        payload: { t: 'hb', ts: now },
-        sig: 'unique-signature-123'
-      };
-
-      // Mock successful verification for first attempt
-      const originalVerify = vi.fn();
-      vi.doMock('../../../../hub/security/_internal/hmac.js', () => ({
-        createHmacSigner: () => ({ verify: originalVerify }),
-        DEFAULT_HMAC_CONFIG: { clockSkewToleranceMs: 5_000, replayWindowMs: 10_000 }
-      }));
-
-      // First call should succeed (after fixing signature verification)
-      // Second call with same signature should fail due to replay protection
-      try {
-        verifyFrame(signedFrame);
-        expect(() => verifyFrame(signedFrame)).toThrow('Replay attack detected');
-      } catch (error) {
-        // Expected - signature verification will fail with mock data
-        // The important thing is that we're checking replay protection logic
+  it('always verifies frames signed with valid keys', () => {
+    fc.assert(fc.property(
+      genPayload(), fc.constantFrom('key1', 'key2'),
+      (payload, kid) => {
+        const keySigner = createHmacSigner({
+          keyId: kid, secret: testKeys[kid as keyof typeof testKeys],
+          algorithm: 'sha256', clockSkewToleranceMs: 5_000, replayWindowMs: 10_000
+        });
+        const signed = keySigner.sign(payload);
+        const result = processFrame(signed);
+        expect(result).toEqual(payload);
       }
-    });
+    ), { numRuns: 20 });
   });
 
-  describe('Frame Processing Pipeline', () => {
-    it('should process unsigned frames unchanged', () => {
-      const unsignedFrame: AnyPushFrame = { t: 'hb', ts: Date.now() };
-      const result = processFrame(unsignedFrame);
-      expect(result).toEqual(unsignedFrame);
-    });
-
-    it('should verify and unwrap signed frames', () => {
-      const payload: AnyPushFrame = { t: 'hb', ts: Date.now() };
-      const signedFrame = {
-        kid: testKeyId,
-        ts: Date.now(),
-        nonce: 'abc123',
-        alg: 'HS256',
-        payload,
-        sig: 'signature'
-      };
-
-      // This will throw due to invalid signature in test, but demonstrates the flow
-      expect(() => processFrame(signedFrame)).toThrow();
-    });
+  it('generates unique signatures for identical payloads', () => {
+    fc.assert(fc.property(genPayload(), (payload) => {
+      const s1 = signer.sign(payload), s2 = signer.sign(payload);
+      expect(s1.nonce).not.toBe(s2.nonce);
+      expect(s1.sig).not.toBe(s2.sig);
+    }), { numRuns: 15 });
   });
 
-  describe('LRU Cache Management', () => {
-    it('should handle cache pruning without errors', () => {
-      // Test that the pruning logic doesn't crash
-      const signedFrame: SignedPushFrame = {
-        kid: testKeyId,
-        ts: Date.now(),
-        nonce: 'abc123',
-        alg: 'HS256',
-        payload: { t: 'hb', ts: Date.now() },
-        sig: 'signature'
-      };
-
-      // Multiple calls should trigger cache management
-      for (let i = 0; i < 5; i++) {
-        try {
-          verifyFrame({ ...signedFrame, sig: `sig-${i}` });
-        } catch {
-          // Expected to fail on signature verification
-        }
-      }
-      // If we get here without crashing, cache management is working
-      expect(true).toBe(true);
-    });
+  it('rejects tampered signatures', () => {
+    fc.assert(fc.property(genPayload(), (payload) => {
+      const signed = signer.sign(payload);
+      const mutated = mutateSig(signed.sig);
+      expect(() => processFrame({...signed, sig: mutated})).toThrow();
+    }), { numRuns: 20 });
   });
 
-  describe('Error Handling', () => {
-    it('should provide descriptive error messages', () => {
-      mockKeyRegistry.getKey.mockReturnValue(null);
+  it('rejects tampered payloads', () => {
+    fc.assert(fc.property(genPayload(), fc.string({maxLength: 20}), (payload, tamper) => {
+      const signed = signer.sign(payload);
+      const tampered = {...signed, payload: {...payload, x: tamper}};
+      expect(() => processFrame(tampered)).toThrow(/signature verification failed/);
+    }), { numRuns: 15 });
+  });
 
-      const signedFrame: SignedPushFrame = {
-        kid: 'missing-key',
-        ts: Date.now(),
-        nonce: 'abc123',
-        alg: 'HS256',
-        payload: { t: 'hb', ts: Date.now() },
-        sig: 'signature'
-      };
+  it('rejects unknown key IDs', () => {
+    fc.assert(fc.property(genPayload(), fc.string({maxLength: 10}).filter(s => 
+      !testKeys.hasOwnProperty(s) && !['__proto__', 'constructor', 'toString'].includes(s)
+    ), (payload, unknownKid) => {
+      const signed = signer.sign(payload);
+      expect(() => processFrame({...signed, kid: unknownKid})).toThrow(/Unknown key ID/);
+    }), { numRuns: 10 });
+  });
 
-      expect(() => verifyFrame(signedFrame)).toThrow('Unknown key ID: missing-key');
-    });
+  it('detects replay attacks', () => {
+    fc.assert(fc.property(genPayload(), (payload) => {
+      const signed = signer.sign(payload);
+      // First verification should succeed
+      expect(() => processFrame(signed)).not.toThrow();
+      // Second verification of same frame should fail (replay)
+      expect(() => processFrame(signed)).toThrow(/Replay attack detected/);
+    }), { numRuns: 10 });
+  });
 
-    it('should handle malformed frame objects', () => {
-      expect(() => processFrame(null)).toThrow();
-      expect(() => processFrame(undefined)).toThrow();
-    });
+  it('rejects malformed fields', () => {
+    fc.assert(fc.property(genPayload(), fc.oneof(
+      fc.constant({type: 'alg', val: 'SHA256'}), fc.constant({type: 'kid', val: ''})
+    ), (payload, mutation) => {
+      const signed = signer.sign(payload);
+      const mutated = mutation.type === 'alg' ? {...signed, alg: mutation.val} : {...signed, kid: mutation.val};
+      expect(() => processFrame(mutated as any)).toThrow();
+    }), { numRuns: 10 });
   });
 });
 
-// Integration test with real crypto (requires actual signature)
-describe('Integration Tests', () => {
-  // These would require actual signed frames from the hub-side implementation
-  // Skipped for now but structure is ready for real integration testing
-  
-  it.skip('should verify real signed frame from hub', () => {
-    // TODO: Add integration test with real hub-signed frame
-  });
-});
+function genPayload(): fc.Arbitrary<AnyPushFrame> {
+  const ts = fc.integer({min: Date.now()-1000, max: Date.now()+1000});
+  return fc.oneof(
+    fc.record({t: fc.constant('hb'), ts}),
+    fc.record({t: fc.constant('tm'), ts, cpu: fc.float({max: 100}), mem: fc.integer({max: 8192})})
+  );
+}
+
+function mutateSig(sig: string): string {
+  const chars = sig.split(''), i = Math.floor(Math.random() * chars.length);
+  chars[i] = chars[i] === 'A' ? 'B' : 'A';
+  return chars.join('');
+}

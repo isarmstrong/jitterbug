@@ -260,11 +260,24 @@
         ],
         "priority": "low",
         "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Production-Grade Server Push System with HMAC Frame Signing",
+        "description": "Implement comprehensive server push infrastructure with HMAC-SHA256 frame signing, client-side verification with replay protection, and secure key management for production-grade real-time log streaming.",
+        "details": "Build upon the existing SSE transport (Task 5) to create a production-ready server push system with cryptographic security. Implement HMAC-SHA256 frame signing on the server hub to ensure message integrity and authenticity. Each frame should include a timestamp, sequence number, and HMAC signature computed over the frame content. On the client side, implement verification logic that validates HMAC signatures using keys delivered via HTML meta tags. Add replay protection using sequence numbers and timestamp windows to prevent message replay attacks. Implement secure key management with key rotation capabilities and fallback mechanisms. Ensure the export surface remains compliant with red team security gates by exposing only necessary APIs. Create comprehensive testing infrastructure covering cryptographic operations, replay protection scenarios, key rotation, and failure modes. The system should gracefully handle verification failures, key mismatches, and network interruptions while maintaining security guarantees.",
+        "testStrategy": "Test HMAC-SHA256 signature generation and verification with known test vectors. Verify replay protection by attempting to replay old messages and confirming rejection. Test key rotation scenarios including seamless transitions and fallback to previous keys. Validate security boundaries by testing with tampered messages, invalid signatures, and expired timestamps. Create stress tests for high-frequency message signing and verification. Test client reconnection scenarios with key changes. Verify error handling for missing or malformed meta tags. Conduct security audit tests including timing attack resistance and memory safety. Test cross-browser compatibility for crypto operations and ensure consistent behavior across different JavaScript engines.",
+        "status": "done",
+        "dependencies": [
+          5
+        ],
+        "priority": "high",
+        "subtasks": []
       }
     ],
     "metadata": {
       "created": "2025-07-19T22:50:56.179Z",
-      "updated": "2025-07-21T04:21:33.408Z",
+      "updated": "2025-07-21T09:13:56.447Z",
       "description": "Clean rewrite of Jitterbug with orchestrator pattern"
     }
   }
