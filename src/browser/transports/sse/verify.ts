@@ -53,9 +53,9 @@ function computeDigest(frame: SignedPushFrame): string {
  * Verify signed push frame on client side
  * @internal
  */
-export function verifyFrame(frame: SignedPushFrame): AnyPushFrame {
+export async function verifyFrame(frame: SignedPushFrame): Promise<AnyPushFrame> {
   const keyRegistry = getKeyRegistry();
-  const keyEntry = keyRegistry.getKey(frame.kid);
+  const keyEntry = await keyRegistry.getKey(frame.kid);
   
   if (!keyEntry) {
     throw new Error(`Unknown key ID: ${frame.kid}`);
@@ -108,7 +108,7 @@ export function isSignedFrame(parsed: unknown): parsed is SignedPushFrame {
  * Process frame - verify signature (all frames must be signed)
  * @internal
  */
-export function processFrame(parsed: unknown): AnyPushFrame {
+export async function processFrame(parsed: unknown): Promise<AnyPushFrame> {
   if (!parsed || typeof parsed !== 'object') {
     throw new Error('Invalid frame: must be an object');
   }
@@ -117,5 +117,5 @@ export function processFrame(parsed: unknown): AnyPushFrame {
     throw new Error('Invalid frame: all frames must be signed (no unsigned frames allowed)');
   }
   
-  return verifyFrame(parsed);
+  return await verifyFrame(parsed);
 }

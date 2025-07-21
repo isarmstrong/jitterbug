@@ -1,67 +1,177 @@
 /**
- * Browser Key Registry - P4.4-b-1 Client-Side HMAC Keys
- * Parses HMAC keys from HTML meta tag for frame verification
+ * Browser Key Registry - P4.4-c Secure Ephemeral Key Management
+ * Fetches HMAC keys securely from authenticated endpoints, never from static HTML
  */
-
-import { parseHmacKeys } from '../../hub/security/_internal/hmac.js';
 
 /** @internal */
 export interface KeyRegistryEntry {
   readonly kid: string;
   readonly secret: Uint8Array;
   readonly algorithm: 'sha256' | 'sha512';
+  readonly expiresAt: number; // Unix timestamp
+}
+
+/** @internal */
+export interface EphemeralKeyResponse {
+  kid: string;
+  secret: string; // base64 encoded
+  algorithm: 'sha256' | 'sha512';
+  expiresAt: number;
 }
 
 class BrowserKeyRegistry {
   private keys = new Map<string, KeyRegistryEntry>();
-  private initialized = false;
+  private keyFetchPromise: Promise<void> | null = null;
+  private lastFetchTime = 0;
+  private readonly FETCH_COOLDOWN_MS = 1000; // Prevent excessive requests
 
-  private initialize(): void {
-    if (this.initialized) return;
+  /**
+   * Securely fetch keys from authenticated endpoint
+   * @internal
+   */
+  private async fetchKeys(): Promise<void> {
+    const now = Date.now();
     
-    try {
-      // Parse keys from HTML meta tag: <meta name="jitterbug-hmac-keys" content="k1:base64,k2:base64">
-      const metaElement = document.querySelector('meta[name="jitterbug-hmac-keys"]');
-      const keysContent = metaElement?.getAttribute('content') || '';
-      
-      if (!keysContent.trim()) {
-        console.debug('[KeyRegistry] No HMAC keys found in meta tag');
-        this.initialized = true;
-        return;
-      }
-
-      const parsedKeys = parseHmacKeys(keysContent);
-      
-      for (const [kid, secret] of parsedKeys.entries()) {
-        this.keys.set(kid, {
-          kid,
-          secret,
-          algorithm: 'sha256' // Default to SHA-256
-        });
-      }
-      
-      console.debug(`[KeyRegistry] Loaded ${this.keys.size} HMAC keys`);
-      
-    } catch (error) {
-      console.error('[KeyRegistry] Failed to parse HMAC keys:', error);
+    // Prevent rapid successive fetches
+    if (now - this.lastFetchTime < this.FETCH_COOLDOWN_MS) {
+      return;
     }
     
-    this.initialized = true;
+    this.lastFetchTime = now;
+    
+    try {
+      const response = await fetch('/api/jitterbug/keys', {
+        method: 'GET',
+        credentials: 'same-origin', // Include session cookies
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest' // CSRF protection
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Key fetch failed: ${response.status} ${response.statusText}`);
+      }
+      
+      const keyData: EphemeralKeyResponse = await response.json();
+      
+      // Validate response structure
+      if (!keyData.kid || !keyData.secret || !keyData.algorithm || !keyData.expiresAt) {
+        throw new Error('Invalid key response structure');
+      }
+      
+      // Decode and store key
+      const secret = new Uint8Array(Buffer.from(keyData.secret, 'base64'));
+      
+      // Validate minimum key length (256 bits)
+      if (secret.length < 32) {
+        throw new Error(`Key ${keyData.kid} too short: ${secret.length} bytes (minimum 32)`);
+      }
+      
+      this.keys.set(keyData.kid, {
+        kid: keyData.kid,
+        secret,
+        algorithm: keyData.algorithm,
+        expiresAt: keyData.expiresAt
+      });
+      
+      console.debug(`[KeyRegistry] Loaded ephemeral key ${keyData.kid}, expires at ${new Date(keyData.expiresAt).toISOString()}`);
+      
+    } catch (error) {
+      console.error('[KeyRegistry] Failed to fetch ephemeral keys:', error);
+      // Clear keys on fetch failure for security
+      this.keys.clear();
+      throw error;
+    }
   }
 
-  getKey(kid: string): KeyRegistryEntry | null {
-    this.initialize();
+  /**
+   * Initialize key registry with secure key fetch
+   * @internal
+   */
+  async initialize(): Promise<void> {
+    // Return existing promise if already fetching
+    if (this.keyFetchPromise) {
+      return this.keyFetchPromise;
+    }
+    
+    this.keyFetchPromise = this.fetchKeys();
+    return this.keyFetchPromise;
+  }
+
+  /**
+   * Get key by ID, automatically refreshing if expired
+   */
+  async getKey(kid: string): Promise<KeyRegistryEntry | null> {
+    await this.initialize();
+    
+    const key = this.keys.get(kid);
+    
+    // Check if key exists and is not expired
+    if (key && Date.now() < key.expiresAt) {
+      return key;
+    }
+    
+    // Key expired or missing, refresh and try again
+    if (key && Date.now() >= key.expiresAt) {
+      console.debug(`[KeyRegistry] Key ${kid} expired, refreshing...`);
+      this.keys.delete(kid);
+    }
+    
+    // Reset fetch promise to allow refresh
+    this.keyFetchPromise = null;
+    await this.initialize();
+    
     return this.keys.get(kid) || null;
   }
 
-  getAllKeys(): ReadonlyMap<string, KeyRegistryEntry> {
-    this.initialize();
-    return new Map(this.keys);
+  /**
+   * Get all valid (non-expired) keys
+   */
+  async getAllKeys(): Promise<ReadonlyMap<string, KeyRegistryEntry>> {
+    await this.initialize();
+    
+    const now = Date.now();
+    const validKeys = new Map<string, KeyRegistryEntry>();
+    
+    for (const [kid, key] of this.keys.entries()) {
+      if (now < key.expiresAt) {
+        validKeys.set(kid, key);
+      } else {
+        // Remove expired keys
+        this.keys.delete(kid);
+      }
+    }
+    
+    return validKeys;
   }
 
-  hasKey(kid: string): boolean {
-    this.initialize();
-    return this.keys.has(kid);
+  /**
+   * Check if registry has a valid key for the given ID
+   */
+  async hasKey(kid: string): Promise<boolean> {
+    const key = await this.getKey(kid);
+    return key !== null;
+  }
+
+  /**
+   * Force refresh of keys (for testing or manual refresh)
+   * @internal
+   */
+  async refresh(): Promise<void> {
+    this.keyFetchPromise = null;
+    this.keys.clear();
+    await this.initialize();
+  }
+
+  /**
+   * Clear all keys (for testing or security cleanup)
+   * @internal
+   */
+  clearKeys(): void {
+    this.keys.clear();
+    this.keyFetchPromise = null;
+    this.lastFetchTime = 0; // Reset cooldown timer
   }
 }
 

@@ -14,9 +14,9 @@ const testKeys = {
 // -- 2) Mock the real keyRegistry **before** importing processFrame
 vi.mock('../../../crypto/keyRegistry.js', () => ({
   getKeyRegistry: () => ({
-    getKey: (kid: string) => {
+    getKey: async (kid: string) => {
       const secret = (testKeys as any)[kid];
-      return secret ? { kid, secret, algorithm: 'sha256' } : null;
+      return secret ? { kid, secret, algorithm: 'sha256', expiresAt: Date.now() + 600_000 } : null;
     },
   }),
 }));
@@ -37,16 +37,16 @@ describe('P4.4-b-2: HMAC Verification Fuzzing', () => {
     });
   });
 
-  it('always verifies frames signed with valid keys', () => {
-    fc.assert(fc.property(
+  it('always verifies frames signed with valid keys', async () => {
+    await fc.assert(fc.asyncProperty(
       genPayload(), fc.constantFrom('key1', 'key2'),
-      (payload, kid) => {
+      async (payload, kid) => {
         const keySigner = createHmacSigner({
           keyId: kid, secret: testKeys[kid as keyof typeof testKeys],
           algorithm: 'sha256', clockSkewToleranceMs: 5_000, replayWindowMs: 10_000
         });
         const signed = keySigner.sign(payload);
-        const result = processFrame(signed);
+        const result = await processFrame(signed);
         expect(result).toEqual(payload);
       }
     ), { numRuns: 20 });
@@ -60,54 +60,54 @@ describe('P4.4-b-2: HMAC Verification Fuzzing', () => {
     }), { numRuns: 15 });
   });
 
-  it('rejects tampered signatures', () => {
-    fc.assert(fc.property(genPayload(), (payload) => {
+  it('rejects tampered signatures', async () => {
+    await fc.assert(fc.asyncProperty(genPayload(), async (payload) => {
       const signed = signer.sign(payload);
       const mutated = mutateSig(signed.sig);
-      expect(() => processFrame({...signed, sig: mutated})).toThrow();
+      await expect(processFrame({...signed, sig: mutated})).rejects.toThrow();
     }), { numRuns: 20 });
   });
 
-  it('rejects tampered payloads', () => {
-    fc.assert(fc.property(genPayload(), fc.string({maxLength: 20}), (payload, tamper) => {
+  it('rejects tampered payloads', async () => {
+    await fc.assert(fc.asyncProperty(genPayload(), fc.string({maxLength: 20}), async (payload, tamper) => {
       const signed = signer.sign(payload);
       const tampered = {...signed, payload: {...payload, x: tamper}};
-      expect(() => processFrame(tampered)).toThrow(/signature verification failed/);
+      await expect(processFrame(tampered)).rejects.toThrow(/signature verification failed/);
     }), { numRuns: 15 });
   });
 
-  it('rejects unknown key IDs', () => {
-    fc.assert(fc.property(genPayload(), fc.string({maxLength: 10}).filter(s => 
+  it('rejects unknown key IDs', async () => {
+    await fc.assert(fc.asyncProperty(genPayload(), fc.string({maxLength: 10}).filter(s => 
       !testKeys.hasOwnProperty(s) && !['__proto__', 'constructor', 'toString'].includes(s)
-    ), (payload, unknownKid) => {
+    ), async (payload, unknownKid) => {
       const signed = signer.sign(payload);
-      expect(() => processFrame({...signed, kid: unknownKid})).toThrow(/Unknown key ID/);
+      await expect(processFrame({...signed, kid: unknownKid})).rejects.toThrow(/Unknown key ID/);
     }), { numRuns: 10 });
   });
 
-  it('detects replay attacks', () => {
-    fc.assert(fc.property(genPayload(), (payload) => {
+  it('detects replay attacks', async () => {
+    await fc.assert(fc.asyncProperty(genPayload(), async (payload) => {
       const signed = signer.sign(payload);
       // First verification should succeed
-      expect(() => processFrame(signed)).not.toThrow();
+      await expect(processFrame(signed)).resolves.not.toThrow();
       // Second verification of same frame should fail (replay)
-      expect(() => processFrame(signed)).toThrow(/Replay attack detected/);
+      await expect(processFrame(signed)).rejects.toThrow(/Replay attack detected/);
     }), { numRuns: 10 });
   });
 
-  it('rejects malformed fields', () => {
-    fc.assert(fc.property(genPayload(), fc.oneof(
+  it('rejects malformed fields', async () => {
+    await fc.assert(fc.asyncProperty(genPayload(), fc.oneof(
       fc.constant({type: 'alg', val: 'SHA256'}), fc.constant({type: 'kid', val: ''})
-    ), (payload, mutation) => {
+    ), async (payload, mutation) => {
       const signed = signer.sign(payload);
       const mutated = mutation.type === 'alg' ? {...signed, alg: mutation.val} : {...signed, kid: mutation.val};
-      expect(() => processFrame(mutated as any)).toThrow();
+      await expect(processFrame(mutated as any)).rejects.toThrow();
     }), { numRuns: 10 });
   });
 
-  it('rejects unsigned frames with security error', () => {
+  it('rejects unsigned frames with security error', async () => {
     const unsignedFrame = { type: 'test', data: 'payload' };
-    expect(() => processFrame(unsignedFrame)).toThrow('Invalid frame: all frames must be signed (no unsigned frames allowed)');
+    await expect(processFrame(unsignedFrame)).rejects.toThrow('Invalid frame: all frames must be signed (no unsigned frames allowed)');
   });
 });
 

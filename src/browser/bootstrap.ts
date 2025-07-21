@@ -25,6 +25,7 @@ import { configPersistence } from './config-persistence.js';
 import { attachLogCapture } from './logs/internal/attach.js';
 import { experimentalEmojiConsole } from './transports/emoji-console.js';
 import type { EmojiConsoleOptions } from './transports/emoji-console.js';
+import { getKeyRegistry } from './crypto/keyRegistry.js';
 
 // Simple ULID-like ID generator (simplified for bootstrap)
 function generateId(): string {
@@ -654,6 +655,24 @@ export function initializeJitterbug(global: Window = window): void {
     } catch (error) {
       console.warn('Failed to apply loaded config:', error);
     }
+  }
+
+  // Initialize secure HMAC key registry (P4.4-c Security)
+  // This fetches ephemeral keys from authenticated endpoint, never from static HTML
+  try {
+    const keyRegistry = getKeyRegistry();
+    keyRegistry.initialize().catch(error => {
+      console.error('[Bootstrap] Failed to initialize secure key registry:', error);
+      // Emit security event for monitoring
+      emit('orchestrator.security.key.initialization.failed', { 
+        error: error.message 
+      }, { 
+        level: 'error', 
+        meta: { source: 'bootstrap' } 
+      });
+    });
+  } catch (error) {
+    console.error('[Bootstrap] Key registry initialization error:', error);
   }
 
   // Add internal state access (non-enumerable)
