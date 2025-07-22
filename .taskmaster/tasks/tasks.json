@@ -250,15 +250,16 @@
       {
         "id": 6,
         "title": "Create Next.js Integration Package with App Router Support",
-        "description": "Build a Next.js integration package that provides a client component for log viewing and API routes for SSE endpoints, focused on essential functionality with app router compatibility.",
-        "details": "Create a dedicated Next.js package that integrates seamlessly with the Jitterbug debugging system. Implement a React client component that can display logs in real-time using the SSE transport system. The component should be lightweight, responsive, and provide filtering capabilities for different log levels and branches. Create API route handlers compatible with Next.js 13+ App Router that serve as SSE endpoints for streaming logs. Implement proper TypeScript definitions for all components and utilities. Include a simple setup function that automatically configures the integration with minimal configuration required. The package should export clear interfaces for the log viewer component, API route handlers, and any utility functions. Ensure compatibility with both Pages Router and App Router architectures. Design the client component to handle connection states, error recovery, and automatic reconnection to the SSE endpoint. Include proper cleanup mechanisms for component unmounting and connection disposal.",
-        "testStrategy": "Test the client component renders correctly and connects to SSE endpoints without errors. Verify compatibility with both App Router and Pages Router by creating test applications for each. Test log filtering and display functionality with various log levels and branch types. Validate TypeScript definitions are correct and provide proper intellisense. Test SSE connection handling including reconnection on network failures. Verify the setup function correctly initializes the integration with minimal configuration. Test component cleanup and memory management during mount/unmount cycles. Validate the package works correctly when installed as a dependency in fresh Next.js applications.",
+        "description": "Build a minimal viable Next.js integration package that provides a client component for log viewing and API routes for SSE endpoints, using approved secure authentication patterns from P1 Sprint security architecture.",
         "status": "pending",
         "dependencies": [
           2,
-          5
+          5,
+          9
         ],
         "priority": "low",
+        "details": "Create a reduced-scope Next.js package that integrates with the Jitterbug debugging system following vetted security patterns from Task 9. Implement a minimal React client component that displays logs in real-time using the secure SSE transport system from Task 5. Focus on essential functionality only - basic log display with simple filtering for log levels and branches. Create API route handlers for Next.js 13+ App Router that serve as secure SSE endpoints using the approved authentication patterns from the P1 Sprint security design. All authentication and key exchange mechanisms must follow the red-team approved architecture from Task 9. Implement basic TypeScript definitions for core components. Include a simple setup function that configures the integration using only approved security patterns. The package should provide minimal but secure interfaces for the log viewer component and API route handlers. Ensure compatibility with App Router architecture as primary target. Design the client component to handle connection states with secure session management. Include proper cleanup mechanisms that don't leak security credentials.",
+        "testStrategy": "Test the client component renders correctly and connects to secure SSE endpoints using approved authentication. Verify App Router compatibility with security patterns from Task 9. Test basic log filtering and display functionality. Validate TypeScript definitions provide intellisense for security-related interfaces. Test secure SSE connection handling including proper credential cleanup on disconnection. Verify the setup function correctly initializes using only approved security patterns. Test component security credential cleanup during unmount cycles. Validate the package maintains security boundaries when installed in fresh Next.js applications.",
         "subtasks": []
       },
       {
@@ -273,11 +274,367 @@
         ],
         "priority": "high",
         "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "P0 Sprint: Test Stability & Regression Hardening",
+        "description": "Critical test suite stabilization sprint to fix all test instabilities, perform root cause analysis of failures, and ensure 100% CI reliability with special focus on HMAC orchestrator timing issues and property-based test edge cases.",
+        "details": "Execute comprehensive test hardening sprint with the following objectives:\n\n1. **HMAC Orchestrator Timing Fix**: Resolve the critical \"Cannot assign to read only property 'lastHeartbeat'\" error in HeartbeatEmitter by:\n   - Implementing proper object freezing/sealing patterns\n   - Using Object.defineProperty with configurable: true for mutable properties\n   - Adding defensive cloning for state updates\n   - Implementing proper TypeScript readonly modifiers\n\n2. **Property-Based Test Stabilization**: \n   - Audit all fast-check property tests for non-deterministic behavior\n   - Add proper seed configuration for reproducible failures\n   - Implement timeout guards and async race condition handlers\n   - Fix any flaky generators or arbitraries\n\n3. **CI Pipeline Hardening**:\n   - Configure test retry logic with exponential backoff\n   - Implement test result aggregation across multiple runs\n   - Add timing analysis to identify slow/flaky tests\n   - Create test stability dashboard\n\n4. **Root Cause Analysis Documentation** (docs/rca-p0-sprint.md):\n   - Document each bug class with detailed reproduction steps\n   - Risk assessment matrix (P0-P4) for each issue type\n   - Remediation steps and preventive measures\n   - Long-term architectural improvements\n\n5. **Verification Protocol**:\n   - Run full test suite 3 times consecutively without failures\n   - Stress test with concurrent execution\n   - Memory leak detection under load\n   - Browser matrix testing for E2E tests",
+        "testStrategy": "Implement multi-phase verification:\n\n1. **Immediate Fixes Validation**: Run targeted tests for each fixed issue 10 times to ensure stability\n\n2. **Full Suite Stability**: Execute complete test suite (unit + E2E) 3 times in a row with zero failures\n\n3. **Stress Testing**: Run tests with --maxWorkers=8 for parallel execution stress\n\n4. **Memory Analysis**: Use --detectLeaks flag and monitor heap usage during test runs\n\n5. **CI Integration**: Trigger 5 consecutive CI runs across different Node versions (18, 20, 22)\n\n6. **RCA Document Review**: Validate all documented issues have corresponding test cases that previously failed and now pass consistently",
+        "status": "pending",
+        "dependencies": [
+          7,
+          5
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Fix HMAC Orchestrator HeartbeatEmitter Read-Only Property Error",
+            "description": "Resolve the critical 'Cannot assign to read only property lastHeartbeat' error in HeartbeatEmitter by implementing proper object mutability patterns and TypeScript readonly modifiers",
+            "dependencies": [],
+            "details": "Analyze the HeartbeatEmitter implementation to identify where objects are being frozen or sealed incorrectly. Implement proper object cloning before state updates using structured cloning or deep copy utilities. Use Object.defineProperty with configurable: true for properties that need to be mutable (like lastHeartbeat). Add defensive programming patterns to prevent accidental mutations of frozen objects. Update TypeScript interfaces to properly distinguish between readonly and mutable properties using readonly modifiers and DeepReadonly utility types where appropriate.",
+            "status": "pending",
+            "testStrategy": "Create unit tests that verify HeartbeatEmitter can update lastHeartbeat property without errors. Test object freezing scenarios with mock frozen objects. Verify that state updates work correctly with both mutable and immutable objects. Run the HMAC orchestrator tests 10 times consecutively to ensure the timing issue is resolved."
+          },
+          {
+            "id": 2,
+            "title": "Stabilize Property-Based Tests with Deterministic Configuration",
+            "description": "Audit and fix all fast-check property-based tests to eliminate non-deterministic behavior and flaky test failures",
+            "dependencies": [],
+            "details": "Conduct a comprehensive audit of all property-based tests using fast-check framework. Add explicit seed configuration to all fc.assert() calls to ensure reproducible test runs. Implement proper async handling for property tests that involve promises or async operations using fc.asyncProperty(). Review all custom arbitraries and generators for sources of non-determinism such as Date.now() or Math.random(). Add timeout guards using fc.configureGlobal() to prevent tests from hanging. Document any complex generators with examples of generated values for debugging.",
+            "status": "pending",
+            "testStrategy": "Run each property-based test 50 times with different seeds to verify deterministic behavior. Create a test harness that captures and replays failed test cases using the same seed. Verify that async property tests complete within expected timeframes. Monitor test execution times to identify slow generators that might cause timeouts."
+          },
+          {
+            "id": 3,
+            "title": "Implement CI Pipeline Retry Logic and Test Stability Dashboard",
+            "description": "Configure intelligent test retry mechanisms in CI pipeline and create a dashboard for monitoring test stability metrics",
+            "dependencies": [
+              "8.1",
+              "8.2"
+            ],
+            "details": "Configure Jest and Playwright with retry logic using exponential backoff (retry up to 3 times with delays of 1s, 2s, 4s). Implement test result aggregation that collects metrics across multiple runs including pass/fail rates, execution times, and retry counts. Create a test stability dashboard using GitHub Actions artifacts or a dedicated service that visualizes flaky tests, slow tests, and failure patterns over time. Add timing analysis to identify tests that exceed performance thresholds. Configure separate retry strategies for unit tests vs E2E tests based on their characteristics.",
+            "status": "pending",
+            "testStrategy": "Verify retry logic works by introducing artificial failures and confirming tests retry appropriately. Test the dashboard data collection by running a known set of stable and flaky tests. Validate that aggregated metrics accurately reflect test behavior across multiple CI runs. Ensure dashboard updates automatically with each CI run."
+          },
+          {
+            "id": 4,
+            "title": "Create Root Cause Analysis Documentation with Risk Assessment",
+            "description": "Document comprehensive root cause analysis of all test failures with risk assessments and remediation strategies",
+            "dependencies": [
+              "8.1",
+              "8.2",
+              "8.3"
+            ],
+            "details": "Create docs/rca-p0-sprint.md with detailed analysis of each bug class discovered during the sprint. For each issue type, document: reproduction steps with minimal code examples, root cause analysis with technical explanation, risk assessment using P0-P4 priority matrix based on likelihood and impact, immediate remediation steps taken, preventive measures to avoid recurrence, and long-term architectural improvements needed. Include specific sections for HMAC timing issues, property-based test instabilities, async race conditions, and memory leaks. Add a summary table of all issues with their status and risk levels.",
+            "status": "pending",
+            "testStrategy": "Validate documentation completeness by ensuring each fixed issue has corresponding RCA entry. Test reproduction steps by having another developer follow them to reproduce issues. Verify risk assessments align with actual production impact observed. Review preventive measures for feasibility and effectiveness."
+          },
+          {
+            "id": 5,
+            "title": "Execute Comprehensive Verification Protocol",
+            "description": "Run extensive verification tests to ensure complete test suite stability including consecutive runs, stress testing, and browser matrix validation",
+            "dependencies": [
+              "8.1",
+              "8.2",
+              "8.3",
+              "8.4"
+            ],
+            "details": "Execute the full test suite (unit + E2E) 3 times consecutively without any failures, documenting execution times and resource usage. Perform stress testing by running tests with maximum concurrency (--maxWorkers=100%) to identify race conditions. Implement memory leak detection using Node.js --expose-gc flag and heap snapshots to ensure no memory leaks under load. Set up browser matrix testing for E2E tests across Chrome, Firefox, Safari, and Edge to ensure cross-browser compatibility. Create a verification report documenting all test runs, performance metrics, and any remaining known issues with mitigation strategies.",
+            "status": "pending",
+            "testStrategy": "Monitor CI runs for consistent green builds across all verification phases. Capture and analyze memory usage graphs during stress tests. Document any performance regressions found during stress testing. Verify browser-specific issues are properly handled or documented as known limitations."
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "P1 Sprint: Secure Key Exchange Design",
+        "description": "Create a comprehensive design document for secure key exchange flow between client and server for log streaming authentication, blocking all Next.js integration work until approved by Red Team.",
+        "details": "Design and document a production-grade secure key exchange mechanism that eliminates HMAC secret exposure while maintaining cryptographic security for the log streaming system. The design must address the following critical components:\n\n1. **Authentication/Authorization Entrypoint**:\n   - Design client-server handshake protocol using challenge-response pattern\n   - Define initial connection establishment flow with proper TLS verification\n   - Specify client identity verification mechanism (API keys, OAuth tokens, or certificates)\n   - Document rate limiting and DDoS protection strategies\n\n2. **Temporary Token Architecture**:\n   - Design JWT-based or signed random token format with mandatory fields:\n     - `iss` (issuer): Server identifier\n     - `sub` (subject): Client identifier\n     - `iat` (issued at): Unix timestamp\n     - `exp` (expiration): Short-lived (5-15 minutes recommended)\n     - `jti` (JWT ID): Unique token identifier for revocation\n     - `scope`: Specific permissions (e.g., 'logs:read', 'logs:stream')\n   - Implement cryptographic signing using RS256 or ES256 (not HS256)\n   - Define token size constraints for HTTP header compatibility\n\n3. **Key Lifetime and Storage Model**:\n   - Specify token rotation strategy with overlapping validity periods\n   - Design stateless verification using public key cryptography\n   - Document key derivation for per-session encryption if needed\n   - Define secure storage requirements for client-side tokens (memory only, no localStorage)\n   - Implement zero-persistence session model with token refresh flow\n\n4. **Client API Design**:\n   - Create TypeScript interfaces for token retrieval without exposing secrets:\n     ```typescript\n     interface TokenRequest {\n       clientId: string;\n       challenge?: string;\n       scope: string[];\n     }\n     interface TokenResponse {\n       token: string;\n       expiresAt: number;\n       refreshToken?: string;\n     }\n     ```\n   - Design SDK methods that abstract complexity from developers\n   - Implement automatic token refresh with exponential backoff\n   - Ensure no HMAC secrets or private keys exist in client code\n\n5. **Server-Side Security Policies**:\n   - Design token revocation list (TRL) with Redis or in-memory cache\n   - Implement expiry policies with grace periods for clock skew\n   - Create audit logging for all authentication events\n   - Design rate limiting per client with sliding window algorithm\n   - Implement anomaly detection for suspicious token usage patterns\n\n6. **Failure Scenario Handling**:\n   - **Replay Attack Prevention**: Use nonce/jti tracking with bloom filters\n   - **Expired Token Handling**: Clear error codes (401) with retry guidance\n   - **Token Misuse Detection**: Pattern analysis for geographic/temporal anomalies\n   - **Key Rotation Failures**: Graceful degradation with security alerts\n   - **Network Partition Handling**: Client-side token caching with strict expiry\n\n7. **Security Considerations**:\n   - Document threat model using STRIDE methodology\n   - Define security boundaries and trust zones\n   - Specify cryptographic algorithm choices with rationale\n   - Document key management lifecycle and rotation procedures\n   - Include security testing scenarios for Red Team validation\n\n8. **Implementation Guidance**:\n   - Provide code examples for critical paths\n   - Define error response formats with security in mind\n   - Document performance implications of crypto operations\n   - Include migration path from current HMAC-based system\n\nThe design document must be structured as a formal technical specification suitable for security review, with clear sections for threat model, cryptographic design, API specifications, and implementation guidelines. All design decisions must include security rationale and cite relevant standards (OAuth 2.0, JWT RFC 7519, etc.).",
+        "testStrategy": "Comprehensive validation approach for the secure key exchange design:\n\n1. **Design Review Process**:\n   - Submit initial draft to security team for preliminary review\n   - Conduct threat modeling session using STRIDE methodology\n   - Document all identified threats and mitigation strategies\n   - Iterate based on security team feedback\n\n2. **Proof of Concept Implementation**:\n   - Build minimal POC demonstrating key exchange flow\n   - Implement token generation and verification logic\n   - Create test harness for security scenarios\n   - Benchmark cryptographic operations for performance impact\n\n3. **Security Testing Scenarios**:\n   - Test replay attack prevention with duplicate tokens\n   - Verify token expiration enforcement with clock manipulation\n   - Attempt token forgery with various attack vectors\n   - Test rate limiting effectiveness under load\n   - Validate secure token storage in client environment\n\n4. **Red Team Validation Requirements**:\n   - Provide design document in markdown format at `docs/key-exchange-design.md`\n   - Include threat model with attack trees\n   - Document all cryptographic assumptions and dependencies\n   - Prepare demonstration of POC with security controls\n   - Address all Red Team findings before approval\n\n5. **Integration Readiness Checklist**:\n   - Ensure design is compatible with existing SSE transport (Task 5)\n   - Verify no breaking changes to current HMAC system during migration\n   - Confirm Next.js integration (Task 6) can adopt new auth model\n   - Document rollback procedures if security issues discovered\n\n6. **Success Criteria**:\n   - Red Team approval with no critical findings\n   - Performance impact < 5% on connection establishment\n   - Zero HMAC secrets exposed in client code\n   - All security scenarios handled with appropriate responses\n   - Clear migration path documented for existing systems",
+        "status": "pending",
+        "dependencies": [
+          5,
+          7
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design Authentication/Authorization Entrypoint",
+            "description": "Create detailed specifications for the client-server handshake protocol including challenge-response patterns, TLS verification, and client identity verification mechanisms",
+            "dependencies": [],
+            "details": "Document the complete authentication flow starting from initial client connection to server acknowledgment. Define the challenge-response protocol using cryptographically secure random challenges with proper entropy (minimum 256 bits). Specify TLS 1.3 requirements with mandatory certificate pinning for production environments. Design client identity verification supporting multiple methods: API keys with HMAC-SHA256 signatures, OAuth 2.0 bearer tokens with PKCE flow, or mTLS client certificates. Include rate limiting specifications using token bucket algorithm with configurable thresholds per client ID. Document DDoS protection strategies including SYN cookie implementation, connection pooling limits, and geographic rate limiting. Create sequence diagrams showing the complete handshake flow with all security checkpoints marked.",
+            "status": "pending",
+            "testStrategy": "Develop test scenarios for each authentication method including successful flows, invalid credentials, expired tokens, and rate limit violations. Create penetration test cases for replay attacks, man-in-the-middle attempts, and DDoS simulation. Verify TLS downgrade protection and certificate validation logic."
+          },
+          {
+            "id": 2,
+            "title": "Design Temporary Token Architecture",
+            "description": "Develop comprehensive JWT-based token format specifications with cryptographic signing using asymmetric algorithms and proper field validation",
+            "dependencies": [
+              "9.1"
+            ],
+            "details": "Design JWT token structure with all mandatory fields properly documented: issuer (iss) containing server URL with version, subject (sub) with client UUID format, issued-at (iat) with NTP sync requirements, expiration (exp) set to 10 minutes by default with configurable range 5-15 minutes, unique JWT ID (jti) using UUID v4 for revocation tracking, and granular scope permissions following least privilege principle. Implement RS256 signing using 2048-bit RSA keys or ES256 with P-256 curve for better performance. Define token size constraints keeping total size under 4KB for HTTP header compatibility. Document token validation flow including signature verification, expiration checking, scope validation, and jti blacklist lookup. Include token structure examples with proper JSON formatting and base64url encoding specifications.",
+            "status": "pending",
+            "testStrategy": "Create unit tests for token generation with all required fields, signature verification with valid and tampered tokens, expiration validation with clock skew handling, and scope permission checking. Test token size limits and header compatibility across different HTTP implementations."
+          },
+          {
+            "id": 3,
+            "title": "Implement Key Lifetime and Storage Model",
+            "description": "Design comprehensive key management strategy including rotation policies, stateless verification mechanisms, and secure client-side storage patterns",
+            "dependencies": [
+              "9.2"
+            ],
+            "details": "Specify token rotation strategy with 2-minute overlap periods to handle network delays and clock skew. Design public key distribution using JWKS (JSON Web Key Set) endpoint with proper caching headers and key rotation notifications. Document RSA or ECDSA key pair generation requirements with secure random number generation. Define per-session key derivation using HKDF with SHA-256 for optional payload encryption. Mandate memory-only storage for tokens on client-side using WeakMap or closure-scoped variables, explicitly prohibiting localStorage, sessionStorage, or cookies. Design token refresh flow with refresh tokens having 24-hour validity and one-time use enforcement. Include automatic cleanup mechanisms for expired tokens and implement secure token passing via Authorization headers only.",
+            "status": "pending",
+            "testStrategy": "Test key rotation scenarios including seamless transitions, emergency rotations, and client handling of key changes. Verify memory-only storage enforcement and automatic cleanup. Test refresh token flow with concurrent refresh attempts and one-time use validation."
+          },
+          {
+            "id": 4,
+            "title": "Create Client API Design and Server Security Policies",
+            "description": "Develop TypeScript SDK interfaces, server-side security implementations, and comprehensive failure handling mechanisms",
+            "dependencies": [
+              "9.3"
+            ],
+            "details": "Design TypeScript SDK with strongly-typed interfaces for TokenRequest including clientId validation, optional challenge for mutual authentication, and granular scope arrays. Implement TokenResponse with JWT token string, Unix timestamp expiration, and optional refresh token. Create SDK methods like getToken(), refreshToken(), and revokeToken() with automatic retry logic using exponential backoff with jitter. Design server-side token revocation using Redis SET with EXPIRE for O(1) lookups and automatic cleanup. Implement sliding window rate limiting per client with configurable windows (1min, 5min, 1hour). Add comprehensive audit logging using structured JSON with correlation IDs, client IPs, user agents, and security events. Design anomaly detection analyzing login patterns, geographic locations, and temporal access patterns with configurable thresholds.",
+            "status": "pending",
+            "testStrategy": "Test SDK methods with various network conditions including timeouts, partial responses, and connection failures. Verify rate limiting accuracy under high load. Test audit log completeness and anomaly detection with synthetic attack patterns."
+          },
+          {
+            "id": 5,
+            "title": "Document Security Model and Implementation Guidance",
+            "description": "Create formal security documentation including threat modeling, failure scenarios, cryptographic specifications, and migration planning",
+            "dependencies": [
+              "9.4"
+            ],
+            "details": "Develop comprehensive threat model using STRIDE methodology documenting Spoofing (addressed by client certificates), Tampering (prevented by JWT signatures), Repudiation (handled by audit logs), Information Disclosure (mitigated by TLS and token expiration), Denial of Service (rate limiting and connection pooling), and Elevation of Privilege (scope-based permissions). Document all failure scenarios with specific mitigations: replay attacks using nonce tracking with bloom filters for space efficiency, expired token handling returning HTTP 401 with retry-after headers, token misuse detection triggering security alerts and automatic revocation, key rotation failures with graceful fallback to previous key set, and network partitions using client-side token caching with strict expiry enforcement. Include complete API error response formats with security-conscious error messages that don't leak system information. Document performance benchmarks for crypto operations targeting <10ms for token generation and <5ms for verification. Create step-by-step migration guide from HMAC-based system with parallel running period and gradual rollout strategy.",
+            "status": "pending",
+            "testStrategy": "Conduct formal security review with Red Team including threat model validation, cryptographic implementation review, and penetration testing scenarios. Test all failure paths with chaos engineering approaches. Verify migration procedures in staging environment with rollback capabilities."
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "P2 Sprint: Documentation & API Specifications",
+        "description": "Create comprehensive security documentation and OpenAPI specifications for the Jitterbug system, focusing on security model, trust boundaries, threat mitigation, and API contracts for key exchange and SSE endpoints.",
+        "details": "Develop two critical documentation deliverables that must pass Red Team review before sprint completion:\n\n1. **SECURITY.md Documentation**:\n   - **Security Model Overview**: Document the complete security architecture including authentication flow, authorization boundaries, and cryptographic primitives used\n   - **Trust Boundaries**: Define and diagram all trust boundaries between client, server, and external systems with detailed data flow analysis\n   - **Threat Model**: Document known threats using STRIDE methodology, including:\n     - Spoofing risks in client-server communication\n     - Tampering vulnerabilities in log streams\n     - Repudiation concerns for audit trails\n     - Information disclosure via timing attacks\n     - Denial of service vectors\n     - Elevation of privilege scenarios\n   - **Key Exchange Mechanism**: Detail the secure key exchange protocol addressing P0/P1 vulnerabilities:\n     - Challenge-response authentication flow\n     - Ephemeral key generation and distribution\n     - Key derivation functions and parameters\n     - Session establishment protocol\n     - Backward secrecy guarantees\n   - **Key Rotation Instructions**: Step-by-step operational procedures for:\n     - Scheduled key rotation intervals\n     - Emergency key revocation process\n     - Zero-downtime rotation implementation\n     - Key versioning and backward compatibility\n   - **Memory Residency Policies**: Document secure memory handling:\n     - Key material storage requirements\n     - Memory zeroing procedures\n     - Protection against memory dumps\n     - Secure deletion protocols\n   - **Ephemeral Token Guidelines**: Usage patterns for temporary tokens:\n     - Token lifetime management\n     - Refresh token strategies\n     - Token revocation mechanisms\n     - Rate limiting policies\n\n2. **OpenAPI/Swagger Specifications**:\n   - **Key/Token Delivery Endpoint**:\n     - POST /api/v1/auth/exchange\n     - Request schema with challenge parameters\n     - Response schema with encrypted key material\n     - Error response formats (401, 403, 429)\n     - Required headers (X-Client-Version, X-Request-ID)\n     - Rate limiting headers\n   - **SSE Log Stream Endpoint**:\n     - GET /api/v1/logs/stream\n     - Query parameters for filtering (level, branch, timestamp)\n     - Authentication headers (Authorization, X-HMAC-Signature)\n     - SSE event types and payload schemas\n     - Connection lifecycle events\n     - Error event formats\n   - **Common Components**:\n     - Security schemes (Bearer, HMAC)\n     - Reusable schemas (LogEntry, ErrorResponse)\n     - Common parameters and headers\n     - Response examples with test data\n\n3. **Implementation Requirements**:\n   - Use OpenAPI 3.1.0 specification format\n   - Include comprehensive examples for all endpoints\n   - Document all security requirements in spec\n   - Add rate limiting annotations\n   - Include webhook specifications if applicable\n   - Generate both YAML and JSON versions\n   - Validate specifications with spectral linter\n\n4. **Red Team Review Preparation**:\n   - Create security checklist document\n   - Prepare threat model diagrams\n   - Document all cryptographic assumptions\n   - Include penetration test scenarios\n   - Provide security contact procedures",
+        "testStrategy": "Comprehensive validation approach for documentation and specifications:\n\n1. **Documentation Validation**:\n   - Run markdown linter on SECURITY.md for formatting compliance\n   - Verify all sections are complete with no TODOs or placeholders\n   - Cross-reference security claims with implementation in Tasks 5, 7, and 9\n   - Validate cryptographic parameters against OWASP recommendations\n   - Check key rotation procedures with operational runbook\n\n2. **OpenAPI Specification Testing**:\n   - Validate specs using Spectral OpenAPI linter with strict ruleset\n   - Generate mock server from specs using Prism\n   - Test all example requests/responses for correctness\n   - Verify security schemes are properly defined\n   - Validate against actual implementation endpoints\n   - Use openapi-generator to create client SDKs as validation\n\n3. **Security Review Preparation**:\n   - Conduct internal threat modeling session\n   - Run automated security scanners on documentation\n   - Verify all P0/P1 vulnerabilities are addressed\n   - Create security questionnaire responses\n   - Prepare demonstration scripts for Red Team\n\n4. **Cross-Reference Validation**:\n   - Ensure SECURITY.md aligns with Task 9 design\n   - Verify API specs match Task 5 SSE implementation\n   - Confirm HMAC details align with Task 7\n   - Validate against Task 8 test scenarios\n\n5. **Acceptance Criteria**:\n   - Zero linting errors in all documentation\n   - 100% OpenAPI spec validation pass\n   - All security sections complete and reviewed\n   - Red Team approval obtained and documented\n   - Documentation published to appropriate channels",
+        "status": "pending",
+        "dependencies": [
+          5,
+          7,
+          9
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design and Document Security Model Architecture",
+            "description": "Create comprehensive security model documentation including authentication flow, authorization boundaries, trust boundaries, and cryptographic primitives for SECURITY.md",
+            "dependencies": [],
+            "details": "Document the complete security architecture with detailed sections on: 1) Authentication flow diagrams showing client-server handshake, challenge-response patterns, and session establishment; 2) Authorization boundaries defining role-based access controls and permission models; 3) Trust boundary analysis with data flow diagrams between client, server, and external systems; 4) Cryptographic primitive specifications including algorithms (AES-256-GCM, HMAC-SHA256), key sizes, and usage patterns; 5) Security assumptions and constraints. Use PlantUML or Mermaid for architectural diagrams. Cross-reference with existing implementation in auth modules and key exchange endpoints.",
+            "status": "pending",
+            "testStrategy": "Validate documentation completeness by checking all sections have detailed content with no placeholders. Run markdown linter for formatting compliance. Have security team review architecture diagrams for accuracy. Cross-reference cryptographic claims with actual implementation in codebase. Verify all trust boundaries are identified and documented."
+          },
+          {
+            "id": 2,
+            "title": "Develop Threat Model Using STRIDE Methodology",
+            "description": "Create comprehensive threat model documentation using STRIDE framework, covering all identified security risks, attack vectors, and mitigation strategies",
+            "dependencies": [
+              "10.1"
+            ],
+            "details": "Apply STRIDE methodology to document threats across all system components: 1) Spoofing risks - analyze client impersonation, server spoofing, and man-in-the-middle attacks on SSE connections; 2) Tampering vulnerabilities - document risks in log stream manipulation, message replay attacks, and data integrity violations; 3) Repudiation concerns - identify audit trail weaknesses and non-repudiation requirements; 4) Information disclosure - analyze timing attacks on HMAC verification, memory dump exposures, and side-channel leaks; 5) Denial of Service - document rate limiting needs, resource exhaustion vectors, and connection flooding risks; 6) Elevation of Privilege - analyze authorization bypass scenarios and privilege escalation paths. Include threat matrices, risk scoring (DREAD), and mitigation priorities.",
+            "status": "pending",
+            "testStrategy": "Validate threat model against OWASP Top 10 and CWE/SANS Top 25. Conduct tabletop exercise with security team to identify missing threats. Cross-reference with penetration test findings from previous security assessments. Ensure each threat has corresponding mitigation strategy documented."
+          },
+          {
+            "id": 3,
+            "title": "Document Key Exchange Protocol and Management Procedures",
+            "description": "Create detailed documentation for secure key exchange mechanism, key rotation procedures, memory residency policies, and ephemeral token management",
+            "dependencies": [
+              "10.1"
+            ],
+            "details": "Document the production-grade key exchange protocol addressing P0/P1 vulnerabilities: 1) Challenge-response authentication flow with sequence diagrams showing client-server interactions; 2) Ephemeral key generation using cryptographically secure random number generators with entropy requirements; 3) Key derivation functions (KDF) specifications using HKDF-SHA256 with proper salt and info parameters; 4) Session establishment protocol with perfect forward secrecy guarantees; 5) Key rotation procedures including scheduled intervals (24-hour default), emergency revocation process, zero-downtime implementation steps, and backward compatibility handling; 6) Memory residency policies covering secure key storage in memory, zeroing procedures using crypto.timingSafeEqual, protection against core dumps, and secure deletion protocols; 7) Ephemeral token guidelines with lifetime management (15-minute default), refresh strategies, revocation mechanisms, and rate limiting policies (100 requests/minute).",
+            "status": "pending",
+            "testStrategy": "Validate key exchange protocol against industry standards (NIST SP 800-56A). Review memory handling procedures against OWASP Cryptographic Storage Cheat Sheet. Test key rotation procedures in staging environment. Verify all cryptographic parameters meet current security recommendations."
+          },
+          {
+            "id": 4,
+            "title": "Create OpenAPI 3.1.0 Specifications for API Endpoints",
+            "description": "Develop comprehensive OpenAPI specifications for key exchange and SSE log streaming endpoints with complete schemas, security definitions, and examples",
+            "dependencies": [
+              "10.3"
+            ],
+            "details": "Create OpenAPI 3.1.0 specifications with the following components: 1) Key/Token Delivery Endpoint (POST /api/v1/auth/exchange) - define request schema with challenge parameters, nonce requirements, and client identification; response schema with encrypted key material structure, token format, and expiration metadata; comprehensive error responses (401 Unauthorized, 403 Forbidden, 429 Rate Limited) with detailed error codes; required headers (X-Client-Version, X-Request-ID, X-Timestamp); 2) SSE Log Stream Endpoint (GET /api/v1/logs/stream) - query parameters for filtering (level=[debug|info|warn|error], branch=[auth|api|ui], since/until timestamps); authentication headers (Authorization: Bearer, X-HMAC-Signature with timestamp); SSE event type definitions (log-entry, heartbeat, error, connection-close); payload schemas for each event type with examples; 3) Common components including security schemes (Bearer Token, HMAC-SHA256), reusable schemas (LogEntry, ErrorResponse, PaginationMeta), rate limiting headers (X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset). Generate both YAML and JSON versions, validate with Spectral linter.",
+            "status": "pending",
+            "testStrategy": "Validate OpenAPI specifications using Spectral linter with strict ruleset. Test all endpoints with example requests using Postman/Insomnia collections. Verify schema compliance by generating mock servers. Ensure all security requirements are properly annotated. Generate API documentation and review for completeness."
+          },
+          {
+            "id": 5,
+            "title": "Prepare Red Team Review Package and Security Validation",
+            "description": "Compile comprehensive security review package including all documentation, threat models, security checklists, and penetration test scenarios for Red Team assessment",
+            "dependencies": [
+              "10.1",
+              "10.2",
+              "10.3",
+              "10.4"
+            ],
+            "details": "Prepare complete Red Team review package containing: 1) Security checklist document covering OWASP ASVS Level 2 requirements, cryptographic implementation validation points, authentication/authorization verification items, and secure communication requirements; 2) Threat model diagrams in multiple formats (architectural overview, data flow diagrams, attack tree visualizations) with accompanying risk matrices; 3) Cryptographic assumptions document detailing algorithm choices, key length justifications, entropy sources, and implementation library versions; 4) Penetration test scenarios including authentication bypass attempts, session hijacking tests, timing attack procedures, and API fuzzing test cases; 5) Security contact procedures with escalation matrix, incident response playbook references, and vulnerability disclosure policy; 6) Executive summary highlighting critical security decisions, trade-offs made, and residual risk acceptance requirements. Include appendices with security tool outputs, dependency vulnerability scans, and compliance mapping (SOC2, GDPR where applicable).",
+            "status": "pending",
+            "testStrategy": "Conduct internal security review using Red Team checklist before submission. Run automated security scanning tools (SAST, dependency check) and include reports. Perform documentation gap analysis against security standards. Schedule pre-review session with security champion. Validate all diagrams render correctly and are accessible."
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "P3 Sprint: Minimal Next.js Integration Package",
+        "description": "Create minimal Next.js integration with secure authentication using approved key exchange design from P1, including React log viewer component with secure token handling, SSE stream connection with proper cleanup, and App Router compatible API routes implementing secure token validation.",
+        "details": "BLOCKED: This task cannot begin until Task 9 (P1 Sprint: Secure Key Exchange Design) is approved by Red Team.\n\nImplement a minimal yet production-ready Next.js integration package following the approved security design from P1 sprint:\n\n1. **React Log Viewer Component**:\n   - Create a client-side React component that securely handles authentication tokens\n   - Implement secure token storage using sessionStorage (never localStorage)\n   - Use React hooks for SSE connection lifecycle management\n   - Implement automatic reconnection with exponential backoff\n   - Add proper cleanup on component unmount to prevent memory leaks\n   - Use React.memo and useMemo for performance optimization\n   - Implement virtualized scrolling for large log volumes\n\n2. **SSE Stream Connection Security**:\n   - Implement secure handshake using approved key exchange protocol from P1\n   - Use challenge-response authentication before establishing SSE connection\n   - Implement client-side HMAC verification for all received frames\n   - Add sequence number tracking for replay attack prevention\n   - Implement proper error boundaries for security failures\n   - Use AbortController for clean connection termination\n\n3. **App Router API Routes**:\n   - Create /api/auth/challenge route for initial authentication\n   - Implement /api/auth/verify route for challenge verification\n   - Create /api/logs/stream route with secure SSE endpoint\n   - Implement proper CORS headers with strict origin validation\n   - Add rate limiting using Next.js middleware\n   - Implement request signing verification\n   - Use edge runtime where appropriate for performance\n\n4. **TypeScript Definitions**:\n   - Define strict types for all authentication flows\n   - Create branded types for tokens and session identifiers\n   - Export comprehensive type definitions for consumer applications\n   - Implement type guards for runtime validation\n   - Use discriminated unions for error handling\n\n5. **Demo Application**:\n   - Create minimal Next.js 14+ app demonstrating secure integration\n   - Show proper authentication flow with no credential exposure\n   - Demonstrate real-time log streaming with security indicators\n   - Include examples of error handling and recovery\n   - Add security audit dashboard showing active connections\n\n6. **Security Patterns Implementation**:\n   - Follow principle of least privilege for all operations\n   - Implement defense in depth with multiple security layers\n   - Use Content Security Policy headers\n   - Implement Subresource Integrity for critical assets\n   - Add security event logging for audit trails\n   - Use constant-time comparison for HMAC verification",
+        "testStrategy": "Comprehensive security-focused testing approach:\n\n1. **Integration Security Tests**:\n   - Test secure handshake flow with invalid credentials\n   - Verify HMAC validation rejects tampered messages\n   - Test replay attack prevention with duplicate sequences\n   - Validate token expiration and renewal flows\n   - Test CSRF protection on all endpoints\n\n2. **Component Testing**:\n   - Test React component lifecycle with proper cleanup\n   - Verify no memory leaks during long-running sessions\n   - Test reconnection logic under various failure scenarios\n   - Validate proper error boundary behavior\n   - Test accessibility compliance (WCAG 2.1 AA)\n\n3. **API Route Testing**:\n   - Test authentication endpoints with fuzzing inputs\n   - Verify rate limiting prevents abuse\n   - Test CORS policy enforcement\n   - Validate proper error responses don't leak information\n   - Test concurrent connection limits\n\n4. **Security Audit Tests**:\n   - Run OWASP ZAP automated security scan\n   - Perform manual penetration testing of auth flows\n   - Verify no secrets in client-side code bundles\n   - Test for timing attacks on authentication\n   - Validate all dependencies are vulnerability-free\n\n5. **Performance Tests**:\n   - Test with 10,000+ log entries for UI responsiveness\n   - Verify SSE connection handles 100 msg/sec throughput\n   - Test memory usage remains stable over 24 hours\n   - Validate bundle size meets performance budget\n\n6. **Red Team Validation**:\n   - Submit complete package for security review\n   - Document all security design decisions\n   - Provide threat model specific to Next.js integration\n   - Include security testing evidence and reports",
+        "status": "pending",
+        "dependencies": [
+          9,
+          5,
+          7
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design and implement secure authentication flow architecture",
+            "description": "Create the foundational authentication architecture following the approved P1 design, implementing challenge-response protocol with proper token lifecycle management",
+            "dependencies": [],
+            "details": "Design and implement the core authentication flow components including: 1) Challenge generation service with cryptographically secure random values, 2) Response verification mechanism using constant-time comparison, 3) Session token generation with appropriate entropy, 4) Token storage strategy using sessionStorage with proper lifecycle hooks, 5) Token refresh mechanism to prevent session hijacking, 6) Security event emitter for audit logging. Ensure all components follow the principle of least privilege and implement defense-in-depth strategies.",
+            "status": "pending",
+            "testStrategy": "Create unit tests for challenge generation entropy, response verification timing attacks, token lifecycle management, and session storage security. Implement integration tests for the complete authentication flow including failure scenarios."
+          },
+          {
+            "id": 2,
+            "title": "Build React log viewer component with secure SSE connection",
+            "description": "Develop a production-ready React component that securely displays real-time logs via SSE with proper authentication, performance optimization, and security boundaries",
+            "dependencies": [
+              "11.1"
+            ],
+            "details": "Implement a React component featuring: 1) Secure token handling with automatic refresh before expiration, 2) SSE connection management using custom hooks with AbortController for cleanup, 3) Automatic reconnection with exponential backoff (initial: 1s, max: 30s), 4) HMAC verification for all received frames using Web Crypto API, 5) Sequence number tracking to prevent replay attacks, 6) React.memo optimization with proper dependency arrays, 7) Virtual scrolling using react-window for handling large log volumes, 8) Error boundaries specifically for security failures, 9) Real-time connection status indicators, 10) Log filtering by level, branch, and content with debounced search.",
+            "status": "pending",
+            "testStrategy": "Test component rendering with React Testing Library, SSE connection lifecycle with mock EventSource, HMAC verification with tampered messages, sequence number validation, virtual scrolling performance with 10k+ logs, and proper cleanup on unmount."
+          },
+          {
+            "id": 3,
+            "title": "Implement Next.js App Router API routes with security middleware",
+            "description": "Create secure API routes for authentication and log streaming using Next.js 14+ App Router with comprehensive security controls and edge runtime optimization",
+            "dependencies": [
+              "11.1"
+            ],
+            "details": "Develop three critical API routes: 1) /api/auth/challenge (POST) - Generate cryptographic challenges with rate limiting per IP, store challenge-response pairs in memory cache with TTL, return challenge with appropriate headers, 2) /api/auth/verify (POST) - Validate challenge responses with constant-time comparison, generate session tokens with proper claims, implement IP binding for session security, 3) /api/logs/stream (GET) - Verify session tokens and HMAC signatures, establish SSE connection with proper headers, implement request signing verification, add connection pooling limits. Apply security middleware for: CORS with strict origin validation, rate limiting using upstash/ratelimit, request signing verification, CSP headers, and security event logging.",
+            "status": "pending",
+            "testStrategy": "Test API routes with supertest for various authentication scenarios, rate limiting effectiveness, CORS policy enforcement, SSE stream establishment, and edge runtime compatibility. Validate security headers and error responses."
+          },
+          {
+            "id": 4,
+            "title": "Create comprehensive TypeScript type system and security utilities",
+            "description": "Design and implement a complete TypeScript type system with branded types, type guards, and security-focused utility functions for the integration package",
+            "dependencies": [
+              "11.1",
+              "11.2",
+              "11.3"
+            ],
+            "details": "Implement TypeScript definitions including: 1) Branded types for Token, SessionId, ChallengeId, and SequenceNumber to prevent type confusion, 2) Discriminated unions for authentication states and error types, 3) Type guards for runtime validation of API responses and SSE messages, 4) Utility types for request/response contracts with strict validation, 5) Security utility functions including constant-time string comparison, secure random generation wrappers, HMAC computation helpers, and base64url encoding/decoding. Export comprehensive type definitions for consumer applications with JSDoc documentation. Implement zod schemas for runtime validation aligned with TypeScript types.",
+            "status": "pending",
+            "testStrategy": "Test type guards with valid and invalid inputs, branded type creation and validation, discriminated union exhaustiveness, zod schema validation accuracy, and security utility correctness including timing attack resistance."
+          },
+          {
+            "id": 5,
+            "title": "Build demo application with security dashboard and integration tests",
+            "description": "Create a production-quality Next.js demo application showcasing secure integration patterns with comprehensive security monitoring and end-to-end testing",
+            "dependencies": [
+              "11.1",
+              "11.2",
+              "11.3",
+              "11.4"
+            ],
+            "details": "Develop a demo application featuring: 1) Landing page explaining security architecture with no credential exposure, 2) Authentication flow demonstration with visual feedback for each step, 3) Real-time log viewer showcasing all component features, 4) Security dashboard displaying active connections, authentication attempts, HMAC verification stats, and security events, 5) Error recovery demonstrations for network failures and security violations, 6) Performance metrics dashboard showing SSE throughput and latency. Implement comprehensive E2E tests using Playwright covering authentication flows, log streaming, security failure scenarios, and performance benchmarks. Add docker-compose setup for easy local testing.",
+            "status": "pending",
+            "testStrategy": "Run E2E tests with Playwright for complete user flows, security dashboard accuracy, error recovery mechanisms, and performance under load. Validate no security credentials are exposed in client-side code or network traffic."
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "P4 Sprint: Bundle Hygiene & Edge Runtime Compatibility",
+        "description": "Perform comprehensive bundle analysis, edge runtime validation, memory leak detection, and TypeScript strict mode compliance across all modules while establishing performance benchmarks for HMAC operations and ensuring production readiness.",
+        "details": "Execute parallel sprint focused on production readiness validation and technical debt cleanup:\n\n1. **Export Surface Audit**:\n   - Run digest scripts (build:digest, analyze:exports) to identify contradictory export counts\n   - Compare named exports vs default exports across all modules\n   - Validate tree-shaking effectiveness with webpack-bundle-analyzer\n   - Document all public API surfaces in exports.md\n   - Ensure consistent export patterns following project conventions\n\n2. **Bundle Size Impact Analysis**:\n   - Establish baseline bundle sizes pre-security changes using size-limit\n   - Measure impact of HMAC implementation on final bundle\n   - Analyze crypto polyfill inclusion for edge runtime\n   - Identify and eliminate duplicate dependencies\n   - Implement code splitting for optional features\n   - Target <50KB gzipped for core functionality\n\n3. **Edge Runtime Compatibility**:\n   - Audit all imports for Node.js-specific APIs (fs, path, crypto)\n   - Replace Node crypto with Web Crypto API equivalents\n   - Ensure all async operations use standard Promise/async-await\n   - Remove any Buffer usage in favor of Uint8Array\n   - Validate fetch API usage for all network operations\n   - Create edge-runtime.test.ts with at least one automated test per module\n\n4. **Memory Leak Detection**:\n   - Implement heap snapshot analysis for key registry operations\n   - Monitor SSE connection lifecycle with Chrome DevTools\n   - Add WeakMap usage for object caching where appropriate\n   - Ensure proper cleanup in useEffect/componentWillUnmount\n   - Validate EventSource.close() called on all SSE disconnects\n   - Create memory-profiling.md with baseline metrics\n\n5. **TypeScript Strict Mode Compliance**:\n   - Enable all strict flags in tsconfig.json\n   - Fix all any types with proper type definitions\n   - Ensure no implicit any in function parameters\n   - Validate all nullable types have proper guards\n   - Enable noUncheckedIndexedAccess for array safety\n   - Document type coverage metrics (target 100%)\n\n6. **HMAC Performance Benchmarks**:\n   - Create benchmark suite using vitest bench or tinybench\n   - Measure HMAC generation time for various payload sizes\n   - Profile signature verification performance\n   - Test throughput for concurrent operations\n   - Establish baseline metrics for P50/P95/P99 latencies\n   - Document results in benchmarks/hmac-baseline.json\n\n7. **Technical Debt Cleanup**:\n   - Remove all TODO/FIXME comments or convert to issues\n   - Consolidate duplicate utility functions\n   - Standardize error handling patterns\n   - Update all dependencies to latest stable versions\n   - Fix all ESLint warnings and errors\n   - Ensure 100% Prettier compliance",
+        "testStrategy": "Implement comprehensive validation suite for production readiness:\n\n1. **Export Surface Validation**:\n   - Run `npm run build:digest` and verify zero discrepancies\n   - Execute tree-shaking test with rollup to confirm dead code elimination\n   - Validate public API matches documentation\n\n2. **Bundle Size Testing**:\n   - Configure size-limit with thresholds for each module\n   - Run `npm run size` in CI to prevent regressions\n   - Test production build with source-map-explorer\n\n3. **Edge Runtime Tests**:\n   - Create test suite that runs in @edge-runtime/vm\n   - Mock all edge runtime globals (crypto, fetch, etc.)\n   - Verify zero Node.js API usage with custom ESLint rule\n   - Run tests in Cloudflare Workers environment\n\n4. **Memory Leak Testing**:\n   - Implement automated heap growth detection\n   - Run 1000 SSE connection cycles checking for leaks\n   - Profile key registry with 10,000 operations\n   - Use Chrome DevTools allocation timeline\n\n5. **TypeScript Validation**:\n   - Run `tsc --noEmit` with all strict flags\n   - Use type-coverage to ensure >99% type coverage\n   - Verify no @ts-ignore or @ts-expect-error comments\n\n6. **Performance Testing**:\n   - Run benchmark suite with consistent hardware\n   - Compare against baseline metrics\n   - Load test with 1000 concurrent HMAC operations\n   - Profile CPU usage during peak load\n\n7. **Production Readiness Checklist**:\n   - All tests pass with --coverage showing >90%\n   - Zero security warnings from npm audit\n   - Lighthouse performance score >95\n   - No console.log statements in production code\n   - All environment variables documented",
+        "status": "pending",
+        "dependencies": [
+          7,
+          8,
+          5
+        ],
+        "priority": "low",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Export Surface Audit and API Documentation",
+            "description": "Perform comprehensive analysis of all module exports, validate tree-shaking effectiveness, and document public API surfaces",
+            "dependencies": [],
+            "details": "Execute export analysis scripts (build:digest, analyze:exports) to identify export count discrepancies. Compare named vs default exports across all modules. Run webpack-bundle-analyzer to validate tree-shaking effectiveness. Create exports.md documenting all public API surfaces with TypeScript interfaces. Ensure consistent export patterns following project conventions, removing any contradictory or duplicate exports.",
+            "status": "pending",
+            "testStrategy": "Run npm run build:digest and verify zero export discrepancies. Use rollup with tree-shaking enabled to confirm dead code elimination. Validate that all exports documented in exports.md are accessible and properly typed. Test import paths from external consumer perspective."
+          },
+          {
+            "id": 2,
+            "title": "Bundle Size Optimization and Impact Analysis",
+            "description": "Establish baseline bundle metrics, analyze security implementation impact, optimize for <50KB gzipped target",
+            "dependencies": [
+              "12.1"
+            ],
+            "details": "Use size-limit to establish pre-security baseline bundle sizes. Measure HMAC implementation impact on final bundle size. Analyze crypto polyfill inclusion for edge runtime compatibility. Identify and eliminate duplicate dependencies using webpack-bundle-analyzer. Implement code splitting for optional features. Remove unused exports identified in subtask 12.1. Configure aggressive tree-shaking and minification. Document bundle size metrics in bundle-analysis.md.",
+            "status": "pending",
+            "testStrategy": "Run size-limit checks in CI to enforce <50KB gzipped limit. Test bundle in production mode with source-map-explorer. Verify no duplicate packages using npm dedupe. Test lazy loading of split chunks in browser environment."
+          },
+          {
+            "id": 3,
+            "title": "Edge Runtime Compatibility and Node.js API Removal",
+            "description": "Audit and replace all Node.js-specific APIs with edge-compatible alternatives, ensuring full edge runtime support",
+            "dependencies": [],
+            "details": "Scan all modules for Node.js-specific imports (fs, path, crypto, process). Replace Node crypto with Web Crypto API equivalents. Convert all Buffer usage to Uint8Array. Ensure all async operations use standard Promise/async-await patterns. Validate fetch API usage for network operations. Create edge-polyfills.ts for any required compatibility shims. Update tsconfig.json to target edge runtime environment. Create edge-runtime.test.ts with comprehensive compatibility tests.",
+            "status": "pending",
+            "testStrategy": "Run tests in edge runtime environment (Cloudflare Workers or Vercel Edge). Use @edge-runtime/jest-environment for testing. Verify no Node.js globals are accessed. Test crypto operations with Web Crypto API. Validate all network requests use fetch."
+          },
+          {
+            "id": 4,
+            "title": "Memory Profiling and Leak Detection Suite",
+            "description": "Implement comprehensive memory leak detection for key registry, SSE connections, and React components",
+            "dependencies": [
+              "12.3"
+            ],
+            "details": "Set up heap snapshot analysis for key registry operations using Chrome DevTools Protocol. Monitor SSE EventSource lifecycle with proper cleanup validation. Implement WeakMap for object caching in appropriate locations. Audit all useEffect hooks for cleanup functions. Ensure EventSource.close() is called on all disconnects. Create automated memory leak tests using Puppeteer. Generate memory-profiling.md with baseline metrics for heap size, retained objects, and garbage collection patterns.",
+            "status": "pending",
+            "testStrategy": "Run Puppeteer-based memory tests simulating 1000 SSE connections. Monitor heap growth over 10-minute stress test. Verify WeakMap usage allows proper garbage collection. Test component unmounting releases all resources. Profile memory usage in production build."
+          },
+          {
+            "id": 5,
+            "title": "TypeScript Strict Mode and HMAC Performance Benchmarking",
+            "description": "Enable full TypeScript strict mode compliance and establish comprehensive HMAC performance baselines",
+            "dependencies": [
+              "12.1",
+              "12.2",
+              "12.3",
+              "12.4"
+            ],
+            "details": "Enable all strict flags in tsconfig.json (strict, noImplicitAny, strictNullChecks, noUncheckedIndexedAccess). Fix all any types with proper type definitions. Add explicit return types to all functions. Implement null/undefined guards for all nullable types. Create benchmark suite using vitest bench for HMAC operations. Measure generation/verification time for 1KB, 10KB, 100KB payloads. Test concurrent HMAC operations (100, 1000, 10000). Document P50/P95/P99 latencies in benchmarks/hmac-baseline.json. Fix all ESLint errors and achieve 100% Prettier compliance.",
+            "status": "pending",
+            "testStrategy": "Run tsc --noEmit with all strict flags enabled. Use type-coverage to verify 100% type coverage. Execute benchmark suite 5 times and verify consistent results. Test HMAC performance under memory pressure. Validate no performance regression from type improvements."
+          }
+        ]
       }
     ],
     "metadata": {
       "created": "2025-07-19T22:50:56.179Z",
-      "updated": "2025-07-21T09:13:56.447Z",
+      "updated": "2025-07-21T21:18:09.085Z",
       "description": "Clean rewrite of Jitterbug with orchestrator pattern"
     }
   }

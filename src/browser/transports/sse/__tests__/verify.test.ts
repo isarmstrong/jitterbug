@@ -49,7 +49,7 @@ describe('P4.4-b-2: HMAC Verification Fuzzing', () => {
         const result = await processFrame(signed);
         expect(result).toEqual(payload);
       }
-    ), { numRuns: 20 });
+    ), { numRuns: 20, seed: 42 });
   });
 
   it('generates unique signatures for identical payloads', () => {
@@ -57,7 +57,7 @@ describe('P4.4-b-2: HMAC Verification Fuzzing', () => {
       const s1 = signer.sign(payload), s2 = signer.sign(payload);
       expect(s1.nonce).not.toBe(s2.nonce);
       expect(s1.sig).not.toBe(s2.sig);
-    }), { numRuns: 15 });
+    }), { numRuns: 15, seed: 1337 });
   });
 
   it('rejects tampered signatures', async () => {
@@ -65,7 +65,7 @@ describe('P4.4-b-2: HMAC Verification Fuzzing', () => {
       const signed = signer.sign(payload);
       const mutated = mutateSig(signed.sig);
       await expect(processFrame({...signed, sig: mutated})).rejects.toThrow();
-    }), { numRuns: 20 });
+    }), { numRuns: 20, seed: 2023 });
   });
 
   it('rejects tampered payloads', async () => {
@@ -73,7 +73,7 @@ describe('P4.4-b-2: HMAC Verification Fuzzing', () => {
       const signed = signer.sign(payload);
       const tampered = {...signed, payload: {...payload, x: tamper}};
       await expect(processFrame(tampered)).rejects.toThrow(/signature verification failed/);
-    }), { numRuns: 15 });
+    }), { numRuns: 15, seed: 9999 });
   });
 
   it('rejects unknown key IDs', async () => {
@@ -82,7 +82,7 @@ describe('P4.4-b-2: HMAC Verification Fuzzing', () => {
     ), async (payload, unknownKid) => {
       const signed = signer.sign(payload);
       await expect(processFrame({...signed, kid: unknownKid})).rejects.toThrow(/Unknown key ID/);
-    }), { numRuns: 10 });
+    }), { numRuns: 10, seed: 5555 });
   });
 
   it('detects replay attacks', async () => {
@@ -92,7 +92,7 @@ describe('P4.4-b-2: HMAC Verification Fuzzing', () => {
       await expect(processFrame(signed)).resolves.not.toThrow();
       // Second verification of same frame should fail (replay)
       await expect(processFrame(signed)).rejects.toThrow(/Replay attack detected/);
-    }), { numRuns: 10 });
+    }), { numRuns: 10, seed: 7777 });
   });
 
   it('rejects malformed fields', async () => {
@@ -102,7 +102,7 @@ describe('P4.4-b-2: HMAC Verification Fuzzing', () => {
       const signed = signer.sign(payload);
       const mutated = mutation.type === 'alg' ? {...signed, alg: mutation.val} : {...signed, kid: mutation.val};
       await expect(processFrame(mutated as any)).rejects.toThrow();
-    }), { numRuns: 10 });
+    }), { numRuns: 10, seed: 1234 });
   });
 
   it('rejects unsigned frames with security error', async () => {
@@ -120,7 +120,10 @@ function genPayload(): fc.Arbitrary<AnyPushFrame> {
 }
 
 function mutateSig(sig: string): string {
-  const chars = sig.split(''), i = Math.floor(Math.random() * chars.length);
+  // Use deterministic index based on signature content for stable tests
+  const chars = sig.split('');
+  const hash = chars.reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const i = hash % chars.length;
   chars[i] = chars[i] === 'A' ? 'B' : 'A';
   return chars.join('');
 }

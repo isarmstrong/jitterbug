@@ -50,7 +50,10 @@
       "Bash(pnpm run:*)",
       "Bash(npx playwright test:*)",
       "Bash(npx eslint:*)",
-      "mcp__task-master-ai__get_tasks"
+      "mcp__task-master-ai__get_tasks",
+      "mcp__task-master-ai__add_task",
+      "mcp__task-master-ai__expand_task",
+      "Bash(node:*)"
     ],
     "deny": []
   },

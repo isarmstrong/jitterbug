@@ -19,7 +19,7 @@ export class HeartbeatEmitter implements PushEmitter<HeartbeatFrame> {
   readonly minIntervalMs: number;
   
   private readonly config: HeartbeatConfig;
-  private lastHeartbeat = 0;
+  private readonly state = { lastHeartbeat: 0, hasEmitted: false };
 
   constructor(config: Partial<HeartbeatConfig> = {}) {
     this.config = { ...DEFAULT_HEARTBEAT_CONFIG, ...config };
@@ -31,13 +31,18 @@ export class HeartbeatEmitter implements PushEmitter<HeartbeatFrame> {
   }
 
   shouldEmit(): boolean {
+    if (!this.state.hasEmitted) {
+      return true;
+    }
+    
     const now = Date.now();
-    return (now - this.lastHeartbeat) >= this.minIntervalMs;
+    return (now - this.state.lastHeartbeat) >= this.minIntervalMs;
   }
 
   createFrame(): HeartbeatFrame {
     const now = Date.now();
-    this.lastHeartbeat = now;
+    this.state.lastHeartbeat = now;
+    this.state.hasEmitted = true;
     
     return {
       t: 'hb',
@@ -46,7 +51,11 @@ export class HeartbeatEmitter implements PushEmitter<HeartbeatFrame> {
   }
 
   serialize(): string {
-    const frame = this.createFrame();
-    return JSON.stringify(frame);
+    // Create a dummy frame for serialization validation without modifying state
+    const dummyFrame: HeartbeatFrame = {
+      t: 'hb',
+      ts: Date.now()
+    };
+    return JSON.stringify(dummyFrame);
   }
 }
